@@ -1,0 +1,30 @@
+/* ============================================================================
+   THEME PERSONNALISÉ - OPTIONNEL
+   Ce fichier permet de personnaliser les couleurs du système
+   ============================================================================ */
+
+:root {
+    /* Personnalisation des couleurs primaires */
+    --primary-color: #2563eb;
+    --secondary-color: #64748b;
+    
+    /* Vous pouvez modifier ces valeurs pour personnaliser votre thème */
+    /* Exemples d'autres palettes :
+    
+    THÈME VERT :
+    --primary-color: #10b981;
+    --secondary-color: #059669;
+    
+    THÈME VIOLET :
+    --primary-color: #8b5cf6;
+    --secondary-color: #7c3aed;
+    
+    THÈME ORANGE :
+    --primary-color: #f59e0b;
+    --secondary-color: #d97706;
+    
+    THÈME ROUGE :
+    --primary-color: #ef4444;
+    --secondary-color: #dc2626;
+    */
+}

@@ -1,0 +1,1643 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Surveillance</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #2563eb;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --dark: #1e293b;
+            --secondary: #64748b;
+            --light: #f8fafc;
+            --border: #e2e8f0;
+            --white: #ffffff;
+        }
+
+        * { margin:0; padding:0; box-sizing:border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f172a;
+            min-height: 100vh;
+            color: var(--white);
+        }
+
+        /* ── Header ── */
+        .dashboard-header {
+            background: linear-gradient(135deg, var(--primary) 0%, #1d4ed8 100%);
+            padding: 14px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+            position: sticky; top: 0; z-index: 200;
+        }
+
+        .header-left { display:flex; align-items:center; gap:12px; }
+
+        .header-logo {
+            width:40px;height:40px;
+            background:rgba(255,255,255,.15);
+            border-radius:10px;
+            display:flex;align-items:center;justify-content:center;
+            font-size:18px;
+        }
+
+        .header-title h1 { font-size:16px;font-weight:700; }
+        .header-title p  { font-size:11px;opacity:.8; }
+
+        .header-stats {
+            display:flex;gap:16px;align-items:center;
+        }
+
+        .stat-pill {
+            display:flex;align-items:center;gap:6px;
+            padding:6px 14px;
+            background:rgba(255,255,255,.15);
+            border-radius:20px;
+            font-size:12px;font-weight:600;
+        }
+
+        .live-dot {
+            width:7px;height:7px;
+            border-radius:50%;
+            background:#10b981;
+            animation:pulse 2s infinite;
+        }
+
+        @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.6;transform:scale(.9)} }
+
+        .header-right { display:flex;gap:8px;align-items:center; }
+
+        .btn {
+            padding:7px 16px;border:none;border-radius:7px;
+            font-size:12px;font-weight:600;cursor:pointer;
+            display:inline-flex;align-items:center;gap:6px;
+            transition:all .2s;
+        }
+        .btn-sm { padding:5px 12px;font-size:11px; }
+        .btn-light   { background:rgba(255,255,255,.2);color:white; }
+        .btn-light:hover { background:rgba(255,255,255,.3); }
+        .btn-success { background:var(--success);color:white; }
+        .btn-warning { background:var(--warning);color:white; }
+        .btn-danger  { background:var(--danger);color:white; }
+        .btn-primary { background:var(--primary);color:white; }
+        .btn-success:hover { background:#059669; }
+        .btn-warning:hover { background:#d97706; }
+        .btn-danger:hover  { background:#dc2626; }
+        .btn-primary:hover { background:#1d4ed8; }
+
+        /* ── Contenu principal ── */
+        .dashboard-body {
+            padding: 20px 24px;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        /* ── Barre de filtre ── */
+        .filter-bar {
+            display:flex;gap:8px;align-items:center;
+            margin-bottom:20px;flex-wrap:wrap;
+        }
+
+        .filter-btn {
+            padding:6px 14px;
+            border:2px solid rgba(255,255,255,.15);
+            background:transparent;
+            color:rgba(255,255,255,.7);
+            border-radius:20px;
+            font-size:11px;font-weight:600;cursor:pointer;
+            transition:all .2s;
+        }
+        .filter-btn.active,
+        .filter-btn:hover {
+            border-color:var(--primary);
+            background:var(--primary);
+            color:white;
+        }
+
+        .search-input {
+            padding:7px 14px;
+            border:2px solid rgba(255,255,255,.15);
+            background:rgba(255,255,255,.05);
+            color:white;border-radius:20px;
+            font-size:12px;outline:none;width:200px;
+            transition:all .2s;
+        }
+        .search-input::placeholder { color:rgba(255,255,255,.4); }
+        .search-input:focus { border-color:var(--primary);background:rgba(255,255,255,.1); }
+
+        /* ── Grille des étudiants ── */
+        .students-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 16px;
+        }
+
+        /* ── Carte étudiant ── */
+        .student-card {
+            background: #1e293b;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,.08);
+            overflow: hidden;
+            transition: transform .2s, box-shadow .2s;
+            position: relative;
+        }
+
+        .student-card:hover { transform:translateY(-2px); box-shadow:0 8px 24px rgba(0,0,0,0.3); }
+
+        .student-card.banned {
+            border-color: rgba(239,68,68,.5);
+            background: rgba(239,68,68,.05);
+        }
+
+        .student-card.high-risk {
+            border-color: rgba(245,158,11,.5);
+            background: rgba(245,158,11,.03);
+        }
+
+        /* ── Vidéo de l'étudiant ── */
+        .card-video {
+            position: relative;
+            aspect-ratio: 16/9;
+            background: #000;
+            overflow: hidden;
+        }
+
+        .card-video video {
+            width:100%;height:100%;
+            object-fit:cover;display:block;
+        }
+
+        .card-video-placeholder {
+            position:absolute;inset:0;
+            display:flex;flex-direction:column;
+            align-items:center;justify-content:center;
+            color:rgba(255,255,255,.3);font-size:11px;gap:8px;
+        }
+
+        .card-video-placeholder i { font-size:28px; }
+
+        .card-video-overlay {
+            position:absolute;top:0;left:0;right:0;
+            padding:8px 10px;
+            background:linear-gradient(to bottom,rgba(0,0,0,.6) 0%,transparent 100%);
+            display:flex;align-items:center;justify-content:space-between;
+        }
+
+        .cv-identity {
+            font-size:10px;font-weight:700;color:white;
+            background:rgba(0,0,0,.5);padding:3px 8px;border-radius:4px;
+        }
+
+        .cv-risk-badge {
+            font-size:10px;font-weight:700;
+            padding:3px 8px;border-radius:4px;
+        }
+        .cv-risk-badge.low    { background:rgba(16,185,129,.9);color:white; }
+        .cv-risk-badge.medium { background:rgba(245,158,11,.9);color:white; }
+        .cv-risk-badge.high   { background:rgba(239,68,68,.9);color:white; }
+
+        .banned-overlay {
+            position:absolute;inset:0;
+            background:rgba(239,68,68,.7);
+            display:flex;align-items:center;justify-content:center;
+            flex-direction:column;gap:8px;
+            font-size:16px;font-weight:700;color:white;
+        }
+
+        /* ── Info étudiant ── */
+        .card-info {
+            padding: 12px 14px;
+        }
+
+        .card-name {
+            font-size: 14px;font-weight:700;margin-bottom:2px;
+        }
+
+        .card-email {
+            font-size: 10px;color:rgba(255,255,255,.5);margin-bottom:10px;
+        }
+
+        .card-metrics {
+            display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;
+        }
+
+        .metric-chip {
+            display:flex;align-items:center;gap:4px;
+            padding:3px 8px;
+            background:rgba(255,255,255,.07);
+            border-radius:6px;font-size:10px;
+        }
+        .metric-chip i { font-size:9px; }
+        .metric-chip.warn { background:rgba(245,158,11,.15);color:var(--warning); }
+        .metric-chip.bad  { background:rgba(239,68,68,.15);color:var(--danger); }
+
+        .risk-mini-bar {
+            height:6px;background:rgba(255,255,255,.1);
+            border-radius:3px;overflow:hidden;margin-bottom:10px;
+        }
+        .risk-mini-fill {
+            height:100%;border-radius:3px;
+            transition:width .5s ease;
+        }
+        .risk-mini-fill.low    { background:var(--success); }
+        .risk-mini-fill.medium { background:var(--warning); }
+        .risk-mini-fill.high   { background:var(--danger); }
+
+        .card-actions {
+            display:flex;gap:6px;
+        }
+
+        .status-indicator {
+            display:inline-flex;align-items:center;gap:5px;
+            font-size:10px;font-weight:600;
+            padding:3px 8px;border-radius:10px;margin-bottom:8px;
+        }
+        .status-indicator.active   { background:rgba(16,185,129,.15);color:var(--success); }
+        .status-indicator.submitted{ background:rgba(37,99,235,.15);color:#60a5fa; }
+        .status-indicator.banned   { background:rgba(239,68,68,.15);color:var(--danger); }
+
+        /* ── Panneau latéral droite (logs) ── */
+        .side-panel {
+            position:fixed;top:0;right:-380px;
+            width:380px;height:100vh;
+            background:#1e293b;
+            border-left:1px solid rgba(255,255,255,.1);
+            z-index:500;
+            transition:right .3s ease;
+            display:flex;flex-direction:column;
+            box-shadow:-4px 0 20px rgba(0,0,0,.4);
+        }
+        .side-panel.open { right:0; }
+
+        .side-panel-header {
+            padding:16px;
+            background:linear-gradient(135deg,var(--primary) 0%,#1d4ed8 100%);
+            display:flex;justify-content:space-between;align-items:center;
+        }
+
+        .side-panel-header h3 { font-size:14px;font-weight:700; }
+
+        .side-panel-content {
+            flex:1;overflow-y:auto;padding:12px;
+        }
+
+        .log-entry {
+            display:flex;gap:8px;padding:8px;
+            border-bottom:1px solid rgba(255,255,255,.05);
+            font-size:11px;
+        }
+        .log-entry i { font-size:12px;margin-top:1px;flex-shrink:0; }
+        .log-time { color:rgba(255,255,255,.4);font-size:9px;white-space:nowrap; }
+
+        .close-side-btn { background:none;border:none;color:white;cursor:pointer;font-size:18px; }
+
+        /* ── Modale envoi message ── */
+        .modal {
+            position:fixed;inset:0;
+            background:rgba(0,0,0,.7);
+            backdrop-filter:blur(6px);
+            display:none;align-items:center;justify-content:center;
+            z-index:9999;
+        }
+        .modal.active { display:flex; }
+
+        .modal-box {
+            background:#1e293b;
+            color:white;
+            padding:28px;border-radius:16px;
+            max-width:440px;width:90%;
+            box-shadow:0 20px 40px rgba(0,0,0,.5);
+        }
+        .modal-box h2 { font-size:18px;font-weight:700;margin-bottom:16px; }
+
+        .modal-input {
+            width:100%;padding:10px 14px;
+            background:rgba(255,255,255,.05);
+            border:2px solid rgba(255,255,255,.15);
+            color:white;border-radius:8px;
+            font-size:13px;font-family:inherit;
+            resize:none;margin-bottom:16px;outline:none;
+        }
+        .modal-input:focus { border-color:var(--primary); }
+
+        .modal-actions { display:flex;gap:8px;justify-content:flex-end; }
+
+        .btn-ghost { background:rgba(255,255,255,.1);color:white; }
+        .btn-ghost:hover { background:rgba(255,255,255,.2); }
+
+        /* ── Toast notifications ── */
+        .toast-container {
+            position:fixed;bottom:20px;right:20px;
+            display:flex;flex-direction:column;gap:8px;
+            z-index:10000;
+        }
+
+        .toast {
+            padding:10px 16px;
+            border-radius:8px;
+            font-size:12px;font-weight:600;
+            animation:slideIn .3s ease;
+            display:flex;align-items:center;gap:8px;
+            box-shadow:0 4px 12px rgba(0,0,0,.3);
+        }
+        .toast.success { background:var(--success);color:white; }
+        .toast.error   { background:var(--danger);color:white; }
+        .toast.info    { background:var(--primary);color:white; }
+
+        @keyframes slideIn { from{opacity:0;transform:translateX(20px)} to{opacity:1;transform:translateX(0)} }
+
+        /* ── État vide ── */
+        .empty-grid {
+            grid-column:1/-1;
+            text-align:center;padding:60px 20px;
+            color:rgba(255,255,255,.3);
+        }
+        .empty-grid i { font-size:48px;display:block;margin-bottom:16px; }
+        .empty-grid p { font-size:14px; }
+
+        /* ── Loading ── */
+        .loading-screen {
+            position:fixed;inset:0;background:#0f172a;
+            display:flex;flex-direction:column;
+            align-items:center;justify-content:center;
+            z-index:99999;color:white;
+        }
+        .loading-spinner {
+            width:48px;height:48px;
+            border:4px solid rgba(255,255,255,.1);
+            border-top-color:var(--primary);
+            border-radius:50%;animation:spin 1s linear infinite;
+            margin-bottom:16px;
+        }
+        @keyframes spin { to{transform:rotate(360deg)} }
+    </style>
+</head>
+<body>
+
+<div id="loading-screen" class="loading-screen">
+    <div class="loading-spinner"></div>
+    <div style="font-size:15px;font-weight:600;">Chargement du dashboard…</div>
+</div>
+
+<!-- ════════ HEADER ════════ -->
+<div class="dashboard-header" id="main-header" style="display:none">
+    <div class="header-left">
+        <div class="header-logo"><i class="fas fa-shield-alt"></i></div>
+        <div class="header-title">
+            <h1 id="exam-title">Surveillance Examen</h1>
+            <p id="exam-subtitle">Dashboard de surveillance en temps réel</p>
+        </div>
+    </div>
+
+    <div class="header-stats">
+        <div class="stat-pill">
+            <span class="live-dot"></span>
+            LIVE
+        </div>
+        <div class="stat-pill">
+            <i class="fas fa-users"></i>
+            <span id="stat-active">0</span> actifs
+        </div>
+        <div class="stat-pill" style="background:rgba(239,68,68,.3)">
+            <i class="fas fa-exclamation-triangle"></i>
+            <span id="stat-highrisk">0</span> risque élevé
+        </div>
+        <div class="stat-pill" style="background:rgba(239,68,68,.2)">
+            <i class="fas fa-ban"></i>
+            <span id="stat-banned">0</span> bannis
+        </div>
+        <div class="stat-pill" id="stat-messages-pill" style="background:rgba(37,99,235,.3);cursor:pointer;" onclick="openStudentMessages()" title="Messages des étudiants">
+            <i class="fas fa-comment-dots"></i>
+            <span id="stat-messages">0</span> message(s)
+        </div>
+    </div>
+
+    <div class="header-right">
+        <button class="btn btn-light" id="btn-teacher-video" onclick="toggleTeacherVideo()" title="Activer/désactiver ma caméra">
+            <i class="fas fa-video-slash" id="my-cam-icon"></i> Caméra
+        </button>
+        <button class="btn btn-light" id="btn-teacher-mic" onclick="toggleTeacherMic()" title="Activer/désactiver mon micro">
+            <i class="fas fa-microphone-slash" id="my-mic-icon"></i> Micro
+        </button>
+        <button class="btn btn-light" onclick="openRecordingsModal()" title="Voir les enregistrements caméra">
+            <i class="fas fa-film"></i> Enregistrements
+        </button>
+        <button class="btn btn-light" onclick="window.location.href='/app'">
+            <i class="fas fa-arrow-left"></i> Retour
+        </button>
+    </div>
+</div>
+
+<!-- ════════ CORPS PRINCIPAL ════════ -->
+<div class="dashboard-body" id="dashboard-body" style="display:none">
+
+    <!-- Barre de filtre -->
+    <div class="filter-bar">
+        <button class="filter-btn active" onclick="setFilter('all',this)">Tous</button>
+        <button class="filter-btn" onclick="setFilter('IN_PROGRESS',this)">En cours</button>
+        <button class="filter-btn" onclick="setFilter('high_risk',this)">
+            <i class="fas fa-exclamation-triangle"></i> Risque élevé
+        </button>
+        <button class="filter-btn" onclick="setFilter('BANNED',this)">Bannis</button>
+        <input type="text" class="search-input" id="search-input"
+               placeholder="Rechercher un étudiant…" oninput="renderGrid()">
+        <button class="btn btn-light btn-sm" onclick="refreshData()" style="margin-left:auto">
+            <i class="fas fa-sync-alt" id="refresh-icon"></i> Actualiser
+        </button>
+    </div>
+
+    <!-- Grille des étudiants -->
+    <div class="students-grid" id="students-grid"></div>
+
+</div>
+
+<!-- ════════ PANNEAU LOGS ════════ -->
+<div class="side-panel" id="side-panel">
+    <div class="side-panel-header">
+        <h3><i class="fas fa-list"></i> Activité de l'étudiant</h3>
+        <button class="close-side-btn" onclick="closeSidePanel()"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="side-panel-content" id="side-panel-content"></div>
+</div>
+
+<!-- ════════ MODAL ENVOYER MESSAGE ════════ -->
+<div id="modal-send" class="modal">
+    <div class="modal-box">
+        <h2 id="modal-send-title"><i class="fas fa-comment"></i> Envoyer un message</h2>
+        <textarea id="modal-send-text" class="modal-input" rows="4"
+                  placeholder="Votre message à l'étudiant…"></textarea>
+        <div class="modal-actions">
+            <button class="btn btn-ghost" onclick="closeSendModal()">Annuler</button>
+            <button class="btn btn-warning" onclick="sendMessage()">
+                <i class="fas fa-paper-plane"></i> Envoyer
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ════════ MODAL CONFIRMATION BAN ════════ -->
+<div id="modal-ban-confirm" class="modal">
+    <div class="modal-box">
+        <h2><i class="fas fa-ban" style="color:var(--danger)"></i> Exclure l'étudiant</h2>
+        <p style="font-size:13px;color:rgba(255,255,255,.6);margin-bottom:16px">
+            Êtes-vous sûr de vouloir exclure <strong id="ban-student-name"></strong> ?
+            Cette action est irréversible.
+        </p>
+        <textarea id="ban-reason-text" class="modal-input" rows="3"
+                  placeholder="Raison de l'exclusion…"></textarea>
+        <div class="modal-actions">
+            <button class="btn btn-ghost" onclick="closeBanModal()">Annuler</button>
+            <button class="btn btn-danger" onclick="confirmBan()">
+                <i class="fas fa-ban"></i> Confirmer l'exclusion
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ════════ MODAL MESSAGES ÉTUDIANTS ════════ -->
+<div id="modal-student-messages" class="modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9000;align-items:center;justify-content:center;">
+    <div class="modal-box" style="max-width:600px;width:90%;max-height:80vh;overflow:hidden;display:flex;flex-direction:column;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+            <h2 style="margin:0;"><i class="fas fa-comment-dots" style="color:#3b82f6;"></i> Messages des Étudiants</h2>
+            <button class="btn btn-ghost btn-sm" onclick="closeStudentMessages()"><i class="fas fa-times"></i></button>
+        </div>
+        <div style="flex:1;overflow-y:auto;" id="student-messages-list">
+            <div style="text-align:center;padding:40px;color:rgba(255,255,255,.4);">
+                <i class="fas fa-comments" style="font-size:32px;display:block;margin-bottom:8px;"></i>
+                Aucun message reçu
+            </div>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:8px;">
+            <button class="btn btn-light btn-sm" onclick="loadStudentMessages()"><i class="fas fa-sync-alt"></i> Actualiser</button>
+            <button class="btn btn-ghost btn-sm" onclick="closeStudentMessages()">Fermer</button>
+        </div>
+    </div>
+</div>
+
+<!-- ════════ MODAL VUE ÉCRAN ÉTUDIANT ════════ -->
+<div id="modal-screen-view" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:9500;flex-direction:column;align-items:center;justify-content:center;">
+    <div style="width:96vw;max-width:1200px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+            <div style="color:white;font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px;">
+                <i class="fas fa-desktop" style="color:#6366f1;"></i>
+                <span id="screen-view-title">Écran de l'étudiant</span>
+                <span style="background:#ef4444;color:white;font-size:10px;padding:2px 6px;border-radius:4px;animation:pulse 1s infinite;">LIVE</span>
+            </div>
+            <button onclick="closeScreenModal()" style="background:rgba(255,255,255,.15);border:none;color:white;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;">
+                <i class="fas fa-times"></i> Fermer
+            </button>
+        </div>
+        <div style="background:#000;border-radius:10px;overflow:hidden;border:2px solid rgba(99,102,241,.5);aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;">
+            <video id="screen-view-video" autoplay playsinline style="width:100%;height:100%;object-fit:contain;display:block;"></video>
+            <div id="screen-view-placeholder" style="color:rgba(255,255,255,.4);text-align:center;padding:40px;">
+                <i class="fas fa-desktop" style="font-size:48px;display:block;margin-bottom:12px;"></i>
+                En attente du partage d'écran…
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ════════ MODAL ENREGISTREMENTS ════════ -->
+<div id="modal-recordings" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9000;align-items:flex-start;justify-content:center;overflow-y:auto;padding:24px 16px;">
+    <div style="background:#1e293b;border-radius:14px;border:1px solid rgba(255,255,255,.1);width:100%;max-width:960px;overflow:hidden;margin:auto;">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid rgba(255,255,255,.1);">
+            <h2 style="margin:0;font-size:16px;display:flex;align-items:center;gap:8px;">
+                <i class="fas fa-film" style="color:#3b82f6;"></i> Enregistrements
+            </h2>
+            <button class="btn btn-ghost btn-sm" onclick="closeRecordingsModal()"><i class="fas fa-times"></i></button>
+        </div>
+        <!-- Onglets -->
+        <div style="display:flex;border-bottom:1px solid rgba(255,255,255,.1);">
+            <button id="tab-videos" onclick="switchRecTab('videos')"
+                style="flex:1;padding:10px;background:rgba(59,130,246,.2);border:none;color:white;cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid #3b82f6;">
+                <i class="fas fa-video"></i> Vidéos enregistrées
+            </button>
+            <button id="tab-snapshots" onclick="switchRecTab('snapshots')"
+                style="flex:1;padding:10px;background:transparent;border:none;color:rgba(255,255,255,.5);cursor:pointer;font-size:13px;border-bottom:2px solid transparent;">
+                <i class="fas fa-camera"></i> Snapshots caméra
+            </button>
+        </div>
+        <div style="padding:16px 20px 20px;" id="recordings-body">
+            <div style="text-align:center;padding:40px;color:rgba(255,255,255,.4);">
+                <i class="fas fa-sync fa-spin" style="font-size:24px;display:block;margin-bottom:8px;"></i>
+                Chargement…
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ════════ TOASTS ════════ -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- ════════ SCRIPTS ════════ -->
+<script src="https://cdn.jsdelivr.net/npm/livekit-client@2.5.7/dist/livekit-client.umd.min.js"></script>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// CONFIG & ÉTAT
+// ═══════════════════════════════════════════════════════════
+const EXAM_ID   = {{ exam_id }};
+const APP_BASE  = window.location.origin;
+let authToken   = localStorage.getItem('authToken');
+
+let studentsData = [];
+let currentFilter = 'all';
+let selectedAttemptId = null;
+let sendType = 'warning'; // 'warning' ou 'message'
+let banAttemptId = null;
+
+let room; // LiveKit room du prof
+let teacherVideoTracks = new Map();   // identity → camera track
+let teacherScreenTracks = new Map();  // identity → screen share track
+let screenViewAttemptId = null;       // carte actuellement en vue écran
+
+// ═══════════════════════════════════════════════════════════
+// UTILITAIRES
+// ═══════════════════════════════════════════════════════════
+
+async function api(path, options = {}) {
+    const resp = await fetch(APP_BASE + path, {
+        ...options,
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + authToken,
+            ...(options.headers || {})
+        }
+    });
+    return resp;
+}
+
+function toast(message, type = 'info') {
+    const container = document.getElementById('toast-container');
+    const el = document.createElement('div');
+    el.className = `toast ${type}`;
+    el.innerHTML = `<i class="fas fa-${type==='success'?'check-circle':type==='error'?'exclamation-circle':'info-circle'}"></i> ${message}`;
+    container.appendChild(el);
+    setTimeout(() => el.remove(), 4000);
+}
+
+function setFilter(filter, btn) {
+    currentFilter = filter;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    renderGrid();
+}
+
+// ═══════════════════════════════════════════════════════════
+// INITIALISATION
+// ═══════════════════════════════════════════════════════════
+
+async function init() {
+    if (!authToken) { window.location.href = APP_BASE + '/app'; return; }
+
+    try {
+        await loadData();
+
+        document.getElementById('loading-screen').style.display = 'none';
+        document.getElementById('main-header').style.display = 'flex';
+        document.getElementById('dashboard-body').style.display = 'block';
+
+        // Connexion LiveKit pour voir les vidéos
+        await initLiveKit();
+
+        // Polling toutes les 5 secondes
+        setInterval(refreshData, 5000);
+
+    } catch(e) {
+        console.error('Erreur init:', e);
+        toast('Erreur de chargement: ' + e.message, 'error');
+    }
+}
+
+async function loadData() {
+    const resp = await api(`/api/online_exams/${EXAM_ID}/active_proctoring`);
+    if (!resp.ok) {
+        if (resp.status === 401) { window.location.href = APP_BASE + '/app'; return; }
+        if (resp.status === 403) { toast('Accès réservé aux enseignants', 'error'); return; }
+        throw new Error('Impossible de charger les données');
+    }
+    const data = await resp.json();
+    studentsData = data.attempts || [];
+
+    document.getElementById('exam-title').textContent = data.exam_title || 'Examen';
+    document.getElementById('exam-subtitle').textContent =
+        `Dashboard de surveillance • Statut: ${data.exam_status || '?'}`;
+
+    updateStats();
+    renderGrid();
+}
+
+async function refreshData() {
+    const icon = document.getElementById('refresh-icon');
+    if (icon) icon.classList.add('fa-spin');
+    try { await loadData(); } catch(e) {}
+    setTimeout(() => { if (icon) icon.classList.remove('fa-spin'); }, 500);
+}
+
+function updateStats() {
+    const active   = studentsData.filter(s => s.status === 'IN_PROGRESS').length;
+    const highRisk = studentsData.filter(s => s.risk_score >= 70).length;
+    const banned   = studentsData.filter(s => s.banned).length;
+
+    document.getElementById('stat-active').textContent   = active;
+    document.getElementById('stat-highrisk').textContent = highRisk;
+    document.getElementById('stat-banned').textContent   = banned;
+}
+
+// ═══════════════════════════════════════════════════════════
+// GRILLE DES ÉTUDIANTS
+// ═══════════════════════════════════════════════════════════
+
+function renderGrid() {
+    const grid   = document.getElementById('students-grid');
+    const search = (document.getElementById('search-input').value || '').toLowerCase();
+
+    let filtered = studentsData.filter(s => {
+        if (search && !s.student_name.toLowerCase().includes(search) &&
+                      !s.student_email.toLowerCase().includes(search)) return false;
+        if (currentFilter === 'IN_PROGRESS') return s.status === 'IN_PROGRESS';
+        if (currentFilter === 'BANNED')      return s.banned;
+        if (currentFilter === 'high_risk')   return s.risk_score >= 70;
+        return true;
+    });
+
+    if (filtered.length === 0) {
+        grid.innerHTML = `
+            <div class="empty-grid">
+                <i class="fas fa-users-slash"></i>
+                <p>Aucun étudiant correspondant</p>
+            </div>`;
+        return;
+    }
+
+    // Mettre à jour les cartes existantes ou en créer de nouvelles
+    const existingIds = new Set([...grid.querySelectorAll('.student-card')].map(el => el.dataset.attemptId));
+    const newIds = new Set(filtered.map(s => String(s.attempt_id)));
+
+    // Supprimer les cartes qui ne sont plus dans le filtre
+    grid.querySelectorAll('.student-card').forEach(el => {
+        if (!newIds.has(el.dataset.attemptId)) el.remove();
+    });
+
+    filtered.forEach(student => {
+        const existingCard = grid.querySelector(`[data-attempt-id="${student.attempt_id}"]`);
+        if (existingCard) {
+            updateCard(existingCard, student);
+        } else {
+            const card = createCard(student);
+            grid.appendChild(card);
+            // Attacher la vidéo si disponible
+            attachVideoToCard(student.livekit_identity, student.attempt_id);
+        }
+    });
+}
+
+function getRiskClass(score) {
+    if (score >= 70) return 'high';
+    if (score >= 40) return 'medium';
+    return 'low';
+}
+
+function getStatusLabel(status) {
+    const map = { IN_PROGRESS: 'En cours', SUBMITTED: 'Soumis',
+                  BANNED: 'Exclu', AUTO_SUBMITTED: 'Auto-soumis' };
+    return map[status] || status;
+}
+
+function getStatusClass(status) {
+    if (status === 'IN_PROGRESS') return 'active';
+    if (status === 'BANNED')      return 'banned';
+    return 'submitted';
+}
+
+function createCard(student) {
+    const card = document.createElement('div');
+    card.className = `student-card${student.banned ? ' banned' : student.risk_score >= 70 ? ' high-risk' : ''}`;
+    card.dataset.attemptId = student.attempt_id;
+
+    card.innerHTML = buildCardHTML(student);
+    return card;
+}
+
+function updateCard(card, student) {
+    // Mettre à jour seulement les éléments dynamiques
+    card.className = `student-card${student.banned ? ' banned' : student.risk_score >= 70 ? ' high-risk' : ''}`;
+
+    const riskFill = card.querySelector('.risk-mini-fill');
+    const riskClass = getRiskClass(student.risk_score);
+    if (riskFill) {
+        riskFill.style.width = student.risk_score + '%';
+        riskFill.className = `risk-mini-fill ${riskClass}`;
+    }
+
+    const cvRisk = card.querySelector('.cv-risk-badge');
+    if (cvRisk) {
+        cvRisk.textContent = student.risk_score + '%';
+        cvRisk.className = `cv-risk-badge ${riskClass}`;
+    }
+
+    const metrics = card.querySelector('.card-metrics');
+    if (metrics) metrics.innerHTML = buildMetricsHTML(student);
+
+    const statusEl = card.querySelector('.status-indicator');
+    if (statusEl) {
+        statusEl.className = `status-indicator ${getStatusClass(student.status)}`;
+        statusEl.innerHTML = `<i class="fas fa-circle"></i> ${getStatusLabel(student.status)}`;
+    }
+
+    // Overlay banni
+    const videoDiv = card.querySelector('.card-video');
+    let bannedOverlay = card.querySelector('.banned-overlay');
+    if (student.banned && !bannedOverlay && videoDiv) {
+        bannedOverlay = document.createElement('div');
+        bannedOverlay.className = 'banned-overlay';
+        bannedOverlay.innerHTML = '<i class="fas fa-ban"></i> EXCLU';
+        videoDiv.appendChild(bannedOverlay);
+    }
+}
+
+function buildMetricsHTML(student) {
+    return `
+        <div class="metric-chip ${student.tab_switches > 0 ? 'warn' : ''}">
+            <i class="fas fa-exchange-alt"></i> ${student.tab_switches} onglets
+        </div>
+        <div class="metric-chip ${student.warnings_count > 2 ? 'bad' : student.warnings_count > 0 ? 'warn' : ''}">
+            <i class="fas fa-exclamation"></i> ${student.warnings_count} alertes
+        </div>`;
+}
+
+function buildCardHTML(student) {
+    const riskClass = getRiskClass(student.risk_score);
+    return `
+        <div class="card-video">
+            <div class="card-video-placeholder">
+                <i class="fas fa-video-slash"></i>
+                <span>Connexion en attente…</span>
+            </div>
+            <video id="video-${student.attempt_id}" autoplay playsinline
+                   style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none"></video>
+            <div class="card-video-overlay">
+                <span class="cv-risk-badge ${riskClass}">${student.risk_score}%</span>
+            </div>
+            ${student.banned ? '<div class="banned-overlay"><i class="fas fa-ban"></i> EXCLU</div>' : ''}
+        </div>
+        <div class="card-info">
+            <div class="card-name">${student.student_name}</div>
+            <div class="card-email">${student.student_email}</div>
+            <span class="status-indicator ${getStatusClass(student.status)}">
+                <i class="fas fa-circle"></i> ${getStatusLabel(student.status)}
+            </span>
+            <div class="card-metrics">${buildMetricsHTML(student)}</div>
+            <div class="risk-mini-bar">
+                <div class="risk-mini-fill ${riskClass}" style="width:${student.risk_score}%"></div>
+            </div>
+            <div class="card-actions">
+                ${!student.banned ? `
+                <button class="btn btn-warning btn-sm" onclick='openSendModal(${student.attempt_id},"${student.student_name}","warning")' title="Avertir">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </button>
+                <button class="btn btn-primary btn-sm" onclick='openSendModal(${student.attempt_id},"${student.student_name}","message")' title="Envoyer un message">
+                    <i class="fas fa-comment"></i>
+                </button>
+                <button class="btn btn-danger btn-sm" onclick='openBanModal(${student.attempt_id},"${student.student_name}")' title="Exclure">
+                    <i class="fas fa-ban"></i>
+                </button>
+                <button class="btn btn-sm" id="rec-btn-${student.attempt_id}"
+                    style="background:rgba(239,68,68,.15);color:var(--danger);border:1px solid rgba(239,68,68,.3)"
+                    onclick="toggleRecording(${student.attempt_id})" title="Démarrer l'enregistrement">
+                    <i class="fas fa-circle"></i> REC
+                </button>
+                ` : `<span style="font-size:11px;color:var(--danger)">Exclu - ${student.ban_reason || ''}</span>`}
+                <button class="btn btn-sm" id="screen-btn-${student.attempt_id}"
+                    style="display:none;background:rgba(99,102,241,.15);color:#6366f1;border:1px solid rgba(99,102,241,.3)"
+                    onclick="openScreenModal(${student.attempt_id},'${student.livekit_identity}')" title="Voir l'écran partagé">
+                    <i class="fas fa-desktop"></i>
+                </button>
+                <button class="btn btn-light btn-sm" onclick="openSidePanel(${student.attempt_id})" style="margin-left:auto" title="Voir les logs">
+                    <i class="fas fa-list"></i>
+                </button>
+            </div>
+        </div>`;
+}
+
+function updateScreenBtn(attemptId, active) {
+    const btn = document.getElementById(`screen-btn-${attemptId}`);
+    if (btn) btn.style.display = active ? 'inline-flex' : 'none';
+}
+
+// ═══════════════════════════════════════════════════════════
+// LIVEKIT (PROF)
+// ═══════════════════════════════════════════════════════════
+
+async function initLiveKit() {
+    let attempts = 0;
+    while (typeof LivekitClient === 'undefined' && attempts < 50) {
+        await new Promise(r => setTimeout(r, 100));
+        attempts++;
+    }
+    if (typeof LivekitClient === 'undefined') return;
+
+    const tokenResp = await api(`/api/online_exams/${EXAM_ID}/proctor_token`);
+    if (!tokenResp.ok) { console.warn('Token LiveKit prof non disponible'); return; }
+    const tokenData = await tokenResp.json();
+
+    try {
+        room = new LivekitClient.Room({ adaptiveStream: true, dynacast: true });
+
+        room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, pub, participant) => {
+            console.log('Track reçu de', participant.identity, track.kind, pub.source);
+            if (track.kind !== 'video') return;
+            const student = studentsData.find(s => s.livekit_identity === participant.identity);
+            const isScreen = pub.source === LivekitClient.Track.Source.ScreenShare || pub.trackName === 'screen';
+            if (isScreen) {
+                teacherScreenTracks.set(participant.identity, track);
+                if (student) {
+                    toast(`📺 ${student.student_name} partage son écran`, 'info');
+                    updateScreenBtn(student.attempt_id, true);
+                }
+            } else {
+                teacherVideoTracks.set(participant.identity, track);
+                if (student) attachVideoToCard(participant.identity, student.attempt_id);
+            }
+        });
+
+        room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track, pub, participant) => {
+            if (track.kind !== 'video') return;
+            const isScreen = pub.source === LivekitClient.Track.Source.ScreenShare || pub.trackName === 'screen';
+            if (isScreen) {
+                teacherScreenTracks.delete(participant.identity);
+                const student = studentsData.find(s => s.livekit_identity === participant.identity);
+                if (student) updateScreenBtn(student.attempt_id, false);
+                // Fermer la vue écran si elle était ouverte pour cet étudiant
+                if (student && screenViewAttemptId === student.attempt_id) closeScreenModal();
+            } else {
+                teacherVideoTracks.delete(participant.identity);
+                const videoEl = document.querySelector(`video[data-identity="${participant.identity}"]`);
+                if (videoEl) videoEl.style.display = 'none';
+            }
+        });
+
+        room.on(LivekitClient.RoomEvent.ParticipantConnected, (participant) => {
+            toast(`${participant.identity} connecté`, 'info');
+        });
+
+        room.on(LivekitClient.RoomEvent.ParticipantDisconnected, (participant) => {
+            const student = studentsData.find(s => s.livekit_identity === participant.identity);
+            const name = student ? student.student_name : participant.identity;
+            toast(`${name} déconnecté`, 'error');
+        });
+
+        await room.connect(tokenData.ws_url, tokenData.token);
+        console.log('✅ LiveKit prof connecté');
+
+        // Attacher les pistes déjà présentes
+        room.remoteParticipants.forEach((participant) => {
+            participant.trackPublications.forEach((pub) => {
+                if (!pub.track || pub.kind !== LivekitClient.Track.Kind.Video) return;
+                const isScreen = pub.source === LivekitClient.Track.Source.ScreenShare || pub.trackName === 'screen';
+                const student = studentsData.find(s => s.livekit_identity === participant.identity);
+                if (isScreen) {
+                    teacherScreenTracks.set(participant.identity, pub.track);
+                    if (student) updateScreenBtn(student.attempt_id, true);
+                } else {
+                    teacherVideoTracks.set(participant.identity, pub.track);
+                    if (student) attachVideoToCard(participant.identity, student.attempt_id);
+                }
+            });
+        });
+
+    } catch(e) {
+        console.error('Erreur LiveKit prof:', e);
+    }
+}
+
+function attachVideoToCard(identity, attemptId) {
+    const track = teacherVideoTracks.get(identity);
+    const videoEl = document.getElementById(`video-${attemptId}`);
+    if (!track || !videoEl) return;
+
+    videoEl.dataset.identity = identity;
+    track.attach(videoEl);
+    videoEl.style.display = 'block';
+
+    // Cacher le placeholder
+    const placeholder = videoEl.previousElementSibling;
+    if (placeholder?.classList.contains('card-video-placeholder')) {
+        placeholder.style.display = 'none';
+    }
+}
+
+// Caméra et micro du prof (indépendants)
+let myVideoTrack = null, myAudioTrack = null;
+let myVideoEnabled = false, myAudioEnabled = false;
+
+async function toggleTeacherVideo() {
+    const icon = document.getElementById('my-cam-icon');
+    const btn  = document.getElementById('btn-teacher-video');
+    if (!myVideoEnabled) {
+        try {
+            myVideoTrack = await LivekitClient.createLocalVideoTrack({
+                resolution: LivekitClient.VideoPresets.h360.resolution
+            });
+            await room?.localParticipant.publishTrack(myVideoTrack);
+            myVideoEnabled = true;
+            if (icon) icon.className = 'fas fa-video';
+            if (btn)  btn.style.background = 'rgba(16,185,129,.3)';
+            toast('Caméra activée — les étudiants peuvent vous voir', 'success');
+        } catch(e) {
+            toast('Impossible d\'activer la caméra : ' + e.message, 'error');
+        }
+    } else {
+        if (myVideoTrack) {
+            await room?.localParticipant.unpublishTrack(myVideoTrack);
+            myVideoTrack.stop();
+            myVideoTrack = null;
+        }
+        myVideoEnabled = false;
+        if (icon) icon.className = 'fas fa-video-slash';
+        if (btn)  btn.style.background = '';
+        toast('Caméra désactivée', 'info');
+    }
+}
+
+async function toggleTeacherMic() {
+    const icon = document.getElementById('my-mic-icon');
+    const btn  = document.getElementById('btn-teacher-mic');
+    if (!myAudioEnabled) {
+        try {
+            myAudioTrack = await LivekitClient.createLocalAudioTrack();
+            await room?.localParticipant.publishTrack(myAudioTrack);
+            myAudioEnabled = true;
+            if (icon) icon.className = 'fas fa-microphone';
+            if (btn)  btn.style.background = 'rgba(16,185,129,.3)';
+            toast('Micro activé — les étudiants peuvent vous entendre', 'success');
+        } catch(e) {
+            toast('Impossible d\'activer le micro : ' + e.message, 'error');
+        }
+    } else {
+        if (myAudioTrack) {
+            await room?.localParticipant.unpublishTrack(myAudioTrack);
+            myAudioTrack.stop();
+            myAudioTrack = null;
+        }
+        myAudioEnabled = false;
+        if (icon) icon.className = 'fas fa-microphone-slash';
+        if (btn)  btn.style.background = '';
+        toast('Micro désactivé', 'info');
+    }
+}
+
+// ═══════════════════════════════════════════════════════════
+// ENREGISTREMENT VIDÉO (LiveKit Egress → S3)
+// ═══════════════════════════════════════════════════════════
+
+const activeRecordings = new Map(); // attemptId → egress_id
+
+async function toggleRecording(attemptId) {
+    const btn = document.getElementById(`rec-btn-${attemptId}`);
+    const isRecording = activeRecordings.has(attemptId);
+
+    if (!isRecording) {
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
+        try {
+            const resp = await api(`/api/exam_attempts/${attemptId}/recording`, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'start' })
+            });
+            const data = await resp.json();
+            if (data.success) {
+                activeRecordings.set(attemptId, data.egress_id);
+                if (btn) {
+                    btn.innerHTML = '<i class="fas fa-stop-circle"></i> STOP';
+                    btn.style.background = 'rgba(239,68,68,.5)';
+                    btn.style.borderColor = 'var(--danger)';
+                    btn.disabled = false;
+                }
+                toast('Enregistrement démarré', 'success');
+            } else {
+                toast('Erreur : ' + (data.error || 'Impossible de démarrer'), 'error');
+                if (btn) { btn.innerHTML = '<i class="fas fa-circle"></i> REC'; btn.disabled = false; }
+            }
+        } catch(e) {
+            toast('Erreur enregistrement : ' + e.message, 'error');
+            if (btn) { btn.innerHTML = '<i class="fas fa-circle"></i> REC'; btn.disabled = false; }
+        }
+    } else {
+        const egressId = activeRecordings.get(attemptId);
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
+        try {
+            const resp = await api(`/api/exam_attempts/${attemptId}/recording`, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'stop', egress_id: egressId })
+            });
+            const data = await resp.json();
+            if (data.success) {
+                activeRecordings.delete(attemptId);
+                if (btn) {
+                    btn.innerHTML = '<i class="fas fa-circle"></i> REC';
+                    btn.style.background = 'rgba(239,68,68,.15)';
+                    btn.style.borderColor = 'rgba(239,68,68,.3)';
+                    btn.disabled = false;
+                }
+                toast('Enregistrement arrêté et sauvegardé sur S3', 'success');
+            } else {
+                toast('Erreur arrêt : ' + (data.error || ''), 'error');
+                if (btn) { btn.innerHTML = '<i class="fas fa-stop-circle"></i> STOP'; btn.disabled = false; }
+            }
+        } catch(e) {
+            toast('Erreur : ' + e.message, 'error');
+            if (btn) { btn.innerHTML = '<i class="fas fa-stop-circle"></i> STOP'; btn.disabled = false; }
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════
+// MESSAGES ÉTUDIANTS → ENSEIGNANT
+// ═══════════════════════════════════════════════════════════
+
+let allStudentMessages = [];
+let lastStudentMsgTimestamp = null;
+
+async function loadStudentMessages() {
+    try {
+        const since = lastStudentMsgTimestamp ? `?since=${encodeURIComponent(lastStudentMsgTimestamp)}` : '';
+        const resp = await api(`/api/online_exams/${EXAM_ID}/student_messages${since}`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const newMsgs = data.messages || [];
+        if (newMsgs.length > 0) {
+            allStudentMessages = [...newMsgs, ...allStudentMessages].slice(0, 100);
+            lastStudentMsgTimestamp = newMsgs[0].timestamp; // desc order
+            // Update counter
+            const counter = document.getElementById('stat-messages');
+            if (counter) counter.textContent = allStudentMessages.length;
+            // Highlight pill
+            const pill = document.getElementById('stat-messages-pill');
+            if (pill) pill.style.background = 'rgba(37,99,235,.7)';
+            // Show toast for new messages
+            newMsgs.forEach(m => toast(`💬 ${m.student_name}: ${m.message.substring(0,60)}`, 'info'));
+        }
+        renderStudentMessagesList();
+    } catch(e) {}
+}
+
+function renderStudentMessagesList() {
+    const list = document.getElementById('student-messages-list');
+    if (!list) return;
+    if (allStudentMessages.length === 0) {
+        list.innerHTML = `<div style="text-align:center;padding:40px;color:rgba(255,255,255,.4);"><i class="fas fa-comments" style="font-size:32px;display:block;margin-bottom:8px;"></i>Aucun message reçu</div>`;
+        return;
+    }
+    list.innerHTML = allStudentMessages.map(m => {
+        const student = studentsData.find(s => s.attempt_id === m.attempt_id);
+        const ts = m.timestamp ? new Date(m.timestamp).toLocaleTimeString('fr-FR') : '';
+        return `
+        <div style="background:rgba(37,99,235,.12);border-left:3px solid #3b82f6;border-radius:4px;padding:10px 12px;margin-bottom:8px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                <strong style="color:#93c5fd;font-size:13px;"><i class="fas fa-user-graduate"></i> ${m.student_name}</strong>
+                <span style="font-size:11px;color:rgba(255,255,255,.5);">${ts}</span>
+            </div>
+            <div style="font-size:13px;color:white;">${m.message}</div>
+            <div style="margin-top:6px;">
+                <button class="btn btn-sm" style="background:rgba(37,99,235,.3);color:white;font-size:11px;" onclick='openSendModal(${m.attempt_id},"${m.student_name}","message")'>
+                    <i class="fas fa-reply"></i> Répondre
+                </button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function openStudentMessages() {
+    const modal = document.getElementById('modal-student-messages');
+    if (modal) {
+        modal.style.display = 'flex';
+        // Reset badge
+        const pill = document.getElementById('stat-messages-pill');
+        if (pill) pill.style.background = 'rgba(37,99,235,.3)';
+    }
+    renderStudentMessagesList();
+}
+
+function closeStudentMessages() {
+    const modal = document.getElementById('modal-student-messages');
+    if (modal) modal.style.display = 'none';
+}
+
+// Polling student messages toutes les 15 secondes
+setInterval(loadStudentMessages, 15000);
+
+// ═══════════════════════════════════════════════════════════
+// ACTIONS : AVERTISSEMENT / MESSAGE
+// ═══════════════════════════════════════════════════════════
+
+function openSendModal(attemptId, studentName, type) {
+    selectedAttemptId = attemptId;
+    sendType = type;
+    document.getElementById('modal-send-title').innerHTML =
+        `<i class="fas fa-${type === 'warning' ? 'exclamation-triangle' : 'comment'}"></i> ` +
+        (type === 'warning' ? 'Avertissement pour ' : 'Message pour ') + studentName;
+    document.getElementById('modal-send-text').value = '';
+    document.getElementById('modal-send').classList.add('active');
+}
+
+function closeSendModal() {
+    document.getElementById('modal-send').classList.remove('active');
+    selectedAttemptId = null;
+}
+
+async function sendMessage() {
+    if (!selectedAttemptId) return;
+    const text = document.getElementById('modal-send-text').value.trim();
+    if (!text) { toast('Le message ne peut pas être vide', 'error'); return; }
+
+    try {
+        const resp = await api(`/api/exam_attempts/${selectedAttemptId}/send_warning`, {
+            method: 'POST',
+            body: JSON.stringify({ message: text, type: sendType })
+        });
+        if (resp.ok) {
+            toast('Message envoyé avec succès', 'success');
+            closeSendModal();
+            await refreshData();
+        } else {
+            toast('Erreur lors de l\'envoi', 'error');
+        }
+    } catch(e) {
+        toast('Erreur: ' + e.message, 'error');
+    }
+}
+
+// ═══════════════════════════════════════════════════════════
+// ACTIONS : BAN
+// ═══════════════════════════════════════════════════════════
+
+function openBanModal(attemptId, studentName) {
+    banAttemptId = attemptId;
+    document.getElementById('ban-student-name').textContent = studentName;
+    document.getElementById('ban-reason-text').value = '';
+    document.getElementById('modal-ban-confirm').classList.add('active');
+}
+
+function closeBanModal() {
+    document.getElementById('modal-ban-confirm').classList.remove('active');
+    banAttemptId = null;
+}
+
+async function confirmBan() {
+    if (!banAttemptId) return;
+    const reason = document.getElementById('ban-reason-text').value.trim() || 'Exclu par l\'enseignant';
+
+    try {
+        const resp = await api(`/api/exam_attempts/${banAttemptId}/proctor_ban`, {
+            method: 'POST',
+            body: JSON.stringify({ reason })
+        });
+        if (resp.ok) {
+            toast('Étudiant exclu de l\'examen', 'success');
+            closeBanModal();
+            await refreshData();
+        } else {
+            toast('Erreur lors de l\'exclusion', 'error');
+        }
+    } catch(e) {
+        toast('Erreur: ' + e.message, 'error');
+    }
+}
+
+// ═══════════════════════════════════════════════════════════
+// PANNEAU LATÉRAL : LOGS ÉTUDIANT
+// ═══════════════════════════════════════════════════════════
+
+async function openSidePanel(attemptId) {
+    document.getElementById('side-panel').classList.add('open');
+
+    const content = document.getElementById('side-panel-content');
+    content.innerHTML = '<div style="text-align:center;padding:20px;color:rgba(255,255,255,.4)"><i class="fas fa-sync fa-spin"></i></div>';
+
+    try {
+        const resp = await api(`/api/online_exams/${EXAM_ID}/incidents`);
+        if (!resp.ok) throw new Error('Erreur chargement logs');
+        const data = await resp.json();
+
+        const logs = (data.incidents || data || []).filter(l => l.attempt_id == attemptId);
+
+        if (logs.length === 0) {
+            content.innerHTML = '<div style="text-align:center;padding:30px;color:rgba(255,255,255,.3)">Aucun événement</div>';
+            return;
+        }
+
+        const iconMap = {
+            tab_switch:       { icon: 'exchange-alt',        color: 'var(--warning)' },
+            copy_attempt:     { icon: 'copy',                color: 'var(--warning)' },
+            paste_attempt:    { icon: 'paste',               color: 'var(--warning)' },
+            right_click:      { icon: 'mouse-pointer',       color: 'var(--secondary)' },
+            devtools_attempt: { icon: 'code',                color: 'var(--danger)' },
+            fullscreen_exit:  { icon: 'compress',            color: 'var(--warning)' },
+            no_face_detected: { icon: 'user-slash',          color: 'var(--danger)' },
+            multiple_faces:   { icon: 'users',               color: 'var(--danger)' },
+            camera_blocked:   { icon: 'video-slash',         color: 'var(--danger)' },
+            face_covered:     { icon: 'eye-slash',           color: 'var(--danger)' },
+            face_mismatch:    { icon: 'user-times',          color: 'var(--danger)' },
+            face_reference_captured: { icon: 'user-check',  color: 'var(--success)' },
+            window_blur:      { icon: 'window-minimize',     color: 'var(--secondary)' },
+            teacher_warning:  { icon: 'exclamation-triangle',color: 'var(--warning)' },
+            teacher_message:  { icon: 'comment',             color: 'var(--primary)' },
+            teacher_ban:      { icon: 'ban',                 color: 'var(--danger)' },
+            session_end:      { icon: 'sign-out-alt',        color: 'var(--secondary)' },
+        };
+
+        const labelMap = {
+            tab_switch:       "Changement d'onglet",
+            copy_attempt:     'Tentative de copie',
+            paste_attempt:    'Tentative de collage',
+            right_click:      'Clic droit bloqué',
+            devtools_attempt: "Tentative d'ouverture des outils développeur",
+            fullscreen_exit:  'Plein écran quitté',
+            no_face_detected: 'Aucun visage détecté',
+            multiple_faces:   'Plusieurs visages détectés',
+            camera_blocked:   'Caméra bloquée / accès refusé',
+            face_covered:     'Visage couvert',
+            face_mismatch:    'Visage non reconnu — imposteur possible',
+            face_reference_captured: 'Référence faciale capturée',
+            window_blur:      'Fenêtre perdue au premier plan',
+            teacher_warning:  "Avertissement de l'enseignant",
+            teacher_message:  "Message de l'enseignant",
+            teacher_ban:      "Exclusion par l'enseignant",
+            session_end:      'Fin de session',
+        };
+
+        function parseDetail(raw) {
+            if (!raw) return '';
+            try {
+                const obj = JSON.parse(raw);
+                if (obj.message) return obj.message;
+                return Object.entries(obj).filter(([k]) => k !== 'from_teacher' && k !== 'timestamp')
+                    .map(([k, v]) => `${k}: ${v}`).join(' · ');
+            } catch(e) { return raw; }
+        }
+
+        content.innerHTML = logs.slice(-50).reverse().map(log => {
+            const meta   = iconMap[log.event_type]  || { icon: 'circle', color: 'rgba(255,255,255,.4)' };
+            const label  = labelMap[log.event_type] || log.event_type.replace(/_/g, ' ');
+            const ts     = log.timestamp ? new Date(log.timestamp).toLocaleTimeString('fr-FR') : '--:--';
+            const detail = parseDetail(log.event_data);
+            return `
+                <div class="log-entry">
+                    <i class="fas fa-${meta.icon}" style="color:${meta.color}"></i>
+                    <div style="flex:1">
+                        <div style="color:rgba(255,255,255,.85);font-weight:600">${label}</div>
+                        ${detail ? `<div style="color:rgba(255,255,255,.45);font-size:9px;margin-top:2px">${detail}</div>` : ''}
+                    </div>
+                    <div class="log-time">${ts}</div>
+                </div>`;
+        }).join('');
+
+    } catch(e) {
+        content.innerHTML = '<div style="color:var(--danger);padding:12px">Erreur: ' + e.message + '</div>';
+    }
+}
+
+function closeSidePanel() {
+    document.getElementById('side-panel').classList.remove('open');
+}
+
+// ═══════════════════════════════════════════════════════════
+// VUE ÉCRAN ÉTUDIANT (Screen Share)
+// ═══════════════════════════════════════════════════════════
+
+function openScreenModal(attemptId, identity) {
+    screenViewAttemptId = attemptId;
+    const modal = document.getElementById('modal-screen-view');
+    const videoEl = document.getElementById('screen-view-video');
+    const placeholder = document.getElementById('screen-view-placeholder');
+    const titleEl = document.getElementById('screen-view-title');
+
+    const student = studentsData.find(s => s.attempt_id === attemptId);
+    if (titleEl) titleEl.textContent = `Écran de ${student ? student.student_name : 'l\'étudiant'}`;
+
+    modal.style.display = 'flex';
+
+    const track = teacherScreenTracks.get(identity);
+    if (track) {
+        videoEl.style.display = 'block';
+        placeholder.style.display = 'none';
+        track.attach(videoEl);
+    } else {
+        videoEl.style.display = 'none';
+        placeholder.style.display = 'block';
+    }
+}
+
+function closeScreenModal() {
+    const modal = document.getElementById('modal-screen-view');
+    const videoEl = document.getElementById('screen-view-video');
+    modal.style.display = 'none';
+    // Détacher la piste pour éviter les fuites
+    try { videoEl.srcObject = null; } catch(e) {}
+    screenViewAttemptId = null;
+}
+
+// ═══════════════════════════════════════════════════════════
+// ENREGISTREMENTS CAMÉRA
+// ═══════════════════════════════════════════════════════════
+
+let recordingsData = null;
+let videoRecordingsData = null;
+let selectedRecStudentIdx = 0;
+let currentRecTab = 'videos';
+
+async function openRecordingsModal() {
+    const modal = document.getElementById('modal-recordings');
+    modal.style.display = 'flex';
+    currentRecTab = 'videos';
+    switchRecTab('videos');
+    await loadVideoRecordings();
+}
+
+function closeRecordingsModal() {
+    document.getElementById('modal-recordings').style.display = 'none';
+}
+
+function switchRecTab(tab) {
+    currentRecTab = tab;
+    const tabVideos = document.getElementById('tab-videos');
+    const tabSnaps  = document.getElementById('tab-snapshots');
+    if (tab === 'videos') {
+        tabVideos.style.background = 'rgba(59,130,246,.2)';
+        tabVideos.style.color = 'white';
+        tabVideos.style.borderBottom = '2px solid #3b82f6';
+        tabSnaps.style.background = 'transparent';
+        tabSnaps.style.color = 'rgba(255,255,255,.5)';
+        tabSnaps.style.borderBottom = '2px solid transparent';
+        if (videoRecordingsData) renderVideoRecordings();
+        else loadVideoRecordings();
+    } else {
+        tabSnaps.style.background = 'rgba(59,130,246,.2)';
+        tabSnaps.style.color = 'white';
+        tabSnaps.style.borderBottom = '2px solid #3b82f6';
+        tabVideos.style.background = 'transparent';
+        tabVideos.style.color = 'rgba(255,255,255,.5)';
+        tabVideos.style.borderBottom = '2px solid transparent';
+        if (recordingsData) renderRecordingsView();
+        else loadRecordings();
+    }
+}
+
+async function loadVideoRecordings() {
+    const body = document.getElementById('recordings-body');
+    body.innerHTML = `<div style="text-align:center;padding:40px;color:rgba(255,255,255,.4);">
+        <i class="fas fa-sync fa-spin" style="font-size:24px;display:block;margin-bottom:8px;"></i>Chargement des vidéos…</div>`;
+    try {
+        const resp = await api(`/api/online_exams/${EXAM_ID}/video_recordings`);
+        const data = await resp.json();
+        videoRecordingsData = data;
+        renderVideoRecordings();
+    } catch(e) {
+        body.innerHTML = `<div style="color:var(--danger);padding:20px;text-align:center;"><i class="fas fa-exclamation-circle"></i> ${e.message}</div>`;
+    }
+}
+
+function renderVideoRecordings() {
+    const body = document.getElementById('recordings-body');
+    if (!videoRecordingsData) return;
+
+    const videos = videoRecordingsData.videos || [];
+    const error  = videoRecordingsData.error;
+
+    if (error && videos.length === 0) {
+        body.innerHTML = `<div style="color:var(--warning);background:rgba(245,158,11,.1);border-radius:8px;padding:16px;margin-bottom:12px;">
+            <i class="fas fa-exclamation-triangle"></i> ${error}</div>
+            <div style="text-align:center;padding:20px;color:rgba(255,255,255,.4);">
+                Aucune vidéo disponible — les enregistrements apparaîtront ici après utilisation du bouton REC sur les cartes étudiants.
+            </div>`;
+        return;
+    }
+
+    if (videos.length === 0) {
+        body.innerHTML = `<div style="text-align:center;padding:40px;color:rgba(255,255,255,.4);">
+            <i class="fas fa-video-slash" style="font-size:32px;display:block;margin-bottom:10px;"></i>
+            <div style="font-size:14px;margin-bottom:8px;">Aucune vidéo enregistrée pour cet examen</div>
+            <div style="font-size:12px;opacity:.7;">Utilisez le bouton <strong>REC</strong> sur les cartes étudiants pour démarrer un enregistrement.</div>
+        </div>`;
+        return;
+    }
+
+    const rows = videos.map(v => {
+        const ts = v.last_modified ? new Date(v.last_modified).toLocaleString('fr-FR') : '—';
+        const started = v.started_at ? new Date(v.started_at).toLocaleTimeString('fr-FR') : '—';
+        const statusColors = { IN_PROGRESS:'#10b981', SUBMITTED:'#3b82f6', BANNED:'#ef4444', AUTO_SUBMITTED:'#f59e0b' };
+        const sc = statusColors[v.student_status] || '#64748b';
+        return `
+        <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+            <div style="width:44px;height:44px;background:rgba(59,130,246,.15);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px;color:#3b82f6;flex-shrink:0;">
+                <i class="fas fa-film"></i>
+            </div>
+            <div style="flex:1;min-width:160px;">
+                <div style="font-size:14px;font-weight:700;color:white;">${v.student_name}</div>
+                <div style="font-size:11px;color:rgba(255,255,255,.45);margin-top:2px;">
+                    <i class="fas fa-file-video" style="margin-right:4px;"></i>${v.filename}
+                    &nbsp;·&nbsp;<i class="fas fa-weight-hanging" style="margin-right:2px;"></i>${v.size_mb} Mo
+                    &nbsp;·&nbsp;<i class="fas fa-calendar" style="margin-right:2px;"></i>${ts}
+                </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+                <span style="font-size:11px;padding:3px 8px;border-radius:99px;background:${sc}22;color:${sc};">${v.student_status||'—'}</span>
+                ${v.url ? `
+                <a href="${v.url}" target="_blank" download="${v.filename}"
+                   style="display:inline-flex;align-items:center;gap:5px;padding:7px 13px;background:rgba(16,185,129,.15);color:#10b981;border:1px solid rgba(16,185,129,.3);border-radius:7px;text-decoration:none;font-size:12px;font-weight:600;">
+                    <i class="fas fa-download"></i> Télécharger
+                </a>
+                <a href="${v.url}" target="_blank"
+                   style="display:inline-flex;align-items:center;gap:5px;padding:7px 13px;background:rgba(59,130,246,.15);color:#60a5fa;border:1px solid rgba(59,130,246,.3);border-radius:7px;text-decoration:none;font-size:12px;font-weight:600;">
+                    <i class="fas fa-play"></i> Lire
+                </a>` : `<span style="font-size:11px;color:rgba(255,255,255,.3);">URL expirée</span>`}
+            </div>
+        </div>`;
+    }).join('');
+
+    body.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+            <div style="font-size:13px;color:rgba(255,255,255,.5);">
+                <i class="fas fa-folder-open"></i> ${videoRecordingsData.prefix || ''} &nbsp;·&nbsp; ${videos.length} fichier(s)
+            </div>
+            <button class="btn btn-light btn-sm" onclick="loadVideoRecordings()"><i class="fas fa-sync-alt"></i> Actualiser</button>
+        </div>
+        ${error ? `<div style="color:var(--warning);background:rgba(245,158,11,.1);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;"><i class="fas fa-exclamation-triangle"></i> ${error}</div>` : ''}
+        ${rows}
+        <div style="font-size:11px;color:rgba(255,255,255,.3);margin-top:10px;text-align:center;">
+            Les liens de téléchargement sont valables 2 heures. Cliquez sur Actualiser pour les renouveler.
+        </div>`;
+}
+
+async function loadRecordings() {
+    const body = document.getElementById('recordings-body');
+    body.innerHTML = `<div style="text-align:center;padding:40px;color:rgba(255,255,255,.4);">
+        <i class="fas fa-sync fa-spin" style="font-size:24px;display:block;margin-bottom:8px;"></i>Chargement…</div>`;
+
+    try {
+        const resp = await api(`/api/online_exams/${EXAM_ID}/recordings`);
+        if (!resp.ok) {
+            const err = await resp.json();
+            body.innerHTML = `<div style="color:var(--danger);padding:20px;text-align:center;"><i class="fas fa-exclamation-circle"></i> ${err.error || 'Erreur de chargement'}</div>`;
+            return;
+        }
+        recordingsData = await resp.json();
+        renderRecordingsView();
+    } catch(e) {
+        body.innerHTML = `<div style="color:var(--danger);padding:20px;text-align:center;"><i class="fas fa-exclamation-circle"></i> ${e.message}</div>`;
+    }
+}
+
+function renderRecordingsView() {
+    const body = document.getElementById('recordings-body');
+    const students = (recordingsData && recordingsData.students) || [];
+
+    if (students.length === 0) {
+        body.innerHTML = `<div style="text-align:center;padding:40px;color:rgba(255,255,255,.4);">
+            <i class="fas fa-camera-slash" style="font-size:32px;display:block;margin-bottom:8px;"></i>
+            Aucun enregistrement disponible pour cet examen.</div>`;
+        return;
+    }
+
+    const statusLabel = { IN_PROGRESS:'En cours', SUBMITTED:'Soumis', BANNED:'Exclu', AUTO_SUBMITTED:'Auto-soumis' };
+    const statusColor = { IN_PROGRESS:'#10b981', SUBMITTED:'#3b82f6', BANNED:'#ef4444', AUTO_SUBMITTED:'#f59e0b' };
+
+    if (selectedRecStudentIdx >= students.length) selectedRecStudentIdx = 0;
+    const cur = students[selectedRecStudentIdx];
+
+    // Sidebar: liste des étudiants
+    const sidebarItems = students.map((s, i) => `
+        <div onclick="selectedRecStudentIdx=${i};renderRecordingsView()"
+             style="padding:10px 12px;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:10px;
+                    background:${i===selectedRecStudentIdx?'rgba(59,130,246,.25)':'transparent'};
+                    border:1px solid ${i===selectedRecStudentIdx?'rgba(59,130,246,.5)':'transparent'};
+                    margin-bottom:4px;">
+            <div style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.1);
+                        display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;">
+                <i class="fas fa-user"></i>
+            </div>
+            <div style="flex:1;min-width:0;">
+                <div style="font-size:13px;font-weight:600;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${s.student_name}</div>
+                <div style="font-size:11px;color:rgba(255,255,255,.4);">${s.snapshots_count} snapshot${s.snapshots_count!==1?'s':''}</div>
+            </div>
+            <span style="font-size:10px;padding:2px 7px;border-radius:99px;background:${statusColor[s.status]||'#64748b'}22;color:${statusColor[s.status]||'#94a3b8'};white-space:nowrap;">
+                ${statusLabel[s.status]||s.status}
+            </span>
+        </div>`).join('');
+
+    // Snapshots de l'étudiant sélectionné
+    let snapshotsHTML = '';
+    if (cur.snapshots && cur.snapshots.length > 0) {
+        snapshotsHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-top:12px;">` +
+            cur.snapshots.filter(s => s.image_data).map(snap => {
+                const ts = snap.timestamp ? new Date(snap.timestamp).toLocaleTimeString('fr-FR') : '';
+                const eventLabel = snap.event_type ? snap.event_type.replace(/_/g,' ') : '';
+                const isBase64 = snap.image_data && snap.image_data.startsWith('data:');
+                const src = isBase64 ? snap.image_data : `data:image/jpeg;base64,${snap.image_data}`;
+                return `
+                <div style="background:rgba(0,0,0,.3);border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.1);">
+                    <img src="${src}" alt="snapshot" style="width:100%;aspect-ratio:4/3;object-fit:cover;display:block;"
+                         onerror="this.parentElement.style.display='none'">
+                    <div style="padding:6px 8px;">
+                        <div style="font-size:10px;color:rgba(255,255,255,.6);">${ts}</div>
+                        ${eventLabel ? `<div style="font-size:10px;color:#f59e0b;">${eventLabel}</div>` : ''}
+                    </div>
+                </div>`;
+            }).join('') + `</div>`;
+        if (cur.snapshots.filter(s => s.image_data).length === 0) {
+            snapshotsHTML = `<div style="color:rgba(255,255,255,.4);font-size:13px;padding:20px 0;text-align:center;">
+                ${cur.snapshots.length} événement(s) enregistré(s) — aucune image disponible</div>`;
+        }
+    } else {
+        snapshotsHTML = `<div style="color:rgba(255,255,255,.4);font-size:13px;padding:20px 0;text-align:center;">
+            <i class="fas fa-camera-slash" style="display:block;font-size:24px;margin-bottom:8px;"></i>
+            Aucun snapshot caméra pour cet étudiant</div>`;
+    }
+
+    body.innerHTML = `
+        <div style="display:flex;gap:16px;min-height:300px;">
+            <!-- Sidebar étudiants -->
+            <div style="width:220px;flex-shrink:0;border-right:1px solid rgba(255,255,255,.08);padding-right:16px;max-height:500px;overflow-y:auto;">
+                <div style="font-size:11px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">
+                    ${students.length} étudiant(s)
+                </div>
+                ${sidebarItems}
+            </div>
+            <!-- Contenu snapshots -->
+            <div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px;">
+                    <div>
+                        <div style="font-size:15px;font-weight:700;color:white;">${cur.student_name}</div>
+                        <div style="font-size:12px;color:rgba(255,255,255,.4);">${cur.student_email}</div>
+                    </div>
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                        <span style="font-size:11px;padding:3px 10px;border-radius:99px;background:${statusColor[cur.status]||'#64748b'}22;color:${statusColor[cur.status]||'#94a3b8'};">
+                            ${statusLabel[cur.status]||cur.status}
+                        </span>
+                        <span style="font-size:11px;color:rgba(255,255,255,.4);">
+                            <i class="fas fa-camera"></i> ${cur.snapshots_count} snapshot(s)
+                        </span>
+                        <button class="btn btn-light btn-sm" onclick="loadRecordings()" title="Actualiser">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                </div>
+                ${snapshotsHTML}
+            </div>
+        </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// DÉMARRAGE
+// ═══════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

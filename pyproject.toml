@@ -1,0 +1,25 @@
+[project]
+name = "exam-grader-pro"
+version = "2.0.0"
+description = "Système de notation automatique avancé avec authentification et PostgreSQL"
+requires-python = ">=3.10"
+dependencies = [
+    "flask>=3.0.0",
+    "flask-cors>=4.0.0",
+    "flask-jwt-extended>=4.6.0",
+    "flask-bcrypt>=1.0.1",
+    "anthropic>=0.40.0",
+    "python-dotenv>=1.0.0",
+    "PyPDF2>=3.0.0",
+    "python-docx>=1.1.0",
+    "werkzeug>=3.0.0",
+    "psycopg2-binary>=2.9.9",
+    "sqlalchemy>=2.0.0",
+    "reportlab>=4.0.0",
+    "matplotlib>=3.8.0",
+    "pillow>=10.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

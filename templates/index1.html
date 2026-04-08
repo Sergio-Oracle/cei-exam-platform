@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Système de Notation d'Examen - Avancé</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+<body>
+    <!-- Écran de connexion -->
+    <div id="login-screen" class="auth-screen">
+        <div class="auth-container">
+            <div class="auth-header">
+                <h1>🎓 Système de Notation</h1>
+                <p>Connectez-vous pour continuer</p>
+            </div>
+            
+            <form id="login-form" class="auth-form">
+                <div class="form-group">
+                    <label for="login-email">📧 Email</label>
+                    <input type="email" id="login-email" placeholder="votre.email@exemple.com" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="login-password">🔒 Mot de passe</label>
+                    <input type="password" id="login-password" placeholder="••••••••" required>
+                </div>
+                
+                <button type="submit" class="btn btn-primary btn-block">Se connecter</button>
+            </form>
+            
+            <div class="auth-footer">
+                <p>Pas de compte? <a href="#" onclick="showRegister()">S'inscrire</a></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Écran d'inscription -->
+    <div id="register-screen" class="auth-screen" style="display:none;">
+        <div class="auth-container">
+            <div class="auth-header">
+                <h1>🎓 Inscription</h1>
+                <p>Créez votre compte étudiant</p>
+            </div>
+            
+            <form id="register-form" class="auth-form">
+                <div class="form-group">
+                    <label for="register-name">👤 Nom complet</label>
+                    <input type="text" id="register-name" placeholder="Jean Dupont" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="register-email">📧 Email</label>
+                    <input type="email" id="register-email" placeholder="votre.email@exemple.com" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="register-password">🔒 Mot de passe</label>
+                    <input type="password" id="register-password" placeholder="••••••••" required>
+                </div>
+                
+                <button type="submit" class="btn btn-primary btn-block">S'inscrire</button>
+            </form>
+            
+            <div class="auth-footer">
+                <p>Déjà inscrit? <a href="#" onclick="showLogin()">Se connecter</a></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application principale -->
+    <div id="app-screen" style="display:none;">
+        <!-- Header avec navigation -->
+        <header class="app-header">
+            <div class="header-content">
+                <h1>🎓 Système de Notation</h1>
+                <div class="user-menu">
+                    <button id="theme-toggle" class="btn btn-secondary btn-sm" title="Changer le thème"><i class="fa fa-circle-half-stroke"></i></button>
+                    <span id="user-name"></span>
+                    <span id="user-role" class="badge"></span>
+                    <button onclick="logout()" class="btn btn-secondary btn-sm">Déconnexion</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Navigation principale -->
+        <nav class="main-nav" id="main-nav">
+            <!-- Sera rempli dynamiquement selon le rôle -->
+        </nav>
+
+        <!-- Contenu principal -->
+        <main class="main-content" id="main-content">
+            <!-- Le contenu change selon la page -->
+        </main>
+    </div>
+
+    <!-- Loader -->
+    <div id="loader" class="loader" style="display:none;">
+        <div class="spinner"></div>
+        <p>Traitement en cours...</p>
+    </div>
+
+    <!-- Modal générique -->
+    <div id="modal" class="modal" style="display:none;">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeModal()">&times;</span>
+            <div id="modal-body"></div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

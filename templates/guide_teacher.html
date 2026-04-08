@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guide Enseignant — Système de Notation CEI</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#f8fafc; color:#1e293b; line-height:1.7; }
+
+        .topbar { background:linear-gradient(135deg,#2563eb,#1d4ed8); color:white; padding:14px 32px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:100; box-shadow:0 2px 12px rgba(0,0,0,.2); }
+        .topbar-brand { font-size:17px; font-weight:700; display:flex; align-items:center; gap:10px; }
+        .topbar-brand i { font-size:22px; }
+        .btn-back { background:rgba(255,255,255,.15); color:white; border:1px solid rgba(255,255,255,.3); padding:8px 18px; border-radius:8px; text-decoration:none; font-size:13px; font-weight:600; display:inline-flex; align-items:center; gap:6px; transition:.2s; }
+        .btn-back:hover { background:rgba(255,255,255,.25); }
+
+        .hero-doc { background:linear-gradient(135deg,#2563eb,#1e40af); color:white; padding:60px 32px; text-align:center; }
+        .hero-doc h1 { font-size:2.4rem; font-weight:800; margin-bottom:12px; }
+        .hero-doc p { font-size:1.1rem; opacity:.9; max-width:600px; margin:0 auto; }
+        .hero-badge { display:inline-flex; align-items:center; gap:6px; background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.3); padding:6px 16px; border-radius:99px; font-size:13px; font-weight:600; margin-bottom:20px; }
+
+        .content-wrap { max-width:900px; margin:0 auto; padding:48px 24px 80px; }
+
+        .toc { background:white; border-radius:14px; border:1px solid #e2e8f0; padding:24px 28px; margin-bottom:40px; }
+        .toc h3 { font-size:14px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.05em; margin-bottom:14px; }
+        .toc-list { list-style:none; display:flex; flex-direction:column; gap:6px; }
+        .toc-list a { color:#2563eb; text-decoration:none; font-size:14px; font-weight:500; display:flex; align-items:center; gap:8px; }
+        .toc-list a:hover { text-decoration:underline; }
+        .toc-list a i { width:18px; text-align:center; font-size:13px; color:#94a3b8; }
+
+        .section { background:white; border-radius:16px; border:1px solid #e2e8f0; margin-bottom:32px; overflow:hidden; }
+        .section-header { background:linear-gradient(135deg,#eff6ff,#dbeafe); border-bottom:1px solid #bfdbfe; padding:20px 28px; display:flex; align-items:center; gap:14px; }
+        .section-icon { width:48px; height:48px; background:#2563eb; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:20px; color:white; flex-shrink:0; }
+        .section-header h2 { font-size:1.15rem; font-weight:700; color:#1e3a8a; margin:0; }
+        .section-body { padding:28px; }
+
+        .steps { display:flex; flex-direction:column; gap:20px; }
+        .step { display:flex; gap:16px; align-items:flex-start; }
+        .step-num { width:36px; height:36px; background:#2563eb; color:white; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; flex-shrink:0; margin-top:2px; }
+        .step-content h4 { font-size:15px; font-weight:700; color:#0f172a; margin-bottom:6px; }
+        .step-content p { font-size:14px; color:#475569; line-height:1.65; }
+        .step-content ul { margin-top:8px; padding-left:18px; }
+        .step-content li { font-size:13px; color:#64748b; margin-bottom:4px; }
+
+        .tip { background:#fffbeb; border:1px solid #fcd34d; border-left:4px solid #f59e0b; border-radius:8px; padding:14px 16px; margin-top:14px; font-size:13px; color:#92400e; display:flex; align-items:flex-start; gap:10px; }
+        .tip i { color:#f59e0b; margin-top:2px; flex-shrink:0; }
+
+        .info { background:#eff6ff; border:1px solid #bfdbfe; border-left:4px solid #2563eb; border-radius:8px; padding:14px 16px; margin-top:14px; font-size:13px; color:#1e40af; display:flex; align-items:flex-start; gap:10px; }
+        .info i { color:#2563eb; margin-top:2px; flex-shrink:0; }
+
+        .screen-mock { background:#0f172a; border-radius:10px; padding:16px; margin-top:16px; font-family:monospace; font-size:12px; color:#94a3b8; }
+        .screen-mock .label { color:#34d399; font-weight:700; }
+        .screen-mock .path { color:#60a5fa; }
+
+        .feature-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:14px; margin-top:16px; }
+        .feature-item { background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:16px; }
+        .feature-item i { color:#2563eb; font-size:18px; margin-bottom:10px; display:block; }
+        .feature-item h5 { font-size:13px; font-weight:700; color:#0f172a; margin-bottom:6px; }
+        .feature-item p { font-size:12px; color:#64748b; line-height:1.5; }
+
+        footer.doc-footer { background:#1e293b; color:rgba(255,255,255,.7); text-align:center; padding:32px; font-size:13px; }
+        footer.doc-footer a { color:#60a5fa; text-decoration:none; font-weight:600; }
+
+        @media(max-width:640px) { .hero-doc h1 { font-size:1.8rem; } .content-wrap { padding:24px 16px 60px; } }
+    </style>
+</head>
+<body>
+
+<div class="topbar">
+    <div class="topbar-brand">
+        <i class="fas fa-graduation-cap"></i> Système de Notation — CEI
+    </div>
+    <a href="/" class="btn-back"><i class="fas fa-arrow-left"></i> Retour à l'accueil</a>
+</div>
+
+<div class="hero-doc">
+    <div class="hero-badge"><i class="fas fa-chalkboard-teacher"></i> Pour les Enseignants</div>
+    <h1>Guide Enseignant</h1>
+    <p>Tout ce que vous devez savoir pour créer, surveiller et corriger des examens sur la plateforme CEI.</p>
+</div>
+
+<div class="content-wrap">
+
+    <!-- Table des matières -->
+    <div class="toc">
+        <h3><i class="fas fa-list"></i> &nbsp;Sommaire</h3>
+        <ul class="toc-list">
+            <li><a href="#creer-sujet"><i class="fas fa-file-alt"></i> 1. Créer un sujet d'examen</a></li>
+            <li><a href="#creer-examen"><i class="fas fa-plus-circle"></i> 2. Créer et configurer un examen en ligne</a></li>
+            <li><a href="#activer"><i class="fas fa-play-circle"></i> 3. Activer l'examen et surveiller</a></li>
+            <li><a href="#dashboard"><i class="fas fa-tachometer-alt"></i> 4. Dashboard de surveillance en temps réel</a></li>
+            <li><a href="#corriger"><i class="fas fa-robot"></i> 5. Corriger les copies avec l'IA</a></li>
+            <li><a href="#enregistrements"><i class="fas fa-film"></i> 6. Accéder aux enregistrements</a></li>
+            <li><a href="#notes"><i class="fas fa-star"></i> 7. Publier les notes</a></li>
+        </ul>
+    </div>
+
+    <!-- 1. Créer un sujet -->
+    <div class="section" id="creer-sujet">
+        <div class="section-header">
+            <div class="section-icon"><i class="fas fa-file-alt"></i></div>
+            <h2>1. Créer un sujet d'examen</h2>
+        </div>
+        <div class="section-body">
+            <div class="steps">
+                <div class="step">
+                    <div class="step-num">1</div>
+                    <div class="step-content">
+                        <h4>Accéder à la gestion des sujets</h4>
+                        <p>Dans le menu principal, cliquez sur <strong>Sujets d'Examens</strong>. Vous verrez la liste de vos sujets existants et le bouton <strong>+ Nouveau Sujet</strong>.</p>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-num">2</div>
+                    <div class="step-content">
+                        <h4>Rédiger ou téléverser le sujet</h4>
+                        <p>Deux méthodes disponibles :</p>
+                        <ul>
+                            <li><strong>Téléversement</strong> : importez un fichier PDF ou Word — l'IA analyse automatiquement le contenu et génère un barème de notation correspondant.</li>
+                            <li><strong>Génération IA</strong> : choisissez un EC (Élément Constitutif) et cliquez sur "Générer des Suggestions d'Examen avec IA". Sélectionnez une suggestion pour générer un examen complet avec questions numérotées et points.</li>
+                        </ul>
+                        <div class="tip"><i class="fas fa-lightbulb"></i> Après création, un aperçu du sujet ET du barème généré s'affiche pour validation avant utilisation.</div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-num">3</div>
+                    <div class="step-content">
+                        <h4>Vérifier la séparation questions / barème</h4>
+                        <p>Le barème de notation (qui contient les réponses) est stocké séparément. Les étudiants ne voient <strong>jamais</strong> le barème pendant l'examen.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Créer un examen -->
+    <div class="section" id="creer-examen">
+        <div class="section-header">
+            <div class="section-icon"><i class="fas fa-plus-circle"></i></div>
+            <h2>2. Créer et configurer un examen en ligne</h2>
+        </div>
+        <div class="section-body">
+            <div class="steps">
+                <div class="step">
+                    <div class="step-num">1</div>
+                    <div class="step-content">
+                        <h4>Ouvrir la création d'examen</h4>
+                        <p>Dans <strong>Examens en Ligne</strong>, cliquez sur <strong>+ Créer un Examen</strong>. Remplissez le formulaire :</p>
+                        <ul>
+                            <li>Titre de l'examen, sujet associé</li>
+                            <li>Date/heure de début et de fin</li>
+                            <li>Durée (en minutes)</li>
+                            <li>Instructions optionnelles</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-num">2</div>
+                    <div class="step-content">
+                        <h4>Configurer la sécurité anti-triche</h4>
+                        <p>Ajustez les paramètres de surveillance selon vos besoins :</p>
+                        <div class="feature-grid">
+                            <div class="feature-item"><i class="fas fa-exchange-alt"></i><h5>Changements de fenêtre</h5><p>Nombre max avant bannissement automatique</p></div>
+                            <div class="feature-item"><i class="fas fa-eye-slash"></i><h5>Visage absent</h5><p>Seuil de détections "aucun visage" avant alerte</p></div>
+                            <div class="feature-item"><i class="fas fa-ban"></i><h5>Copier/Coller</h5><p>Activer/désactiver le presse-papier</p></div>
+                            <div class="feature-item"><i class="fas fa-mouse-pointer"></i><h5>Clic droit</h5><p>Bloquer le menu contextuel</p></div>
+                            <div class="feature-item"><i class="fas fa-terminal"></i><h5>Outils Dev</h5><p>Bannir si outils développeur détectés</p></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. Activer l'examen -->
+    <div class="section" id="activer">
+        <div class="section-header">
+            <div class="section-icon"><i class="fas fa-play-circle"></i></div>
+            <h2>3. Activer l'examen</h2>
+        </div>
+        <div class="section-body">
+            <div class="steps">
+                <div class="step">
+                    <div class="step-num">1</div>
+                    <div class="step-content">
+                        <h4>Passer de "Planifié" à "En cours"</h4>
+                        <p>Sur la carte de l'examen, cliquez sur le bouton <strong>Activer</strong>. Le statut passe à <span style="color:#059669;font-weight:700;">En cours</span>. Les étudiants peuvent maintenant composer pendant la plage horaire définie.</p>
+                        <div class="info"><i class="fas fa-info-circle"></i> Si un étudiant clique sur "Composer" avant l'heure, il voit une alerte avec la date et l'heure exactes de début.</div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-num">2</div>
+                    <div class="step-content">
+                        <h4>Ouvrir le Dashboard de Surveillance</h4>
+                        <p>Cliquez sur <strong>Surveiller</strong> sur la carte de l'examen. Le dashboard s'ouvre dans un nouvel onglet avec les flux vidéo en direct de tous les étudiants.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Dashboard -->
+    <div class="section" id="dashboard">
+        <div class="section-header">
+            <div class="section-icon"><i class="fas fa-tachometer-alt"></i></div>
+            <h2>4. Dashboard de surveillance en temps réel</h2>
+        </div>
+        <div class="section-body">
+            <p style="color:#475569;margin-bottom:20px;">Le dashboard affiche une grille de toutes les tentatives actives avec vidéo en direct de chaque étudiant.</p>
+            <div class="feature-grid">
+                <div class="feature-item"><i class="fas fa-video"></i><h5>Flux caméra HD</h5><p>Vidéo en direct de chaque étudiant (caméra + détection faciale)</p></div>
+                <div class="feature-item"><i class="fas fa-desktop"></i><h5>Partage d'écran</h5><p>Bouton <span style="color:#6366f1;font-weight:700;">Voir écran</span> quand l'étudiant partage son écran — vue plein format</p></div>
+                <div class="feature-item"><i class="fas fa-chart-line"></i><h5>Score de risque</h5><p>0–100% calculé en temps réel selon les incidents détectés</p></div>
+                <div class="feature-item"><i class="fas fa-exclamation-triangle"></i><h5>Envoyer un avertissement</h5><p>Message affiché immédiatement sur l'écran de l'étudiant avec popup orange</p></div>
+                <div class="feature-item"><i class="fas fa-comment"></i><h5>Envoyer un message</h5><p>Communication directe avec l'étudiant (popup bleue sur son écran)</p></div>
+                <div class="feature-item"><i class="fas fa-comment-dots"></i><h5>Messages des étudiants</h5><p>Les étudiants peuvent vous écrire depuis leur panneau "Contacter l'enseignant"</p></div>
+                <div class="feature-item"><i class="fas fa-ban"></i><h5>Exclure un étudiant</h5><p>Bannissement immédiat avec saisie de la raison — irréversible</p></div>
+                <div class="feature-item"><i class="fas fa-list"></i><h5>Logs d'activité</h5><p>Historique complet des événements pour chaque étudiant</p></div>
+            </div>
+            <div class="tip"><i class="fas fa-lightbulb"></i> Les étudiants à risque élevé (score ≥ 70%) apparaissent avec un encadré rouge dans la grille pour les repérer rapidement.</div>
+        </div>
+    </div>
+
+    <!-- 5. Corriger -->
+    <div class="section" id="corriger">
+        <div class="section-header">
+            <div class="section-icon"><i class="fas fa-robot"></i></div>
+            <h2>5. Corriger les copies avec l'IA</h2>
+        </div>
+        <div class="section-body">
+            <div class="steps">
+                <div class="step">
+                    <div class="step-num">1</div>
+                    <div class="step-content">
+                        <h4>Clôturer l'examen</h4>
+                        <p>Cliquez sur <strong>Clôturer</strong> sur la carte de l'examen. Les étudiants encore en session sont soumis automatiquement.</p>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-num">2</div>
+                    <div class="step-content">
+                        <h4>Accéder aux copies</h4>
+                        <p>Rendez-vous dans <strong>Copies d'Étudiants</strong>. Sélectionnez les copies soumises et lancez la correction IA. L'IA utilise le barème du sujet pour noter chaque réponse avec un feedback détaillé.</p>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-num">3</div>
+                    <div class="step-content">
+                        <h4>Réviser et valider</h4>
+                        <p>Vérifiez les notes proposées par l'IA, ajustez si nécessaire, puis publiez les résultats. Une notification email est envoyée aux étudiants.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 6. Enregistrements -->
+    <div class="section" id="enregistrements">
+        <div class="section-header">
+            <div class="section-icon"><i class="fas fa-film"></i></div>
+            <h2>6. Accéder aux enregistrements</h2>
+        </div>
+        <div class="section-body">
+            <div class="steps">
+                <div class="step">
+                    <div class="step-num">1</div>
+                    <div class="step-content">
+                        <h4>Snapshots caméra automatiques</h4>
+                        <p>Depuis le dashboard, cliquez sur le bouton <strong>Enregistrements</strong> en haut à droite. L'onglet "Snapshots caméra" affiche toutes les captures d'écran horodatées prises automatiquement pendant l'examen.</p>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-num">2</div>
+                    <div class="step-content">
+                        <h4>Vidéos enregistrées (REC)</h4>
+                        <p>Si vous avez activé le bouton <strong>REC</strong> sur une carte étudiant pendant l'examen, la vidéo est sauvegardée sur le serveur. L'onglet "Vidéos enregistrées" génère des liens de téléchargement valables 2 heures.</p>
+                        <div class="tip"><i class="fas fa-lightbulb"></i> Les liens d'accès expirent après 2 heures. Cliquez sur "Actualiser" pour en obtenir de nouveaux.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 7. Notes -->
+    <div class="section" id="notes">
+        <div class="section-header">
+            <div class="section-icon"><i class="fas fa-star"></i></div>
+            <h2>7. Publier les notes et relevés</h2>
+        </div>
+        <div class="section-body">
+            <div class="steps">
+                <div class="step">
+                    <div class="step-num">1</div>
+                    <div class="step-content">
+                        <h4>Saisie / import des notes</h4>
+                        <p>Allez dans <strong>Notes</strong>. Les notes des copies corrigées sont automatiquement associées. Vous pouvez aussi importer en masse via CSV ou saisir manuellement.</p>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-num">2</div>
+                    <div class="step-content">
+                        <h4>Générer les relevés</h4>
+                        <p>Depuis <strong>Relevés de Notes</strong>, générez les relevés semestriels officiels (PDF) avec calcul automatique du GPA et crédit ECTS.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<footer class="doc-footer">
+    <p>Système de Notation CEI — <a href="/">Retour à l'accueil</a> · <a href="/guide-etudiant">Guide Étudiant</a> · <a href="/conditions">Conditions d'Utilisation</a></p>
+    <p style="margin-top:8px;opacity:.6;">© 2025 CEI — École Centrale des Logiciels Libre et de Télécommunications, Dakar, Sénégal</p>
+</footer>
+
+</body>
+</html>

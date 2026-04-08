@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Système de Notation d'Examen - Accueil</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/landing.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="logo">
+                <h1>🎓 ExamGrader</h1>
+            </div>
+            <div class="nav-links">
+                <a href="#features">Fonctionnalités</a>
+                <a href="#about">À propos</a>
+                <a href="#contact">Contact</a>
+                <button class="btn-login" onclick="goToLogin()">Se connecter</button>
+            </div>
+        </div>
+    </nav>
+
+    <section class="hero">
+        <div class="hero-content">
+            <h1>Système de Notation Automatique</h1>
+            <p class="hero-subtitle">Correction intelligente d'examens avec IA</p>
+            <div class="hero-buttons">
+                <button class="btn-primary" onclick="goToLogin()">Commencer</button>
+                <button class="btn-secondary" onclick="scrollToFeatures()">En savoir plus</button>
+            </div>
+        </div>
+    </section>
+
+    <section id="features" class="features">
+        <div class="container">
+            <h2>Fonctionnalités Principales</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🤖</div>
+                    <h3>Correction Automatique</h3>
+                    <p>Correction intelligente des copies avec l'IA Claude Sonnet 4, garantissant précision et équité.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <h3>Statistiques Avancées</h3>
+                    <p>Analyses détaillées avec graphiques interactifs pour suivre les performances des étudiants.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">📚</div>
+                    <h3>Correction en Lot</h3>
+                    <p>Corrigez plusieurs copies simultanément pour gagner un temps précieux.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">📄</div>
+                    <h3>Export PDF</h3>
+                    <p>Exportez les corrections en PDF professionnel pour archivage et distribution.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">⚠️</div>
+                    <h3>Système de Réclamations</h3>
+                    <p>Processus transparent permettant aux étudiants de contester une note.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">🔒</div>
+                    <h3>Sécurisé</h3>
+                    <p>Authentification robuste et gestion des rôles pour protéger vos données.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="roles" class="roles">
+        <div class="container">
+            <h2>Pour Qui ?</h2>
+            <div class="roles-grid">
+                <div class="role-card">
+                    <div class="role-icon">👑</div>
+                    <h3>Administrateurs</h3>
+                    <ul>
+                        <li>Gestion complète du système</li>
+                        <li>Surveillance des utilisateurs</li>
+                        <li>Statistiques globales</li>
+                        <li>Gestion des réclamations</li>
+                    </ul>
+                </div>
+                
+                <div class="role-card">
+                    <div class="role-icon">👨‍🏫</div>
+                    <h3>Professeurs</h3>
+                    <ul>
+                        <li>Création de sujets d'examen</li>
+                        <li>Correction automatique</li>
+                        <li>Analyses statistiques détaillées</li>
+                        <li>Export des résultats</li>
+                    </ul>
+                </div>
+                
+                <div class="role-card">
+                    <div class="role-icon">👨‍🎓</div>
+                    <h3>Étudiants</h3>
+                    <ul>
+                        <li>Consultation des notes</li>
+                        <li>Téléchargement des corrections</li>
+                        <li>Dépôt de réclamations</li>
+                        <li>Suivi des performances</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="about" class="about">
+        <div class="container">
+            <h2>À Propos</h2>
+            <div class="about-content">
+                <p>ExamGrader est une plateforme innovante de correction automatique d'examens qui utilise l'intelligence artificielle de pointe pour offrir des évaluations précises, cohérentes et rapides.</p>
+                <p>Notre système permet aux enseignants de gagner du temps tout en maintenant la qualité et l'équité des corrections.</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="contact" class="contact">
+        <div class="container">
+            <h2>Contactez-nous</h2>
+            <p>Vous avez des questions ou souhaitez une démonstration ?</p>
+            <div class="contact-info">
+                <p>📧 Email: contact@examgrader.com</p>
+                <p>📱 Téléphone: +221 XX XXX XX XX</p>
+            </div>
+        </div>
+    </section>
+
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2025 ExamGrader. Tous droits réservés.</p>
+        </div>
+    </footer>
+
+    <script>
+        function goToLogin() {
+            window.location.href = '/app';
+        }
+        
+        function scrollToFeatures() {
+            document.getElementById('features').scrollIntoView({ behavior: 'smooth' });
+        }
+    </script>
+</body>
+</html>

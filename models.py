@@ -1,0 +1,616 @@
+"""Modèles de base de données - Système de Notation Avancé VERSION COMPLÈTE avec détection de doublons"""
+from dotenv import load_dotenv
+import os 
+
+load_dotenv()
+
+from sqlalchemy import (
+    create_engine, Column, Integer, String, Float, Text,
+    DateTime, Boolean, ForeignKey, Enum as SQLEnum, UniqueConstraint
+)
+from sqlalchemy import (
+    create_engine, Column, Integer, String, Float, Text,
+    DateTime, Boolean, ForeignKey, Enum as SQLEnum, UniqueConstraint
+)
+from datetime import timedelta
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, relationship
+from datetime import datetime
+import enum
+
+Base = declarative_base()
+
+# Enums
+class UserRole(enum.Enum):
+    STUDENT = "student"
+    PROFESSOR = "professor"
+    ADMIN = "admin"
+
+class ReclamationStatus(enum.Enum):
+    PENDING = "pending"
+    RESOLVED = "resolved"
+    REJECTED = "rejected"
+
+# MODÈLES POUR LA MAQUETTE PÉDAGOGIQUE
+class Formation(Base):
+    """Formation/Programme académique (ex: Master Télécommunications)"""
+    __tablename__ = 'formations'
+
+    id = Column(Integer, primary_key=True)
+    code = Column(String(50), unique=True, nullable=False)
+    name = Column(String(200), nullable=False)
+    level = Column(String(50))
+    department = Column(String(100))
+    description = Column(Text)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    semesters = relationship('Semester', back_populates='formation', cascade='all, delete-orphan')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'code': self.code,
+            'name': self.name,
+            'level': self.level,
+            'department': self.department,
+            'description': self.description,
+            'is_active': self.is_active,
+            'semesters_count': len(self.semesters) if self.semesters else 0,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+class Semester(Base):
+    """Semestre d'une formation"""
+    __tablename__ = 'semesters'
+
+    id = Column(Integer, primary_key=True)
+    formation_id = Column(Integer, ForeignKey('formations.id'), nullable=False)
+    number = Column(Integer, nullable=False)
+    name = Column(String(100))
+    total_credits = Column(Integer, default=30)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    formation = relationship('Formation', back_populates='semesters')
+    ues = relationship('UE', back_populates='semester', cascade='all, delete-orphan')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'formation_id': self.formation_id,
+            'formation_name': self.formation.name if self.formation else None,
+            'number': self.number,
+            'name': self.name,
+            'total_credits': self.total_credits,
+            'ues_count': len(self.ues) if self.ues else 0,
+            'is_active': self.is_active,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+class UE(Base):
+    """Unité d'Enseignement"""
+    __tablename__ = 'ues'
+
+    id = Column(Integer, primary_key=True)
+    semester_id = Column(Integer, ForeignKey('semesters.id'), nullable=False)
+    code = Column(String(50), nullable=False, unique=True)
+    name = Column(String(200), nullable=False)
+    credits = Column(Integer, default=6)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    semester = relationship('Semester', back_populates='ues')
+    ecs = relationship('EC', back_populates='ue', cascade='all, delete-orphan')
+    enrollments = relationship('StudentUEEnrollment', back_populates='ue', cascade='all, delete-orphan')  # Nouveau: Inscriptions étudiants
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'semester_id': self.semester_id,
+            'semester_name': self.semester.name if self.semester else None,
+            'code': self.code,
+            'name': self.name,
+            'credits': self.credits,
+            'ecs_count': len(self.ecs) if self.ecs else 0,
+            'students_count': len(self.enrollments) if self.enrollments else 0,  # Nouveau: Nombre d'étudiants inscrits
+            'is_active': self.is_active,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+class EC(Base):
+    """Élément Constitutif"""
+    __tablename__ = 'ecs'
+
+    id = Column(Integer, primary_key=True)
+    ue_id = Column(Integer, ForeignKey('ues.id'), nullable=False)
+    code = Column(String(50), nullable=False, unique=True)
+    name = Column(String(200), nullable=False)
+    cm = Column(Integer, default=0)
+    td = Column(Integer, default=0)
+    tp = Column(Integer, default=0)
+    tpe = Column(Integer, default=0)
+    vht = Column(Integer, default=0)
+    coefficient = Column(Integer, default=1)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    ue = relationship('UE', back_populates='ecs')
+    subjects = relationship('Subject', back_populates='ec')
+    assignments = relationship('ECAssignment', back_populates='ec', cascade='all, delete-orphan')  # Nouveau: Affectations professeurs
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'ue_id': self.ue_id,
+            'ue_code': self.ue.code if self.ue else None,
+            'ue_name': self.ue.name if self.ue else None,
+            'code': self.code,
+            'name': self.name,
+            'cm': self.cm,
+            'td': self.td,
+            'tp': self.tp,
+            'tpe': self.tpe,
+            'vht': self.vht,
+            'coefficient': self.coefficient,
+            'is_active': self.is_active,
+            'assigned_professor_id': self.assignments[0].professor_id if self.assignments else None,  # Nouveau
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+# NOUVEAU: Affectation EC à Professeur (unicité par EC)
+class ECAssignment(Base):
+    __tablename__ = 'ec_assignments'
+    id = Column(Integer, primary_key=True)
+    ec_id = Column(Integer, ForeignKey('ecs.id'), nullable=False)
+    professor_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    assigned_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint('ec_id', name='unique_ec_assignment'),)  # Unicité: Un EC = un professeur
+
+    ec = relationship('EC', back_populates='assignments')
+    professor = relationship('User')
+
+# NOUVEAU: Inscription Étudiant à UE
+class StudentUEEnrollment(Base):
+    __tablename__ = 'student_ue_enrollments'
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    ue_id = Column(Integer, ForeignKey('ues.id'), nullable=False)
+    enrolled_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint('student_id', 'ue_id', name='unique_student_ue'),)  # Unicité: Pas de double inscription
+
+    student = relationship('User')
+    ue = relationship('UE', back_populates='enrollments')
+
+# MODÈLES UTILISATEURS ET COPIES (avec hash pour doublons)
+class User(Base):
+    __tablename__ = 'users'
+
+    id = Column(Integer, primary_key=True)
+    email = Column(String(120), unique=True, nullable=True)
+    password_hash = Column(String(255), nullable=False)
+    full_name = Column(String(100), nullable=False)
+    role = Column(SQLEnum(UserRole), default=UserRole.STUDENT)
+    is_active = Column(Boolean, default=True)
+    email_verified = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_login = Column(DateTime)
+    has_email = Column(Boolean, default=True)
+
+    created_subjects = relationship('Subject', foreign_keys='Subject.creator_id', back_populates='creator')
+    student_papers = relationship('StudentPaper', foreign_keys='StudentPaper.student_id', back_populates='student')
+    corrected_papers = relationship('StudentPaper', foreign_keys='StudentPaper.corrected_by_id', back_populates='corrector')
+    reclamations = relationship('Reclamation', foreign_keys='Reclamation.student_id', back_populates='student')
+    responded_reclamations = relationship('Reclamation', foreign_keys='Reclamation.responded_by_id', back_populates='responder')
+    ec_assignments = relationship('ECAssignment', back_populates='professor')  # Nouveau: ECs affectés
+    ue_enrollments = relationship('StudentUEEnrollment', back_populates='student')  # Nouveau: UEs inscrites
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'email': self.email,
+            'full_name': self.full_name,
+            'role': self.role.value,
+            'is_active': self.is_active,
+            'email_verified': self.email_verified,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'last_login': self.last_login.isoformat() if self.last_login else None
+        }
+
+class Subject(Base):
+    """Sujet d'examen"""
+    __tablename__ = 'subjects'
+
+    id = Column(Integer, primary_key=True)
+    ec_id = Column(Integer, ForeignKey('ecs.id'), nullable=True)
+    title = Column(String(200), nullable=False)
+    content = Column(Text, nullable=False)
+    rubric = Column(Text)
+    filename = Column(String(255))
+    creator_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    ec = relationship('EC', back_populates='subjects')
+    creator = relationship('User', foreign_keys=[creator_id], back_populates='created_subjects')
+    papers = relationship('StudentPaper', back_populates='subject', cascade='all, delete-orphan')
+    online_exams = relationship('OnlineExam', back_populates='subject', cascade='all, delete-orphan')
+
+    # ✅ FIX: méthode to_dict correctement définie DANS la classe Subject
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'ec_id': self.ec_id,
+            'ec_code': self.ec.code if self.ec else None,
+            'ec_name': self.ec.name if self.ec else None,
+            'ue_code': self.ec.ue.code if self.ec and self.ec.ue else None,
+            'ue_name': self.ec.ue.name if self.ec and self.ec.ue else None,
+            'title': self.title,
+            'content': self.content,
+            'rubric': self.rubric,
+            'filename': self.filename,
+            'creator_id': self.creator_id,
+            'creator_name': self.creator.full_name if self.creator else None,
+            'is_active': self.is_active,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+class StudentPaper(Base):
+    """Copie d'étudiant - AVEC HASH POUR DÉTECTION DE DOUBLONS"""
+    __tablename__ = 'student_papers'
+
+    id = Column(Integer, primary_key=True)
+    subject_id = Column(Integer, ForeignKey('subjects.id'), nullable=False)
+    student_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    content = Column(Text, nullable=False)
+    grade = Column(Text)
+    score = Column(Float)
+    filename = Column(String(255))
+    file_hash = Column(String(64), unique=True) # SHA256 pour détecter doublons
+    extracted_student_name = Column(String(200)) # Nom extrait par OCR
+    corrected_by_id = Column(Integer, ForeignKey('users.id'))
+    corrected_at = Column(DateTime)
+    reclamation_window_end = Column(DateTime, default=lambda: datetime.utcnow() + timedelta(days=7))  # Fin de la fenêtre de réclamation (corrected_at + 7 jours)
+    email_sent = Column(Boolean, default=False) # Email envoyé?
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    subject = relationship('Subject', back_populates='papers')
+    student = relationship('User', foreign_keys=[student_id], back_populates='student_papers')
+    corrector = relationship('User', foreign_keys=[corrected_by_id], back_populates='corrected_papers')
+    reclamations = relationship('Reclamation', back_populates='paper', cascade='all, delete-orphan')
+    history = relationship('CorrectionHistory', back_populates='paper', cascade='all, delete-orphan')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'subject_id': self.subject_id,
+            'subject_title': self.subject.title if self.subject else None,
+            'student_id': self.student_id,
+            'student_name': self.student.full_name if self.student else None,
+            'student_email': self.student.email if self.student else None,
+            'content': self.content,
+            'grade': self.grade,
+            'score': self.score,
+            'filename': self.filename,
+            'extracted_student_name': self.extracted_student_name,
+            'corrected_by_id': self.corrected_by_id,
+            'corrector_name': self.corrector.full_name if self.corrector else None,
+            'corrected_at': self.corrected_at.isoformat() if self.corrected_at else None,
+            'reclamation_window_end': self.reclamation_window_end.isoformat() if self.reclamation_window_end else None,  # Nouveau
+            'email_sent': self.email_sent,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+class Reclamation(Base):
+    __tablename__ = 'reclamations'
+
+    id = Column(Integer, primary_key=True)
+    paper_id = Column(Integer, ForeignKey('student_papers.id'), nullable=False)
+    student_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    reason = Column(Text, nullable=False)
+    status = Column(SQLEnum(ReclamationStatus), default=ReclamationStatus.PENDING)
+    response = Column(Text)
+
+    ia_decision = Column(Text)  # Décision complète/textuelle retournée par l'IA
+    ia_proposed_status = Column(String(50))  # 'resolved' or 'rejected' as proposed by IA
+    ia_proposed_score = Column(Float)
+    ia_proposed_grade = Column(Text)
+    ia_proposed_reason = Column(Text)
+    ia_processed_at = Column(DateTime)
+
+    responded_by_id = Column(Integer, ForeignKey('users.id'))
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    paper = relationship('StudentPaper', back_populates='reclamations')
+    student = relationship('User', foreign_keys=[student_id], back_populates='reclamations')
+    responder = relationship('User', foreign_keys=[responded_by_id], back_populates='responded_reclamations')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'paper_id': self.paper_id,
+            'student_id': self.student_id,
+            'student_name': self.student.full_name if self.student else None,
+            'subject_title': self.paper.subject.title if self.paper and self.paper.subject else None,
+            'reason': self.reason,
+            'status': self.status.value,
+            'response': self.response,
+            'ia_decision': self.ia_decision,
+            'ia_proposed_status': self.ia_proposed_status,
+            'ia_proposed_score': self.ia_proposed_score,
+            'ia_proposed_grade': self.ia_proposed_grade,
+            'ia_proposed_reason': self.ia_proposed_reason,
+            'ia_processed_at': self.ia_processed_at.isoformat() if self.ia_processed_at else None,
+            'responded_by_id': self.responded_by_id,
+            'responder_name': self.responder.full_name if self.responder else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+class CorrectionHistory(Base):
+    __tablename__ = 'correction_history'
+
+    id = Column(Integer, primary_key=True)
+    paper_id = Column(Integer, ForeignKey('student_papers.id'), nullable=False)
+    corrector_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    old_score = Column(Float)
+    new_score = Column(Float)
+    old_grade = Column(Text)
+    new_grade = Column(Text)
+    reason = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    paper = relationship('StudentPaper', back_populates='history')
+    corrector = relationship('User')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'paper_id': self.paper_id,
+            'corrector_id': self.corrector_id,
+            'corrector_name': self.corrector.full_name if self.corrector else None,
+            'old_score': self.old_score,
+            'new_score': self.new_score,
+            'reason': self.reason,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+class ExamStatus(enum.Enum):
+    DRAFT = "draft"  # Brouillon
+    SCHEDULED = "scheduled"  # Planifié
+    ACTIVE = "active"  # En cours
+    CLOSED = "closed"  # Terminé
+
+class AttemptStatus(enum.Enum):
+    IN_PROGRESS = "in_progress"
+    SUBMITTED = "submitted"
+    BANNED = "banned"
+    AUTO_SUBMITTED = "auto_submitted"  # Soumission automatique (temps écoulé)
+
+class OnlineExam(Base):
+    """Examen en ligne avec surveillance"""
+    __tablename__ = 'online_exams'
+    
+    id = Column(Integer, primary_key=True)
+    subject_id = Column(Integer, ForeignKey('subjects.id'), nullable=False)
+    title = Column(String(200), nullable=False)
+    instructions = Column(Text)
+    duration_minutes = Column(Integer, nullable=False)  # Durée en minutes
+    start_time = Column(DateTime, nullable=False)
+    end_time = Column(DateTime, nullable=False)
+    
+    # Paramètres de sécurité
+    max_tab_switches = Column(Integer, default=2)    # Seuil: changements de fenêtre/onglet
+    enable_copy_paste = Column(Boolean, default=False)
+    enable_right_click = Column(Boolean, default=False)
+    randomize_questions = Column(Boolean, default=False)
+
+    # Seuils de bannissement supplémentaires
+    max_no_face_count = Column(Integer, default=10)  # Seuil: nb fois sans visage (-1=désactivé)
+    ban_on_devtools = Column(Boolean, default=True)  # Bannir immédiatement si outils dev détectés
+    
+    status = Column(SQLEnum(ExamStatus), default=ExamStatus.DRAFT)
+    created_by_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    subject = relationship('Subject', back_populates='online_exams')
+    creator = relationship('User', foreign_keys=[created_by_id])
+    attempts = relationship('ExamAttempt', back_populates='exam', cascade='all, delete-orphan')
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'subject_id': self.subject_id,
+            'subject_title': self.subject.title if self.subject else None,
+            'title': self.title,
+            'instructions': self.instructions,
+            'duration_minutes': self.duration_minutes,
+            'start_time': (self.start_time.replace(tzinfo=__import__('datetime').timezone.utc).isoformat() if self.start_time.tzinfo is None else self.start_time.isoformat()) if self.start_time else None,
+            'end_time': (self.end_time.replace(tzinfo=__import__('datetime').timezone.utc).isoformat() if self.end_time.tzinfo is None else self.end_time.isoformat()) if self.end_time else None,
+            'max_tab_switches': self.max_tab_switches,
+            'enable_copy_paste': self.enable_copy_paste,
+            'enable_right_click': self.enable_right_click,
+            'randomize_questions': self.randomize_questions,
+            'max_no_face_count': self.max_no_face_count if self.max_no_face_count is not None else 10,
+            'ban_on_devtools': self.ban_on_devtools if self.ban_on_devtools is not None else True,
+            'status': self.status.value,
+            'creator_name': self.creator.full_name if self.creator else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'is_active': self.status == ExamStatus.ACTIVE,
+            'attempts_count': len(self.attempts) if self.attempts else 0
+        }
+
+class ExamAttempt(Base):
+    """Tentative de composition d'un étudiant"""
+    __tablename__ = 'exam_attempts'
+    
+    id = Column(Integer, primary_key=True)
+    exam_id = Column(Integer, ForeignKey('online_exams.id'), nullable=False)
+    student_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    
+    status = Column(SQLEnum(AttemptStatus), default=AttemptStatus.IN_PROGRESS)
+    started_at = Column(DateTime, default=datetime.utcnow)
+    submitted_at = Column(DateTime)
+    
+    # Surveillance
+    tab_switches = Column(Integer, default=0)    # Compteur: violations graves (fenêtre, focus...)
+    warnings_count = Column(Integer, default=0)  # Compteur: violations mineures
+    no_face_count = Column(Integer, default=0)   # Compteur: détections sans visage
+    banned_at = Column(DateTime)
+    ban_reason = Column(Text)
+
+    # Proctoring LiveKit
+    risk_score = Column(Integer, default=0)  # Score de risque 0-100
+
+    # Réponses (JSON ou texte selon format)
+    answers = Column(Text)  # JSON stockant les réponses
+    
+    # Résultats après correction
+    score = Column(Float)
+    feedback = Column(Text)
+    corrected_at = Column(DateTime)
+    corrected_by_id = Column(Integer, ForeignKey('users.id'))
+    
+    exam = relationship('OnlineExam', back_populates='attempts')
+    student = relationship('User', foreign_keys=[student_id])
+    corrector = relationship('User', foreign_keys=[corrected_by_id])
+    activity_logs = relationship('ExamActivityLog', back_populates='attempt', cascade='all, delete-orphan')
+    camera_logs = relationship('CameraLog', back_populates='attempt', cascade='all, delete-orphan')
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'exam_id': self.exam_id,
+            'exam_title': self.exam.title if self.exam else None,
+            'student_id': self.student_id,
+            'student_name': self.student.full_name if self.student else None,
+            'status': self.status.value,
+            'started_at': self.started_at.isoformat() if self.started_at else None,
+            'submitted_at': self.submitted_at.isoformat() if self.submitted_at else None,
+            'tab_switches': self.tab_switches,
+            'warnings_count': self.warnings_count,
+            'no_face_count': self.no_face_count or 0,
+            'banned_at': self.banned_at.isoformat() if self.banned_at else None,
+            'ban_reason': self.ban_reason,
+            'risk_score': self.risk_score or 0,
+            'answers': self.answers,
+            'score': self.score,
+            'feedback': self.feedback,
+            'corrected_at': self.corrected_at.isoformat() if self.corrected_at else None,
+            'corrector_name': self.corrector.full_name if self.corrector else None
+        }
+
+class ExamActivityLog(Base):
+    """Log d'activité pendant l'examen (surveillance)"""
+    __tablename__ = 'exam_activity_logs'
+    
+    id = Column(Integer, primary_key=True)
+    attempt_id = Column(Integer, ForeignKey('exam_attempts.id'), nullable=False)
+    event_type = Column(String(50), nullable=False)  # tab_switch, copy_attempt, paste_attempt, right_click, etc.
+    event_data = Column(Text)  # Données additionnelles (JSON)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    
+    attempt = relationship('ExamAttempt', back_populates='activity_logs')
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'attempt_id': self.attempt_id,
+            'event_type': self.event_type,
+            'event_data': self.event_data,
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None
+        }
+
+class GradeTranscript(Base):
+    """Relevé de notes d'un étudiant"""
+    __tablename__ = 'grade_transcripts'
+    
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    semester_id = Column(Integer, ForeignKey('semesters.id'), nullable=False)
+    
+    # Calculs automatiques
+    total_credits = Column(Integer, default=0)
+    obtained_credits = Column(Integer, default=0)
+    gpa = Column(Float)  # Moyenne générale pondérée
+    
+    generated_at = Column(DateTime, default=datetime.utcnow)
+    generated_by_id = Column(Integer, ForeignKey('users.id'))
+    
+    student = relationship('User', foreign_keys=[student_id])
+    semester = relationship('Semester')
+    generator = relationship('User', foreign_keys=[generated_by_id])
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'student_id': self.student_id,
+            'student_name': self.student.full_name if self.student else None,
+            'semester_id': self.semester_id,
+            'semester_name': self.semester.name if self.semester else None,
+            'total_credits': self.total_credits,
+            'obtained_credits': self.obtained_credits,
+            'gpa': self.gpa,
+            'generated_at': self.generated_at.isoformat() if self.generated_at else None
+        }
+
+class CameraLog(Base):
+    """Logs de surveillance caméra pendant les examens"""
+    __tablename__ = 'camera_logs'
+
+    id = Column(Integer, primary_key=True)
+    attempt_id = Column(Integer, ForeignKey('exam_attempts.id', ondelete='CASCADE'), nullable=False)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    face_detected = Column(Boolean)
+    faces_count = Column(Integer)
+    in_frame = Column(Boolean)
+    violation_type = Column(String(50))
+    violation_severity = Column(String(20))
+    image_filename = Column(String(255))
+    image_data = Column(Text)
+    confidence_score = Column(Float)
+    frame_analysis = Column(Text)
+    event_type = Column(String(50))
+
+    attempt = relationship('ExamAttempt', back_populates='camera_logs')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'attempt_id': self.attempt_id,
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
+            'event_type': self.event_type or self.violation_type,
+            'face_detected': self.face_detected,
+            'faces_count': self.faces_count,
+            'image_data': self.image_data,
+        }
+
+
+# Configuration de la base de données
+DATABASE_URL = os.getenv('DATABASE_URL')
+
+if not DATABASE_URL:
+    raise ValueError(
+        "❌ ERREUR: DATABASE_URL non défini dans .env!\n"
+        "Créez un fichier .env avec:\n"
+        "DATABASE_URL=postgresql://exam_user:passer@localhost:5432/exam_grader_db"
+    )
+
+print(f"🔗 Connexion à: {DATABASE_URL.split('@')[1] if '@' in DATABASE_URL else DATABASE_URL}")
+
+engine = create_engine(
+    DATABASE_URL,
+    echo=False,
+    connect_args={'options': '-c timezone=UTC'}  # Force UTC, évite conversion Europe/Berlin
+)
+SessionLocal = sessionmaker(bind=engine)
+
+def get_session():
+    return SessionLocal()
+
+def init_db():
+    Base.metadata.create_all(engine)
+    print("✅ Base de données initialisée avec examens en ligne et relevés de notes")

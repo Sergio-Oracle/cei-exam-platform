@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CEI — Centre d'Examen Intelligent | Plateforme d'Examens en Ligne</title>
+    <meta name="description" content="CEI est la plateforme sénégalaise d'examens en ligne avec surveillance vidéo en temps réel, correction automatique par IA et détection de fraude avancée. Idéale pour les universités et écoles d'Afrique de l'Ouest.">
+
+    <!-- Preconnect to external CDN to reduce DNS/TLS latency -->
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+    <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
+
+    <!-- Full CSS — loaded asynchronously (no render-blocking) -->
+    <link rel="preload" href="{{ url_for('static', filename='css/landing.css') }}" as="style" onload="this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="{{ url_for('static', filename='css/landing.css') }}"></noscript>
+
+    <!-- Font Awesome — loaded asynchronously to avoid render-blocking -->
+    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" as="style" onload="this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"></noscript>
+
+    <!-- ══ Critical CSS (above-the-fold) inlined — zero render-blocking ══ -->
+    <style>
+    :root{--primary:#3b82f6;--primary-dark:#2563eb;--primary-light:#60a5fa;--success:#10b981;--success-dark:#059669;--gray-50:#f8fafc;--gray-100:#f1f5f9;--gray-200:#e2e8f0;--gray-400:#94a3b8;--gray-500:#64748b;--gray-900:#0f172a;--shadow-lg:0 10px 15px -3px rgba(0,0,0,.1);--radius-md:12px;--radius-xl:24px;--transition:all .3s cubic-bezier(.4,0,.2,1)}
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Inter',Roboto,sans-serif;line-height:1.6;color:var(--gray-900);background:var(--gray-50);overflow-x:hidden}
+    .hero{background:linear-gradient(135deg,var(--primary) 0%,var(--primary-dark) 100%);color:white;padding:120px 20px 100px;text-align:center;position:relative;overflow:hidden}
+    .hero::before{content:'';position:absolute;top:0;left:0;right:0;bottom:0;background:url('data:image/svg+xml,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="grid" width="100" height="100" patternUnits="userSpaceOnUse"><path d="M 100 0 L 0 0 0 100" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="1"/></pattern></defs><rect width="100%25" height="100%25" fill="url(%23grid)"/></svg>');opacity:.5}
+    .hero-content{position:relative;z-index:1;max-width:1200px;margin:0 auto}
+    .hero-icon{width:120px;height:120px;background:rgba(255,255,255,.15);border-radius:var(--radius-xl);display:inline-flex;align-items:center;justify-content:center;margin-bottom:32px;box-shadow:0 10px 30px rgba(0,0,0,.2);animation:float 3s ease-in-out infinite}
+    @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+    .hero-icon i,.hero-icon svg{font-size:64px;color:white;width:64px;height:64px}
+    .hero h1{font-size:56px;font-weight:800;margin-bottom:24px;text-shadow:0 2px 10px rgba(0,0,0,.2);line-height:1.2}
+    .hero p{font-size:22px;margin-bottom:40px;opacity:.95;max-width:800px;margin-left:auto;margin-right:auto}
+    .cta-buttons{display:flex;gap:20px;justify-content:center;flex-wrap:wrap}
+    .btn{padding:18px 40px;font-size:18px;font-weight:600;border-radius:var(--radius-md);text-decoration:none;display:inline-flex;align-items:center;gap:12px;transition:var(--transition);box-shadow:var(--shadow-lg);border:none;cursor:pointer;font-family:inherit}
+    .btn-primary{background:white;color:var(--primary)}
+    .btn-secondary{background:rgba(255,255,255,.15);color:white;border:2px solid rgba(255,255,255,.3)}
+    .fas,.fab,.far{display:inline-block;font-style:normal;font-variant:normal;text-rendering:auto;-webkit-font-smoothing:antialiased}
+    </style>
+</head>
+<body>
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-content">
+            <div class="hero-icon">
+                <i class="fas fa-graduation-cap"></i>
+            </div>
+            <h1>Centre d'Examen Intelligent</h1>
+            <p>La plateforme sénégalaise d'examens en ligne — surveillance vidéo en temps réel, correction automatique par IA, relevés officiels et détection de fraude avancée</p>
+            <div class="cta-buttons">
+                <a href="/app" class="btn btn-primary">
+                    <i class="fas fa-rocket"></i>
+                    Commencer Maintenant
+                </a>
+                <a href="#comment-ca-marche" class="btn btn-secondary">
+                    <i class="fas fa-play-circle"></i>
+                    Comment ça marche ?
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- ══ Section Mission / Pourquoi CEI ══ -->
+    <section id="mission" style="background:white;padding:80px 0;">
+        <div class="container">
+
+            <!-- En-tête -->
+            <div style="text-align:center;max-width:760px;margin:0 auto 64px;">
+                <span style="display:inline-block;background:#eff6ff;color:var(--primary-dark);font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:5px 16px;border-radius:99px;margin-bottom:16px;">Notre mission</span>
+                <h2 style="font-size:2rem;font-weight:800;color:var(--gray-900);margin-bottom:16px;line-height:1.25;">Pourquoi le Centre d'Examen Intelligent ?</h2>
+                <p style="color:var(--gray-500);font-size:1.05rem;line-height:1.7;">Au Sénégal, les enseignants font face à des promotions surchargées, des délais de correction serrés et des fraudes difficiles à contrôler — surtout en présentiel. Le CEI est né pour répondre à ces défis concrets avec une solution entièrement numérique, accessible depuis n'importe quel navigateur.</p>
+            </div>
+
+            <!-- 3 colonnes : Objectif · Public · Pourquoi Sénégal -->
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:28px;margin-bottom:72px;">
+
+                <!-- Objectif -->
+                <div class="reveal" style="border:1px solid var(--gray-200);border-radius:16px;padding:32px;background:var(--gray-50);">
+                    <div style="width:48px;height:48px;border-radius:12px;background:#eff6ff;display:flex;align-items:center;justify-content:center;margin-bottom:20px;">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary-dark)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                    </div>
+                    <h3 style="font-size:1.05rem;font-weight:700;color:var(--gray-900);margin-bottom:10px;">Objectif</h3>
+                    <p style="color:var(--gray-500);font-size:.93rem;line-height:1.7;">Numériser l'intégralité du cycle d'examen — de la création du sujet à la publication des relevés de notes — en éliminant les tâches manuelles répétitives et en garantissant l'intégrité académique à chaque étape.</p>
+                </div>
+
+                <!-- Public visé -->
+                <div class="reveal" style="border:1px solid var(--gray-200);border-radius:16px;padding:32px;background:var(--gray-50);">
+                    <div style="width:48px;height:48px;border-radius:12px;background:#ecfdf5;display:flex;align-items:center;justify-content:center;margin-bottom:20px;">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--success-dark)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+                    </div>
+                    <h3 style="font-size:1.05rem;font-weight:700;color:var(--gray-900);margin-bottom:10px;">Public visé</h3>
+                    <p style="color:var(--gray-500);font-size:.93rem;line-height:1.7;">Universités, grandes écoles, centres de formation professionnelle et instituts techniques au Sénégal et en Afrique de l'Ouest. La plateforme s'adresse aussi bien aux établissements publics qu'aux écoles privées qui souhaitent moderniser leur système d'évaluation.</p>
+                </div>
+
+                <!-- Importance au Sénégal -->
+                <div class="reveal" style="border:1px solid var(--gray-200);border-radius:16px;padding:32px;background:var(--gray-50);">
+                    <div style="width:48px;height:48px;border-radius:12px;background:#fef3c7;display:flex;align-items:center;justify-content:center;margin-bottom:20px;">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    </div>
+                    <h3 style="font-size:1.05rem;font-weight:700;color:var(--gray-900);margin-bottom:10px;">Pourquoi c'est crucial au Sénégal</h3>
+                    <p style="color:var(--gray-500);font-size:.93rem;line-height:1.7;">Avec des classes pouvant dépasser 200 étudiants, un enseignant passe des semaines à corriger manuellement. Le CEI réduit ce délai à quelques heures grâce à l'IA, tout en rendant la surveillance possible à distance — un enjeu majeur pour les filières en ligne comme l'EC2LT ou l'UVS.</p>
+                </div>
+            </div>
+
+            <!-- 4 points forts horizontaux -->
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:20px;">
+
+                <div class="reveal" style="display:flex;gap:14px;align-items:flex-start;padding:20px;border-radius:12px;border:1px solid var(--gray-200);background:white;">
+                    <div style="width:36px;height:36px;min-width:36px;border-radius:8px;background:#eff6ff;display:flex;align-items:center;justify-content:center;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary-dark)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    </div>
+                    <div>
+                        <div style="font-size:.88rem;font-weight:700;color:var(--gray-900);margin-bottom:4px;">Gain de temps &gt; 90 %</div>
+                        <div style="font-size:.82rem;color:var(--gray-500);line-height:1.5;">La correction IA génère un feedback détaillé par copie en quelques secondes, avec note calculée automatiquement selon le barème défini.</div>
+                    </div>
+                </div>
+
+                <div class="reveal" style="display:flex;gap:14px;align-items:flex-start;padding:20px;border-radius:12px;border:1px solid var(--gray-200);background:white;">
+                    <div style="width:36px;height:36px;min-width:36px;border-radius:8px;background:#ecfdf5;display:flex;align-items:center;justify-content:center;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--success-dark)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                    </div>
+                    <div>
+                        <div style="font-size:.88rem;font-weight:700;color:var(--gray-900);margin-bottom:4px;">Anti-triche avancé</div>
+                        <div style="font-size:.82rem;color:var(--gray-500);line-height:1.5;">Surveillance caméra + écran + détection faciale + reconnaissance d'identité en temps réel. Chaque incident est logué et horodaté avec preuve.</div>
+                    </div>
+                </div>
+
+                <div class="reveal" style="display:flex;gap:14px;align-items:flex-start;padding:20px;border-radius:12px;border:1px solid var(--gray-200);background:white;">
+                    <div style="width:36px;height:36px;min-width:36px;border-radius:8px;background:#fef3c7;display:flex;align-items:center;justify-content:center;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                    </div>
+                    <div>
+                        <div style="font-size:.88rem;font-weight:700;color:var(--gray-900);margin-bottom:4px;">Relevés officiels PDF</div>
+                        <div style="font-size:.82rem;color:var(--gray-500);line-height:1.5;">Génération automatique des relevés semestriels avec calcul de la moyenne pondérée, crédits, GPA — conformes aux exigences académiques.</div>
+                    </div>
+                </div>
+
+                <div class="reveal" style="display:flex;gap:14px;align-items:flex-start;padding:20px;border-radius:12px;border:1px solid var(--gray-200);background:white;">
+                    <div style="width:36px;height:36px;min-width:36px;border-radius:8px;background:#f0fdf4;display:flex;align-items:center;justify-content:center;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+                    </div>
+                    <div>
+                        <div style="font-size:.88rem;font-weight:700;color:var(--gray-900);margin-bottom:4px;">100 % navigateur</div>
+                        <div style="font-size:.82rem;color:var(--gray-500);line-height:1.5;">Aucune installation requise. La plateforme fonctionne sur tout navigateur moderne — adapté aux contextes où les équipements sont limités.</div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features" id="features">
+        <div class="container">
+            <h2>Fonctionnalités Complètes</h2>
+            <p class="section-subtitle">Une solution tout-en-un pour moderniser l'évaluation académique</p>
+            
+            <div class="features-grid">
+                <!-- Examens en Ligne -->
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-laptop-code"></i>
+                    </div>
+                    <h3>Examens en Ligne Surveillés</h3>
+                    <p>Créez des examens sécurisés avec surveillance anti-triche en temps réel. Détection automatique des tentatives de fraude et bannissement immédiat.</p>
+                    <ul class="feature-list">
+                        <li><i class="fas fa-check"></i> Timer en temps réel</li>
+                        <li><i class="fas fa-check"></i> Sauvegarde automatique</li>
+                        <li><i class="fas fa-check"></i> Mode plein écran forcé</li>
+                        <li><i class="fas fa-check"></i> Logs d'activité détaillés</li>
+                    </ul>
+                </div>
+
+                <!-- Correction IA -->
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-robot"></i>
+                    </div>
+                    <h3>Correction IA Avancée</h3>
+                    <p>Intelligence artificielle pour corriger automatiquement les copies avec précision, cohérence et feedback détaillé personnalisé.</p>
+                    <ul class="feature-list">
+                        <li><i class="fas fa-check"></i> Correction automatique instantanée</li>
+                        <li><i class="fas fa-check"></i> Feedback personnalisé par question</li>
+                        <li><i class="fas fa-check"></i> Cohérence à 100%</li>
+                        <li><i class="fas fa-check"></i> Gain de temps de 95%</li>
+                    </ul>
+                </div>
+
+                <!-- Relevés de Notes -->
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-award"></i>
+                    </div>
+                    <h3>Relevés de Notes Officiels</h3>
+                    <p>Génération automatique de relevés de notes professionnels au format PDF avec calcul GPA et validation semestrielle.</p>
+                    <ul class="feature-list">
+                        <li><i class="fas fa-check"></i> Calcul automatique du GPA</li>
+                        <li><i class="fas fa-check"></i> Validation semestrielle</li>
+                        <li><i class="fas fa-check"></i> Export PDF professionnel</li>
+                        <li><i class="fas fa-check"></i> Historique complet</li>
+                    </ul>
+                </div>
+
+                <!-- Surveillance Vidéo -->
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-video"></i>
+                    </div>
+                    <h3>Surveillance Vidéo en Temps Réel</h3>
+                    <p>Surveillance vidéo HD en temps réel. L'enseignant voit tous les étudiants simultanément avec détection faciale IA.</p>
+                    <ul class="feature-list">
+                        <li><i class="fas fa-check"></i> Vidéo caméra + partage d'écran</li>
+                        <li><i class="fas fa-check"></i> Détection faciale automatique</li>
+                        <li><i class="fas fa-check"></i> Snapshots caméra horodatés</li>
+                        <li><i class="fas fa-check"></i> Score de risque en temps réel</li>
+                    </ul>
+                </div>
+
+                <!-- Maquette Pédagogique -->
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-sitemap"></i>
+                    </div>
+                    <h3>Maquette Pédagogique Complète</h3>
+                    <p>Gestion complète : Formations, Semestres, UEs, ECs avec affectations professeurs et inscriptions étudiants.</p>
+                    <ul class="feature-list">
+                        <li><i class="fas fa-check"></i> CRUD Formations</li>
+                        <li><i class="fas fa-check"></i> Gestion Semestres/UEs/ECs</li>
+                        <li><i class="fas fa-check"></i> Affectation professeurs</li>
+                        <li><i class="fas fa-check"></i> Inscription étudiants</li>
+                    </ul>
+                </div>
+
+                <!-- Statistiques -->
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-chart-pie"></i>
+                    </div>
+                    <h3>Statistiques & Analyses</h3>
+                    <p>Analyses détaillées avec moyennes, médianes, distributions, taux de réussite et graphiques interactifs.</p>
+                    <ul class="feature-list">
+                        <li><i class="fas fa-check"></i> Moyennes & médianes</li>
+                        <li><i class="fas fa-check"></i> Distributions de notes</li>
+                        <li><i class="fas fa-check"></i> Graphiques interactifs</li>
+                        <li><i class="fas fa-check"></i> Exports Excel</li>
+                    </ul>
+                </div>
+
+                <!-- Gestion Multi-Rôles -->
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-users-gear"></i>
+                    </div>
+                    <h3>Gestion Multi-Rôles</h3>
+                    <p>Interfaces adaptées pour administrateurs, professeurs et étudiants avec permissions granulaires.</p>
+                    <ul class="feature-list">
+                        <li><i class="fas fa-check"></i> Admin : Gestion globale</li>
+                        <li><i class="fas fa-check"></i> Professeur : Correction & notes</li>
+                        <li><i class="fas fa-check"></i> Étudiant : Examens & relevés</li>
+                        <li><i class="fas fa-check"></i> Permissions granulaires</li>
+                    </ul>
+                </div>
+
+                <!-- Réclamations -->
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-comment-dots"></i>
+                    </div>
+                    <h3>Système de Réclamations IA</h3>
+                    <p>Gestion des contestations de notes avec analyse IA pour aider à la prise de décision équitable.</p>
+                    <ul class="feature-list">
+                        <li><i class="fas fa-check"></i> Soumission en ligne</li>
+                        <li><i class="fas fa-check"></i> Analyse IA des arguments</li>
+                        <li><i class="fas fa-check"></i> Workflow d'approbation</li>
+                        <li><i class="fas fa-check"></i> Historique complet</li>
+                    </ul>
+                </div>
+
+                <!-- Notifications -->
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-bell"></i>
+                    </div>
+                    <h3>Notifications en Temps Réel</h3>
+                    <p>Restez informé en temps réel de tous les événements importants de la plateforme.</p>
+                    <ul class="feature-list">
+                        <li><i class="fas fa-check"></i> Notifications instantanées</li>
+                        <li><i class="fas fa-check"></i> Alertes d'incidents</li>
+                        <li><i class="fas fa-check"></i> Mises à jour de notes</li>
+                        <li><i class="fas fa-check"></i> Historique complet</li>
+                    </ul>
+                </div>
+
+                <!-- Exports PDF -->
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-file-pdf"></i>
+                    </div>
+                    <h3>Exports PDF Professionnels</h3>
+                    <p>Génération de documents PDF haute qualité avec mise en page professionnelle.</p>
+                    <ul class="feature-list">
+                        <li><i class="fas fa-check"></i> Copies corrigées</li>
+                        <li><i class="fas fa-check"></i> Relevés de notes</li>
+                        <li><i class="fas fa-check"></i> Rapports statistiques</li>
+                        <li><i class="fas fa-check"></i> Documents officiels</li>
+                    </ul>
+                </div>
+
+                <!-- Historique -->
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-history"></i>
+                    </div>
+                    <h3>Historique & Traçabilité</h3>
+                    <p>Traçabilité complète de toutes les actions et événements sur la plateforme.</p>
+                    <ul class="feature-list">
+                        <li><i class="fas fa-check"></i> Historique des examens</li>
+                        <li><i class="fas fa-check"></i> Logs d'activité détaillés</li>
+                        <li><i class="fas fa-check"></i> Incidents de triche</li>
+                        <li><i class="fas fa-check"></i> Audit complet</li>
+                    </ul>
+                </div>
+
+                <!-- Email Integration -->
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-envelope"></i>
+                    </div>
+                    <h3>Notifications par Email</h3>
+                    <p>Envoi automatique d'emails pour tous les événements importants.</p>
+                    <ul class="feature-list">
+                        <li><i class="fas fa-check"></i> Notes publiées</li>
+                        <li><i class="fas fa-check"></i> Incidents de triche</li>
+                        <li><i class="fas fa-check"></i> Réclamations traitées</li>
+                        <li><i class="fas fa-check"></i> Notifications système</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Stats Section — données réelles de la plateforme -->
+    <section class="stats">
+        <div class="stats-grid">
+            <div class="stat-item reveal">
+                <div class="stat-value">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+                    <span class="stat-num" id="stat-students" data-target="1480">0</span>
+                </div>
+                <div class="stat-label">Étudiants actifs</div>
+            </div>
+            <div class="stat-item reveal">
+                <div class="stat-value">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    <span class="stat-num" id="stat-exams" data-target="320">0</span>
+                </div>
+                <div class="stat-label">Examens créés</div>
+            </div>
+            <div class="stat-item reveal">
+                <div class="stat-value">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                    <span class="stat-num" id="stat-attempts" data-target="4750">0</span>
+                </div>
+                <div class="stat-label">Compositions passées</div>
+            </div>
+            <div class="stat-item reveal">
+                <div class="stat-value">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a2 2 0 012 2v1h4a1 1 0 011 1v10a1 1 0 01-1 1H6a1 1 0 01-1-1V6a1 1 0 011-1h4V4a2 2 0 012-2z"/><path d="M9 14l2 2 4-4"/></svg>
+                    <span class="stat-num" id="stat-corrections" data-target="3920">0</span>
+                </div>
+                <div class="stat-label">Copies corrigées par l'IA</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Security Features -->
+    <section class="security">
+        <div class="container">
+            <h2>Sécurité & Surveillance Maximales</h2>
+            <p class="section-subtitle">Protection complète contre la triche avec détection intelligente</p>
+            
+            <div class="security-grid">
+                <div class="security-card">
+                    <i class="fas fa-window-restore"></i>
+                    <h4>Détection Changement Fenêtre</h4>
+                    <p>Avertissement immédiat et bannissement automatique après dépassement du seuil configuré</p>
+                </div>
+                
+                <div class="security-card">
+                    <i class="fas fa-ban"></i>
+                    <h4>Blocage Copier/Coller</h4>
+                    <p>Désactivation complète du presse-papier pour empêcher toute forme de fraude</p>
+                </div>
+                
+                <div class="security-card">
+                    <i class="fas fa-code"></i>
+                    <h4>Protection Console Dev</h4>
+                    <p>Blocage F12 et des outils développeur pour sécuriser l'environnement d'examen</p>
+                </div>
+                
+                <div class="security-card">
+                    <i class="fas fa-expand"></i>
+                    <h4>Mode Plein Écran Forcé</h4>
+                    <p>Activation automatique et obligatoire pour éviter les distractions externes</p>
+                </div>
+                
+                <div class="security-card">
+                    <i class="fas fa-clock"></i>
+                    <h4>Soumission Auto Temps</h4>
+                    <p>Envoi automatique à l'expiration du temps pour garantir l'équité</p>
+                </div>
+                
+                <div class="security-card">
+                    <i class="fas fa-history"></i>
+                    <h4>Logs Complets</h4>
+                    <p>Traçabilité de toutes les actions suspectes avec horodatage précis</p>
+                </div>
+
+                <div class="security-card">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <h4>Gestion des Incidents</h4>
+                    <p>Système complet de détection, enregistrement et gestion des incidents de triche</p>
+                </div>
+
+                <div class="security-card">
+                    <i class="fas fa-envelope"></i>
+                    <h4>Notifications Email</h4>
+                    <p>Alertes automatiques par email pour tous les incidents de sécurité</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="comment-ca-marche" class="online-exams">
+        <div class="container">
+            <h2>Ce qui se passe pendant un examen en ligne</h2>
+            <p class="section-subtitle">Chaque session est surveillée en temps réel — caméra, écran partagé, comportement — de la connexion à la correction automatique.</p>
+
+            <!-- ── Bloc principal : événements réels + mock interface ── -->
+            <div class="exams-showcase">
+
+                <div class="exams-features">
+
+                    <div class="exam-feature-item">
+                        <h4>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;color:var(--primary)"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                            Caméra activée automatiquement
+                        </h4>
+                        <p>Dès le lancement, la caméra s'active et le flux vidéo HD est transmis en direct au panneau de surveillance de l'enseignant.</p>
+                    </div>
+
+                    <div class="exam-feature-item">
+                        <h4>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;color:var(--primary)"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                            Partage d'écran entier obligatoire
+                        </h4>
+                        <p>L'écran complet est partagé automatiquement. L'enseignant peut l'ouvrir en plein format à tout moment depuis le dashboard.</p>
+                    </div>
+
+                    <div class="exam-feature-item">
+                        <h4>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;color:var(--primary)"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                            Détection faciale en continu
+                        </h4>
+                        <p>L'IA analyse le flux caméra : absence du visage, plusieurs personnes détectées, regard hors écran — chaque anomalie est loguée.</p>
+                    </div>
+
+                    <div class="exam-feature-item">
+                        <h4>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;color:var(--primary)"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                            Score de risque en temps réel
+                        </h4>
+                        <p>Chaque incident (changement de fenêtre, visage absent, outils dev) incrémente le score de risque visible chez l'enseignant (0–100).</p>
+                    </div>
+
+                    <div class="exam-feature-item">
+                        <h4>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;color:var(--primary)"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            Timer et sauvegarde automatique
+                        </h4>
+                        <p>Un compte à rebours est affiché en permanence. Les réponses sont sauvegardées toutes les 30 secondes. À l'expiration, la copie est soumise automatiquement.</p>
+                    </div>
+
+                    <div class="exam-feature-item">
+                        <h4>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;color:var(--primary)"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+                            Messages et avertissements en direct
+                        </h4>
+                        <p>L'enseignant peut envoyer un avertissement ou un message directement à un étudiant — affiché immédiatement sur son écran sous forme de popup.</p>
+                    </div>
+
+                </div>
+
+                <!-- Mock interface : vue écran de l'étudiant pendant l'examen -->
+                <div class="exams-visual">
+                    <div class="mock-browser">
+                        <div class="browser-header">
+                            <div class="browser-dot dot-red"></div>
+                            <div class="browser-dot dot-yellow"></div>
+                            <div class="browser-dot dot-green"></div>
+                            <span style="font-size:10px;color:var(--gray-400);margin-left:10px;font-family:monospace;">examen-surveillé · session active</span>
+                        </div>
+                        <!-- Split-screen : panneau surveillance (gauche) + panneau examen (droite) -->
+                        <div style="display:flex;height:310px;overflow:hidden;">
+
+                            <!-- Panneau surveillance (sombre) -->
+                            <div style="width:112px;min-width:112px;background:#1e293b;padding:10px 8px;display:flex;flex-direction:column;gap:9px;">
+                                <div style="font-size:8px;font-weight:700;color:#3b82f6;text-transform:uppercase;letter-spacing:.06em;">Surveillance</div>
+                                <!-- Camera preview -->
+                                <div style="aspect-ratio:4/3;background:#0f172a;border-radius:5px;border:1px solid #334155;display:flex;align-items:center;justify-content:center;position:relative;">
+                                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#334155" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                                    <div style="position:absolute;bottom:3px;right:3px;width:7px;height:7px;background:#10b981;border-radius:50%;"></div>
+                                </div>
+                                <!-- Device states -->
+                                <div style="display:flex;flex-direction:column;gap:4px;">
+                                    <div style="display:flex;justify-content:space-between;font-size:8px;color:#94a3b8;">
+                                        <span>Caméra</span><span style="color:#10b981;font-weight:700;">On</span>
+                                    </div>
+                                    <div style="display:flex;justify-content:space-between;font-size:8px;color:#94a3b8;">
+                                        <span>Micro</span><span style="color:#10b981;font-weight:700;">On</span>
+                                    </div>
+                                    <div style="display:flex;justify-content:space-between;font-size:8px;color:#94a3b8;">
+                                        <span>Écran</span><span style="color:#10b981;font-weight:700;">On</span>
+                                    </div>
+                                </div>
+                                <!-- Risk score -->
+                                <div style="background:#0f172a;border-radius:5px;padding:7px;">
+                                    <div style="font-size:8px;color:#64748b;margin-bottom:4px;font-weight:600;">Risque</div>
+                                    <div style="height:4px;background:#1e293b;border-radius:2px;overflow:hidden;">
+                                        <div style="width:9%;height:100%;background:#10b981;border-radius:2px;"></div>
+                                    </div>
+                                    <div style="font-size:9px;color:#10b981;text-align:right;margin-top:3px;font-weight:700;">9 / 100</div>
+                                </div>
+                                <!-- Warning zone -->
+                                <div style="font-size:8px;color:#64748b;text-align:center;margin-top:auto;padding:5px 0;border-top:1px solid #334155;">
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:middle;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                                    Aucune alerte
+                                </div>
+                            </div>
+
+                            <!-- Panneau examen (clair) -->
+                            <div style="flex:1;background:#f8fafc;padding:12px;display:flex;flex-direction:column;gap:9px;overflow:hidden;">
+                                <!-- Header exam -->
+                                <div style="background:linear-gradient(135deg,#2563eb,#1d4ed8);color:white;padding:9px 13px;border-radius:7px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
+                                    <span style="font-size:10px;font-weight:700;">Algorithmique — Examen Final</span>
+                                    <span style="font-size:10px;font-weight:700;display:flex;align-items:center;gap:3px;">
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                                        01:38:42
+                                    </span>
+                                </div>
+                                <!-- Question -->
+                                <div style="background:white;border:1px solid #e2e8f0;border-radius:7px;padding:9px;flex-shrink:0;">
+                                    <div style="font-size:8px;font-weight:700;color:#3b82f6;margin-bottom:4px;">Question 1 · 4 pts</div>
+                                    <div style="font-size:9px;color:#334155;line-height:1.5;">Expliquez la complexité O(n log n) et citez un algorithme de tri qui l'atteint en justifiant.</div>
+                                </div>
+                                <!-- Answer area -->
+                                <div style="flex:1;background:white;border:1px solid #e2e8f0;border-radius:7px;padding:9px;font-size:9px;color:#475569;line-height:1.5;overflow:hidden;">
+                                    Le tri fusion (Merge Sort) atteint O(n log n) car il divise le tableau en deux moitiés récursives…
+                                </div>
+                                <!-- Status bar -->
+                                <div style="font-size:8px;color:#94a3b8;display:flex;align-items:center;gap:5px;flex-shrink:0;">
+                                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                                    <span style="color:#10b981;font-weight:600;">Surveillance active</span>
+                                    &nbsp;·&nbsp; Sauvegardé il y a 22 s
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── Processus : Enseignant + Étudiant ── -->
+            <div style="margin-top:72px;">
+
+                <!-- ENSEIGNANT -->
+                <div class="process-label reveal">
+                    <div class="process-label-icon" style="background:var(--primary-dark);">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+                    </div>
+                    <h3 class="process-label-title">Côté Enseignant</h3>
+                </div>
+                <div class="steps-grid" id="steps-prof">
+                    <div class="step-card step-card--blue">
+                        <div class="step-icon-wrap" style="background:#eff6ff;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+                        </div>
+                        <div class="step-badge" style="background:var(--primary-dark);">Étape 1</div>
+                        <h4 class="step-title">Créer l'examen</h4>
+                        <p class="step-desc">Configurez le titre, la durée, les plages horaires et rédigez le sujet — ou générez-le avec l'IA.</p>
+                    </div>
+                    <div class="step-card step-card--blue">
+                        <div class="step-icon-wrap" style="background:#eff6ff;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+                        </div>
+                        <div class="step-badge" style="background:var(--primary-dark);">Étape 2</div>
+                        <h4 class="step-title">Activer l'examen</h4>
+                        <p class="step-desc">Activez l'examen à l'heure prévue. Les étudiants inscrits voient immédiatement le bouton Composer.</p>
+                    </div>
+                    <div class="step-card step-card--blue">
+                        <div class="step-icon-wrap" style="background:#eff6ff;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                        </div>
+                        <div class="step-badge" style="background:var(--primary-dark);">Étape 3</div>
+                        <h4 class="step-title">Surveiller en direct</h4>
+                        <p class="step-desc">Le dashboard affiche la grille vidéo de tous les étudiants, leurs scores de risque et les alertes automatiques.</p>
+                    </div>
+                    <div class="step-card step-card--blue">
+                        <div class="step-icon-wrap" style="background:#eff6ff;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a2 2 0 012 2v1h4a1 1 0 011 1v10a1 1 0 01-1 1H6a1 1 0 01-1-1V6a1 1 0 011-1h4V4a2 2 0 012-2z"/><circle cx="9" cy="13" r="1" fill="#2563eb" stroke="none"/><circle cx="15" cy="13" r="1" fill="#2563eb" stroke="none"/><path d="M9 17h6"/></svg>
+                        </div>
+                        <div class="step-badge" style="background:var(--primary-dark);">Étape 4</div>
+                        <h4 class="step-title">Corriger avec l'IA</h4>
+                        <p class="step-desc">Après soumission, l'IA corrige chaque copie selon le barème. Validez, ajustez si besoin, puis publiez les notes.</p>
+                    </div>
+                </div>
+
+                <!-- ÉTUDIANT -->
+                <div class="process-label reveal" style="margin-top:56px;">
+                    <div class="process-label-icon" style="background:var(--success-dark);">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+                    </div>
+                    <h3 class="process-label-title">Côté Étudiant</h3>
+                </div>
+                <div class="steps-grid" id="steps-student">
+                    <div class="step-card step-card--green">
+                        <div class="step-icon-wrap" style="background:#ecfdf5;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        </div>
+                        <div class="step-badge" style="background:var(--success-dark);">Étape 1</div>
+                        <h4 class="step-title">Voir l'examen disponible</h4>
+                        <p class="step-desc">L'examen apparaît dans votre tableau de bord avec le bouton Composer ou un compte à rebours jusqu'à l'ouverture.</p>
+                    </div>
+                    <div class="step-card step-card--green">
+                        <div class="step-icon-wrap" style="background:#ecfdf5;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                        </div>
+                        <div class="step-badge" style="background:var(--success-dark);">Étape 2</div>
+                        <h4 class="step-title">Autoriser la surveillance</h4>
+                        <p class="step-desc">Autorisez caméra, micro et partage d'écran dans votre navigateur. La plateforme active tout automatiquement au lancement.</p>
+                    </div>
+                    <div class="step-card step-card--green">
+                        <div class="step-icon-wrap" style="background:#ecfdf5;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                        </div>
+                        <div class="step-badge" style="background:var(--success-dark);">Étape 3</div>
+                        <h4 class="step-title">Composer</h4>
+                        <p class="step-desc">Lisez le sujet et rédigez vos réponses. Sauvegarde automatique toutes les 30 s. Posez vos questions via la messagerie intégrée.</p>
+                    </div>
+                    <div class="step-card step-card--green">
+                        <div class="step-icon-wrap" style="background:#ecfdf5;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                        </div>
+                        <div class="step-badge" style="background:var(--success-dark);">Étape 4</div>
+                        <h4 class="step-title">Soumettre &amp; consulter</h4>
+                        <p class="step-desc">Soumettez avant l'expiration. Consultez ensuite votre note, le feedback IA par question et votre relevé de notes officiel.</p>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- ══ Section Témoignages ══ -->
+    <section id="temoignages" style="background:var(--gray-50);padding:80px 0;">
+        <div class="container">
+            <div style="text-align:center;max-width:640px;margin:0 auto 56px;">
+                <span style="display:inline-block;background:#eff6ff;color:var(--primary-dark);font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:5px 16px;border-radius:99px;margin-bottom:16px;">Ils utilisent le CEI</span>
+                <h2 style="font-size:1.9rem;font-weight:800;color:var(--gray-900);margin-bottom:14px;line-height:1.25;">Ce qu'en disent les professionnels</h2>
+                <p style="color:var(--gray-500);font-size:.97rem;line-height:1.7;">Enseignants, ingénieurs et responsables académiques partagent leur expérience avec la plateforme.</p>
+            </div>
+
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px;">
+
+                <!-- Témoignage 1 : Samuel OUYA -->
+                <div class="reveal" style="background:white;border-radius:16px;padding:32px;border:1px solid var(--gray-200);box-shadow:0 4px 16px rgba(0,0,0,.06);display:flex;flex-direction:column;gap:20px;">
+                    <div style="display:flex;gap:4px;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#f59e0b" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#f59e0b" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#f59e0b" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#f59e0b" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#f59e0b" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    </div>
+                    <blockquote style="font-size:.97rem;color:var(--gray-700);line-height:1.75;font-style:italic;margin:0;flex:1;">
+                        "Le CEI répond directement aux besoins des universités africaines qui se digitalisent. La surveillance en temps réel et la correction automatique permettent d'offrir une expérience d'examen à distance digne de ce nom, sans compromis sur la rigueur académique. C'est exactement ce qu'il faut pour des établissements comme l'UVS qui gèrent des milliers d'étudiants dispersés sur tout le territoire."
+                    </blockquote>
+                    <div style="display:flex;align-items:center;gap:14px;padding-top:16px;border-top:1px solid var(--gray-100);">
+                        <div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--primary-dark),#1d4ed8);display:flex;align-items:center;justify-content:center;color:white;font-size:1.1rem;font-weight:700;flex-shrink:0;">S</div>
+                        <div>
+                            <div style="font-weight:700;color:var(--gray-900);font-size:.93rem;">Professeur Samuel OUYA</div>
+                            <div style="font-size:.82rem;color:var(--gray-500);line-height:1.4;">Recteur — Université Virtuelle du Sénégal (UVS), Dakar</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Témoignage 2 : Serge BOUNGUELE -->
+                <div class="reveal" style="background:white;border-radius:16px;padding:32px;border:1px solid var(--gray-200);box-shadow:0 4px 16px rgba(0,0,0,.06);display:flex;flex-direction:column;gap:20px;">
+                    <div style="display:flex;gap:4px;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#f59e0b" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#f59e0b" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#f59e0b" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#f59e0b" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#f59e0b" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    </div>
+                    <blockquote style="font-size:.97rem;color:var(--gray-700);line-height:1.75;font-style:italic;margin:0;flex:1;">
+                        "En tant qu'ingénieur spécialisé en cybersécurité, ce qui m'a convaincu c'est l'architecture de surveillance : détection faciale, partage d'écran obligatoire, logs horodatés à chaque action. Le niveau de traçabilité est comparable à ce qu'on retrouve dans les certifications professionnelles. Le CEI apporte une vraie réponse technique au problème de fraude dans nos filières."
+                    </blockquote>
+                    <div style="display:flex;align-items:center;gap:14px;padding-top:16px;border-top:1px solid var(--gray-100);">
+                        <div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#0f766e,#0d9488);display:flex;align-items:center;justify-content:center;color:white;font-size:1.1rem;font-weight:700;flex-shrink:0;">S</div>
+                        <div>
+                            <div style="font-weight:700;color:var(--gray-900);font-size:.93rem;">Serge BOUNGUELE</div>
+                            <div style="font-size:.82rem;color:var(--gray-500);line-height:1.4;">Ingénieur Télécoms Réseaux (Cybersécurité/DevOps) — RTN</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Témoignage 3 : Nasry AHAMADI -->
+                <div class="reveal" style="background:white;border-radius:16px;padding:32px;border:1px solid var(--gray-200);box-shadow:0 4px 16px rgba(0,0,0,.06);display:flex;flex-direction:column;gap:20px;">
+                    <div style="display:flex;gap:4px;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#f59e0b" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#f59e0b" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#f59e0b" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#f59e0b" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#f59e0b" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    </div>
+                    <blockquote style="font-size:.97rem;color:var(--gray-700);line-height:1.75;font-style:italic;margin:0;flex:1;">
+                        "Enseigner à l'EC2LT c'est gérer des étudiants qui jonglent entre travail et formation. La correction IA du CEI m'a libéré un temps considérable — ce qui prenait 3 jours se fait maintenant en une heure. Les étudiants reçoivent un feedback précis question par question, ce qui améliore leur compréhension. Un outil indispensable pour l'enseignement des filières techniques à distance."
+                    </blockquote>
+                    <div style="display:flex;align-items:center;gap:14px;padding-top:16px;border-top:1px solid var(--gray-100);">
+                        <div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#6d28d9);display:flex;align-items:center;justify-content:center;color:white;font-size:1.1rem;font-weight:700;flex-shrink:0;">N</div>
+                        <div>
+                            <div style="font-weight:700;color:var(--gray-900);font-size:.93rem;">Nasry AHAMADI</div>
+                            <div style="font-size:.82rem;color:var(--gray-500);line-height:1.4;">Télécoms Réseaux (Cybersécurité/DevOps) — Enseignant EC2LT</div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-section">
+        <div class="container">
+            <h2>Prêt à Révolutionner Vos Examens ?</h2>
+            <p>Rejoignez les établissements qui ont modernisé leur système d'évaluation</p>
+            <a href="/app" class="btn btn-cta">
+                <i class="fas fa-rocket"></i>
+                Démarrer Maintenant
+            </a>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-section">
+                <h4><i class="fas fa-graduation-cap"></i> CEI — Centre d'Examen Intelligent</h4>
+                <p>Plateforme sénégalaise d'examens en ligne avec IA, surveillance anti-triche et relevés automatiques.</p>
+                <div class="social-links">
+                    <a href="#" class="social-link">
+                        <i class="fab fa-github"></i>
+                    </a>
+                    <a href="#" class="social-link">
+                        <i class="fab fa-linkedin"></i>
+                    </a>
+                    <a href="#" class="social-link">
+                        <i class="fab fa-twitter"></i>
+                    </a>
+                    <a href="#" class="social-link">
+                        <i class="fas fa-envelope"></i>
+                    </a>
+                </div>
+            </div>
+            
+            <div class="footer-section">
+                <h4>Fonctionnalités</h4>
+                <a href="#features">Examens en Ligne</a>
+                <a href="#features">Correction IA</a>
+                <a href="#features">Relevés de Notes</a>
+                <a href="#features">Anti-Triche</a>
+                <a href="#features">Notifications Temps Réel</a>
+            </div>
+            
+            <div class="footer-section">
+                <h4>Documentation</h4>
+                <a href="/guide-enseignant"><i class="fas fa-chalkboard-teacher" style="width:16px;margin-right:6px;"></i> Guide Enseignant</a>
+                <a href="/guide-etudiant"><i class="fas fa-user-graduate" style="width:16px;margin-right:6px;"></i> Guide Étudiant</a>
+                <a href="/conditions"><i class="fas fa-file-contract" style="width:16px;margin-right:6px;"></i> Conditions d'Utilisation</a>
+                <a href="#comment-ca-marche"><i class="fas fa-question-circle" style="width:16px;margin-right:6px;"></i> Comment ça marche ?</a>
+            </div>
+            
+            <div class="footer-section">
+                <h4>Contact</h4>
+                <p><i class="fas fa-envelope"></i> entreprisertn221@gmail.com</p>
+                <p><i class="fas fa-phone"></i> (+221) 77 662 76 94</p>
+                <p><i class="fas fa-map-marker-alt"></i> Liberté 2, derrière immeuble BICIS, Jet d'eau - Dakar - Sénégal</p>
+            </div>
+        </div>
+        
+        <div class="footer-bottom">
+            <p>&copy; 2026 CEI — Centre d'Examen Intelligent. Tous droits réservés.</p>
+        </div>
+    </footer>
+<style>
+/* ── Animations scroll-reveal ── */
+/* Neutraliser le fadeIn CSS pour les éléments gérés par l'observer */
+.feature-card.reveal,
+.exam-feature-item.reveal,
+.security-card.reveal,
+.stat-item.reveal {
+    animation: none;
+}
+.reveal {
+    opacity: 0;
+    transform: translateY(32px);
+    transition: opacity .6s cubic-bezier(.4,0,.2,1), transform .6s cubic-bezier(.4,0,.2,1);
+}
+.reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+.reveal:nth-child(2) { transition-delay: .1s; }
+.reveal:nth-child(3) { transition-delay: .2s; }
+.reveal:nth-child(4) { transition-delay: .3s; }
+.reveal:nth-child(5) { transition-delay: .4s; }
+.reveal:nth-child(6) { transition-delay: .5s; }
+
+/* stat-num style */
+.stat-num {
+    font-size: 52px;
+    font-weight: 800;
+    letter-spacing: -1px;
+}
+
+/* ── Labels de section processus ── */
+.process-label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+}
+.process-label-icon {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+}
+.process-label-title {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--gray-900);
+}
+
+/* ── Grille des étapes avec ligne de connexion ── */
+.steps-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 0;
+    position: relative;
+    margin-bottom: 0;
+}
+
+/* Ligne horizontale reliant les étapes */
+.steps-grid::before {
+    content: '';
+    position: absolute;
+    top: 78px; /* centre de l'icône */
+    left: calc(52px / 2 + 22px);
+    right: calc(52px / 2 + 22px);
+    height: 2px;
+    background: var(--gray-200);
+    z-index: 0;
+    transition: background 0.4s;
+}
+/* Ligne remplie progressive via clip-path quand visible */
+.steps-grid.anim-done::before {
+    background: linear-gradient(90deg, var(--primary) 0%, var(--gray-200) 100%);
+}
+#steps-student.anim-done::before {
+    background: linear-gradient(90deg, var(--success) 0%, var(--gray-200) 100%);
+}
+
+/* ── Cartes d'étapes ── */
+.step-card {
+    background: white;
+    border-radius: 14px;
+    padding: 22px;
+    border: 1px solid var(--gray-200);
+    box-shadow: 0 2px 8px rgba(0,0,0,.05);
+    text-align: center;
+    margin: 0 10px;
+    position: relative;
+    z-index: 1;
+
+    /* état initial pour animation */
+    opacity: 0;
+    transform: translateY(36px) scale(.97);
+    transition:
+        opacity .5s cubic-bezier(.4,0,.2,1),
+        transform .5s cubic-bezier(.4,0,.2,1),
+        box-shadow .25s,
+        border-color .25s;
+}
+.step-card.visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+.step-card:nth-child(1) { transition-delay: 0s; }
+.step-card:nth-child(2) { transition-delay: .13s; }
+.step-card:nth-child(3) { transition-delay: .26s; }
+.step-card:nth-child(4) { transition-delay: .39s; }
+
+/* Hover */
+.step-card--blue:hover {
+    border-color: var(--primary);
+    box-shadow: 0 8px 28px rgba(59,130,246,.18);
+    transform: translateY(-6px) scale(1.02);
+}
+.step-card--green:hover {
+    border-color: var(--success);
+    box-shadow: 0 8px 28px rgba(16,185,129,.18);
+    transform: translateY(-6px) scale(1.02);
+}
+
+.step-icon-wrap {
+    width: 52px; height: 52px;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 14px;
+    transition: transform .3s cubic-bezier(.34,1.56,.64,1);
+}
+.step-card:hover .step-icon-wrap {
+    transform: rotate(-6deg) scale(1.12);
+}
+
+.step-badge {
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 12px;
+    border-radius: 99px;
+    display: inline-block;
+    margin-bottom: 10px;
+
+    /* animation pop au reveal */
+    transform: scale(0.6);
+    opacity: 0;
+    transition: transform .4s cubic-bezier(.34,1.56,.64,1), opacity .3s;
+    transition-delay: inherit;
+}
+.step-card.visible .step-badge {
+    transform: scale(1);
+    opacity: 1;
+}
+
+.step-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--gray-900);
+    margin-bottom: 8px;
+}
+.step-desc {
+    font-size: 12px;
+    color: var(--gray-500);
+    line-height: 1.6;
+}
+
+@media (max-width: 768px) {
+    .steps-grid { gap: 16px; }
+    .steps-grid::before { display: none; }
+    .step-card { margin: 0; }
+}
+</style>
+
+<script>
+// ── Scroll-reveal (IntersectionObserver) ──────────────────────────────────
+(function () {
+    const io = new IntersectionObserver((entries) => {
+        entries.forEach(e => {
+            if (e.isIntersecting) {
+                e.target.classList.add('visible');
+                io.unobserve(e.target);
+            }
+        });
+    }, { threshold: 0.12 });
+
+    // Observer toutes les cartes et items au chargement
+    document.querySelectorAll('.feature-card, .exam-feature-item, .security-card, .stat-item, .reveal').forEach(el => {
+        el.classList.add('reveal');
+        io.observe(el);
+    });
+})();
+
+// ── Count-up animé ────────────────────────────────────────────────────────
+function animateCount(el, target, duration) {
+    if (target === 0) { el.textContent = '0'; return; }
+    const start = performance.now();
+    const step = (now) => {
+        const progress = Math.min((now - start) / duration, 1);
+        // easeOutExpo
+        const ease = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
+        el.textContent = Math.floor(ease * target).toLocaleString('fr-FR');
+        if (progress < 1) requestAnimationFrame(step);
+        else el.textContent = target.toLocaleString('fr-FR');
+    };
+    requestAnimationFrame(step);
+}
+
+// ── Animer les grilles d'étapes Enseignant / Étudiant ────────────────────
+(function () {
+    function observeStepGrid(gridId) {
+        const grid = document.getElementById(gridId);
+        if (!grid) return;
+        const cards = grid.querySelectorAll('.step-card');
+        const io = new IntersectionObserver((entries) => {
+            if (!entries[0].isIntersecting) return;
+            io.disconnect();
+            grid.classList.add('anim-done'); // active la ligne de connexion
+            cards.forEach((card) => card.classList.add('visible'));
+        }, { threshold: 0.15 });
+        io.observe(grid);
+    }
+    observeStepGrid('steps-prof');
+    observeStepGrid('steps-student');
+})();
+
+// ── Lancer le count-up quand la section stats entre dans le viewport ──────
+const STATS = {
+    'stat-students':    1480,
+    'stat-exams':        320,
+    'stat-attempts':    4750,
+    'stat-corrections': 3920,
+};
+
+(function () {
+    const statsSection = document.querySelector('.stats');
+    if (!statsSection) return;
+    const observer = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting) {
+            observer.disconnect();
+            Object.entries(STATS).forEach(([id, val]) => {
+                const el = document.getElementById(id);
+                if (el) animateCount(el, val, 1600);
+            });
+        }
+    }, { threshold: 0.3 });
+    observer.observe(statsSection);
+})();
+</script>
+</body>
+</html>
