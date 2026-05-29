@@ -48,6 +48,7 @@ from utils import (
     match_student_by_name  # Utilitaires améliorés
 )
 from proctoring_routes import proctoring_bp
+from swagger_docs import swagger_bp
 
 # ... autres imports ...
 from models import (
@@ -148,8 +149,9 @@ else:
     if _ollama_key and _ollama_url:
         print(f"✅ Ollama configuré comme fallback IA ({OLLAMA_MODEL} @ {_ollama_url})")
 
-# Enregistrement du blueprint proctoring
+# Enregistrement des blueprints
 app.register_blueprint(proctoring_bp)
+app.register_blueprint(swagger_bp)
 
 @jwt.unauthorized_loader
 def unauthorized_callback(callback):
