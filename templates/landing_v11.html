@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Système de Notation Intelligent - Accueil</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <title>Centre d'Examen Intelligent - Accueil</title>
+    <link rel="stylesheet" href="/static/fontawesome/css/all.min.css">
     <style>
         * {
             margin: 0;
@@ -275,6 +275,55 @@
             transform: translateY(-2px);
         }
 
+        /* Nouvelles Fonctionnalités */
+        .new-features {
+            padding: 80px 20px;
+            background: #f8fafc;
+        }
+
+        .new-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: linear-gradient(135deg, #7c3aed, #6d28d9);
+            color: white;
+            padding: 6px 16px;
+            border-radius: 99px;
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 16px;
+        }
+
+        .feature-card.new {
+            border-color: #c4b5fd;
+            background: linear-gradient(135deg, #faf5ff, #f3e8ff);
+            position: relative;
+        }
+
+        .feature-card.new .feature-icon {
+            background: linear-gradient(135deg, #7c3aed, #6d28d9);
+        }
+
+        .feature-card.new:hover {
+            border-color: #7c3aed;
+        }
+
+        .tag-new {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: #7c3aed;
+            color: white;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 99px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
         @media (max-width: 768px) {
             .hero h1 {
                 font-size: 32px;
@@ -314,7 +363,7 @@
             <div class="hero-icon">
                 <i class="fas fa-graduation-cap"></i>
             </div>
-            <h1>Système de Notation Intelligent</h1>
+            <h1>Centre d'Examen Intelligent</h1>
             <p>Une solution complète de correction automatique d'examens propulsée par l'IA. Gagnez du temps, améliorez la cohérence et offrez un feedback détaillé à vos étudiants.</p>
             <div class="cta-buttons">
                 <a href="/app" class="btn btn-primary">
@@ -350,7 +399,7 @@
                         <i class="fas fa-users"></i>
                     </div>
                     <h3>Gestion Multi-Rôles</h3>
-                    <p>Interface adaptée pour administrateurs, professeurs et étudiants. Chacun dispose de ses propres outils et permissions.</p>
+                    <p>Interface adaptée pour administrateurs, professeurs, surveillants et étudiants. Chacun dispose de ses propres outils et permissions selon son rôle.</p>
                 </div>
 
                 <div class="feature-card">
@@ -383,6 +432,63 @@
                     </div>
                     <h3>Gestion des Réclamations</h3>
                     <p>Système complet de contestation des notes avec traitement IA pour aider à la prise de décision équitable.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Nouvelles Fonctionnalités Section -->
+    <section class="new-features" id="nouveautes">
+        <div class="features-container">
+            <div class="section-title">
+                <div><span class="new-badge"><i class="fas fa-star"></i> Nouveau — v2.0</span></div>
+                <h2>Surveillance Intelligente</h2>
+                <p>Des outils de proctoring avancés pour garantir l'intégrité académique en temps réel</p>
+            </div>
+            <div class="features-grid">
+                <div class="feature-card new">
+                    <span class="tag-new">Nouveau</span>
+                    <div class="feature-icon">
+                        <i class="fas fa-user-check"></i>
+                    </div>
+                    <h3>Détection Faciale IA</h3>
+                    <p>Reconnaissance faciale en temps réel avec détection des visages absents ou multiples. Système anti-faux-positifs : référence multi-images, seuil consécutif (3 frames), recapture automatique et guidage étudiant.</p>
+                </div>
+
+                <div class="feature-card new">
+                    <span class="tag-new">Nouveau</span>
+                    <div class="feature-icon">
+                        <i class="fas fa-desktop"></i>
+                    </div>
+                    <h3>Partage d'Écran Complet</h3>
+                    <p>Le partage d'écran complet (moniteur entier) est obligatoire. Le partage de fenêtre ou d'onglet est automatiquement refusé — seul l'écran entier est accepté, garantissant une surveillance totale.</p>
+                </div>
+
+                <div class="feature-card new">
+                    <span class="tag-new">Nouveau</span>
+                    <div class="feature-icon">
+                        <i class="fas fa-phone"></i>
+                    </div>
+                    <h3>Appel Privé Enseignant-Étudiant</h3>
+                    <p>Le surveillant peut initier un appel audio/vidéo privé avec un étudiant spécifique depuis le dashboard. L'étudiant peut également demander un contact vocal pour poser une question ou signaler un problème.</p>
+                </div>
+
+                <div class="feature-card new">
+                    <span class="tag-new">Nouveau</span>
+                    <div class="feature-icon">
+                        <i class="fas fa-video"></i>
+                    </div>
+                    <h3>Surveillance Temps Réel</h3>
+                    <p>Dashboard de surveillance avec flux vidéo HD de tous les étudiants simultanément. Score de risque 0–100%, snapshots automatiques, enregistrement vidéo à la demande et logs d'activité horodatés.</p>
+                </div>
+
+                <div class="feature-card new">
+                    <span class="tag-new">Nouveau</span>
+                    <div class="feature-icon">
+                        <i class="fas fa-eye"></i>
+                    </div>
+                    <h3>Rôle Surveillant Dédié</h3>
+                    <p>Affectez des surveillants par examen et répartissez automatiquement les étudiants entre eux (ordre alphabétique, round-robin). Chaque surveillant ne voit et n'intervient que sur son groupe assigné.</p>
                 </div>
             </div>
         </div>
@@ -423,8 +529,19 @@
     <!-- Footer -->
     <footer class="footer">
         <div class="footer-content">
-            <p><i class="fas fa-graduation-cap"></i> Système de Notation Intelligent - Propulsé par l'IA</p>
-            <p>&copy; 2025 Tous droits réservés</p>
+            <p><i class="fas fa-graduation-cap"></i> Centre d'Examen Intelligent - Propulsé par l'IA</p>
+            <p style="margin-bottom:16px;">
+                <a href="/guide-etudiant" style="color:rgba(255,255,255,.7);text-decoration:none;margin:0 10px;font-size:13px;"><i class="fas fa-user-graduate"></i> Guide Étudiant</a>
+                <a href="/guide-enseignant" style="color:rgba(255,255,255,.7);text-decoration:none;margin:0 10px;font-size:13px;"><i class="fas fa-chalkboard-teacher"></i> Guide Enseignant</a>
+                <a href="/guide-surveillant" style="color:rgba(255,255,255,.7);text-decoration:none;margin:0 10px;font-size:13px;"><i class="fas fa-eye"></i> Guide Surveillant</a>
+                <a href="/conditions" style="color:rgba(255,255,255,.7);text-decoration:none;margin:0 10px;font-size:13px;"><i class="fas fa-file-contract"></i> Conditions d'Utilisation</a>
+            </p>
+            <p style="margin-bottom:8px;font-size:12px;opacity:.7;">
+                <i class="fas fa-map-marker-alt"></i> Cité du savoir, Diamniadio &nbsp;·&nbsp;
+                <i class="fas fa-phone"></i> +221 30 108 41 53 &nbsp;·&nbsp;
+                <i class="fas fa-envelope"></i> <a href="mailto:visioplus@unchk.edu.sn" style="color:rgba(255,255,255,.7);">visioplus@unchk.edu.sn</a>
+            </p>
+            <p>&copy; 2026 Tous droits réservés — UNCHK, Cité du savoir, Diamniadio, Sénégal</p>
             <div class="social-links">
                 <a href="#" class="social-link">
                     <i class="fab fa-github"></i>

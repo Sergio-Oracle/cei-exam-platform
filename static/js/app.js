@@ -10,9 +10,10 @@ const TZ_DAKAR = 'Africa/Dakar';
  * @param {string} isoStr  - chaîne ISO renvoyée par l'API (ex: "2026-01-02T17:54:00+00:00")
  * @param {object} opts    - options Intl supplémentaires
  */
+function _locale() { return window._i18nLocale || 'fr-FR'; }
 function fmtDakar(isoStr, opts = {}) {
     if (!isoStr) return '—';
-    return new Date(isoStr).toLocaleString('fr-FR', {
+    return new Date(isoStr).toLocaleString(_locale(), {
         timeZone: TZ_DAKAR,
         day: '2-digit', month: '2-digit', year: 'numeric',
         hour: '2-digit', minute: '2-digit',
@@ -21,32 +22,36 @@ function fmtDakar(isoStr, opts = {}) {
 }
 function fmtDakarDate(isoStr) {
     if (!isoStr) return '—';
-    return new Date(isoStr).toLocaleDateString('fr-FR', { timeZone: TZ_DAKAR, day: '2-digit', month: '2-digit', year: 'numeric' });
+    return new Date(isoStr).toLocaleDateString(_locale(), { timeZone: TZ_DAKAR, day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 function fmtDakarTime(isoStr) {
     if (!isoStr) return '—';
-    return new Date(isoStr).toLocaleTimeString('fr-FR', { timeZone: TZ_DAKAR, hour: '2-digit', minute: '2-digit' });
+    return new Date(isoStr).toLocaleTimeString(_locale(), { timeZone: TZ_DAKAR, hour: '2-digit', minute: '2-digit' });
 }
 
 // ─── Traduction des erreurs techniques en messages lisibles ───────────────
 function humanError(err) {
-    if (!err) return 'Une erreur inattendue est survenue. Veuillez réessayer.';
+    if (!err) return t('msg.error_generic');
+    // Erreur déjà gérée (session expirée, redirection login) — ne pas afficher une 2e alerte
+    if (err.alreadyHandled) return null;
+    // Le serveur a envoyé un message explicite (encodé par authenticatedFetch)
+    if (err.serverMessage) return err.serverMessage;
     const m = String(err.message || err).toLowerCase();
     if (m.includes('failed to fetch') || m.includes('networkerror') || m.includes('network request'))
-        return 'Erreur de connexion réseau. Vérifiez votre connexion internet et réessayez.';
+        return t('msg.error_network');
     if (m.includes('timeout') || m.includes('timed out'))
-        return 'Le serveur met trop de temps à répondre. Veuillez réessayer dans quelques instants.';
+        return t('msg.error_timeout');
     if (m.includes('aborted'))
-        return 'La requête a été interrompue. Veuillez réessayer.';
+        return t('msg.error_generic');
     if (m.includes('json') || m.includes('unexpected token'))
-        return 'Le serveur a renvoyé une réponse inattendue. Veuillez réessayer ou contacter le support.';
+        return t('msg.error_json');
     if (m.includes('unauthorized') || m.includes('401'))
-        return 'Votre session a expiré. Veuillez vous reconnecter.';
+        return t('auth.session_expired');
     if (m.includes('forbidden') || m.includes('403'))
-        return "Vous n'avez pas les droits nécessaires pour effectuer cette action.";
+        return t('auth.no_permission');
     if (m.includes('not found') || m.includes('404'))
-        return 'La ressource demandée est introuvable.';
-    return 'Une erreur inattendue est survenue. Veuillez réessayer ou contacter le support.';
+        return t('auth.not_found');
+    return t('msg.error_generic');
 }
 
 
@@ -58,55 +63,40 @@ async function authenticatedFetch(url, options = {}) {
     
     try {
         const response = await fetch(url, config);
-        
-        // Gestion de l'expiration de session
+
+        // 401/422 : session expirée → alerte immédiate + redirection login
         if (response.status === 401 || response.status === 422) {
             localStorage.removeItem('authToken');
             authToken = null;
             currentUser = null;
             showAlert('Votre session a expiré. Veuillez vous reconnecter.', 'warning');
             showLogin();
-            throw new Error('Session expirée');
+            const e401 = new Error('Session expirée');
+            e401.alreadyHandled = true;
+            throw e401;
         }
-        
-        // Gestion des erreurs 403
-        if (response.status === 403) {
-            const data = await response.json().catch(() => ({}));
-            showAlert(data.error || 'Vous n\'avez pas l\'autorisation d\'effectuer cette action', 'error');
-            throw new Error('Accès non autorisé');
+
+        // 400 / 403 / 404 / 5xx : encoder le message serveur dans l'erreur
+        // (affiché UNE seule fois par le bloc catch de l'appelant via humanError)
+        if (response.status === 400 || response.status === 403 ||
+            response.status === 404 || response.status >= 500) {
+            const body = await response.json().catch(() => ({}));
+            const defaults = {
+                400: 'Données invalides. Vérifiez les informations saisies.',
+                403: 'Vous n\'avez pas l\'autorisation d\'effectuer cette action.',
+                404: 'Ressource introuvable.',
+            };
+            const msg = body.error || defaults[response.status] || 'Erreur serveur. Veuillez réessayer plus tard.';
+            const err = new Error(msg);
+            err.serverMessage = msg;
+            err.statusCode = response.status;
+            throw err;
         }
-        
-        // Gestion des erreurs 404
-        if (response.status === 404) {
-            const data = await response.json().catch(() => ({}));
-            showAlert(data.error || 'Ressource non trouvée', 'error');
-            throw new Error('Ressource non trouvée');
-        }
-        
-        // Gestion des erreurs 400 (mauvaise requête)
-        if (response.status === 400) {
-            const data = await response.json().catch(() => ({}));
-            showAlert(data.error || 'Requête invalide', 'error');
-            throw new Error('Requête invalide');
-        }
-        
-        // Gestion des erreurs serveur 500
-        if (response.status >= 500) {
-            const data = await response.json().catch(() => ({}));
-            showAlert(data.error || 'Erreur serveur. Veuillez réessayer plus tard.', 'error');
-            throw new Error('Erreur serveur');
-        }
-        
+
         return response;
     } catch (error) {
-        // Si l'erreur n'a pas déjà été gérée, afficher un message générique
-        if (error.message !== 'Session expirée' && 
-            error.message !== 'Accès non autorisé' && 
-            error.message !== 'Ressource non trouvée' &&
-            error.message !== 'Requête invalide' &&
-            error.message !== 'Erreur serveur') {
-            showAlert('Erreur de connexion. Vérifiez votre connexion internet.', 'error');
-        }
+        // Ne pas ré-afficher les erreurs déjà traitées (serverMessage / alreadyHandled)
+        // Les erreurs réseau (Failed to fetch) sont gérées par humanError dans l'appelant
         throw error;
     }
 }
@@ -142,7 +132,7 @@ async function handleLogin(e) {
             localStorage.setItem('authToken', authToken);
             showApp();
         } else {
-            showAlert(data.error || 'Une erreur est survenue. Veuillez réessayer.', 'error');
+            showAlert(data.error || 'Identifiants incorrects ou compte désactivé.', 'error');
         }
     } catch (error) {
         showAlert(humanError(error), 'error');
@@ -186,23 +176,86 @@ function showLogin() {
 
 // ✅ Fonction showRegister() SUPPRIMÉE
 
+function getRoleColor(role) {
+    return { admin: '#7c3aed', professor: '#2563eb', student: '#059669', surveillant: '#d97706' }[role] || '#3b82f6';
+}
+
+function buildInitials(name) {
+    return (name || '?').split(' ').map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
+}
+
+window._currentView = null; // Garde la fonction de la vue active
+
 function showApp() {
     document.getElementById('login-screen').style.display = 'none';
-    // ✅ Ligne register-screen supprimée
     document.getElementById('app-screen').style.display = 'block';
-    document.getElementById('user-name').textContent = currentUser.full_name;
-    document.getElementById('user-role').textContent = getRoleLabel(currentUser.role);
+    refreshNavbarAvatar();
     loadNavigation();
     loadDashboard();
+    // Rechargement complet quand la langue change
+    const _origSetLang = window.setLang;
+    window.setLang = function(code) {
+        _origSetLang(code);
+        if (currentUser) {
+            loadNavigation();
+            applyI18n();
+            if (window._currentView) window._currentView();
+        }
+    };
+}
+
+function refreshNavbarAvatar() {
+    const color    = getRoleColor(currentUser.role);
+    const initials = buildInitials(currentUser.full_name);
+    const roleLabel = getRoleLabel(currentUser.role);
+
+    // Petite bulle dans la navbar
+    const circle = document.getElementById('user-avatar-circle');
+    if (circle) { circle.textContent = initials; circle.style.background = color; }
+    const nameEl = document.getElementById('user-name');
+    if (nameEl) nameEl.textContent = currentUser.full_name;
+    const roleEl = document.getElementById('user-role');
+    if (roleEl) roleEl.textContent = roleLabel;
+
+    // Contenu du dropdown header
+    const dlg = document.getElementById('dropdown-avatar-lg');
+    if (dlg) { dlg.textContent = initials; dlg.style.background = color; }
+    const dn = document.getElementById('dropdown-name');
+    if (dn) dn.textContent = currentUser.full_name;
+    const de = document.getElementById('dropdown-email');
+    if (de) de.textContent = currentUser.email || '';
+    const db = document.getElementById('dropdown-badge');
+    if (db) { db.textContent = roleLabel; db.style.background = color; }
+}
+
+function toggleUserDropdown(e) {
+    if (e) e.stopPropagation();
+    const dd   = document.getElementById('user-dropdown');
+    const chev = document.getElementById('av-chevron');
+    const open = dd.style.display !== 'none';
+    dd.style.display = open ? 'none' : 'block';
+    if (chev) chev.classList.toggle('open', !open);
+}
+
+function closeUserDropdown() {
+    const dd   = document.getElementById('user-dropdown');
+    const chev = document.getElementById('av-chevron');
+    if (dd)   dd.style.display = 'none';
+    if (chev) chev.classList.remove('open');
+}
+
+function openProfileFromDropdown() {
+    closeUserDropdown();
+    showProfileModal('info');
+}
+
+function openPasswordFromDropdown() {
+    closeUserDropdown();
+    showProfileModal('pw');
 }
 
 function getRoleLabel(role) {
-    const labels = { 
-        'admin': 'Administrateur', 
-        'professor': 'Professeur', 
-        'student': 'Étudiant' 
-    };
-    return labels[role] || role;
+    return t('role.' + role) || role;
 }
 // Navigation
 function loadNavigation() {
@@ -212,109 +265,119 @@ function loadNavigation() {
     if (currentUser.role === 'admin') {
         tabs = `<div class="nav-tabs">
             <button class="nav-tab active" onclick="loadDashboard()">
-                <i class="fas fa-chart-line"></i> Dashboard
+                <i class="fas fa-chart-line"></i> ${t('nav.dashboard')}
             </button>
             <button class="nav-tab" onclick="showCreateCourseWithAISuggestionsModal()">
-                <i class="fas fa-magic"></i> Créer Cours + IA
+                <i class="fas fa-magic"></i> ${t('nav.ai_suggestions')}
             </button>
             <button class="nav-tab" onclick="loadCreateSubject()">
-                <i class="fas fa-plus-circle"></i> Créer Sujet
+                <i class="fas fa-plus-circle"></i> ${t('nav.create_subject')}
             </button>
             <button class="nav-tab" onclick="loadUsers()">
-                <i class="fas fa-users"></i> Utilisateurs
+                <i class="fas fa-users"></i> ${t('nav.users')}
             </button>
             <button class="nav-tab" onclick="loadSubjects()">
-                <i class="fas fa-file-alt"></i> Sujets
+                <i class="fas fa-file-alt"></i> ${t('nav.subjects')}
             </button>
             <button class="nav-tab" onclick="loadCorrectedPapersList()">
-                <i class="fas fa-check-circle"></i> Copies Corrigées
+                <i class="fas fa-check-circle"></i> ${t('nav.corrected_papers')}
             </button>
             <button class="nav-tab" onclick="loadMaquette()">
-                <i class="fas fa-layer-group"></i> Maquette
+                <i class="fas fa-layer-group"></i> ${t('nav.maquette')}
             </button>
             <button class="nav-tab" onclick="loadECAssignments()">
-                <i class="fas fa-link"></i> Affectations EC
+                <i class="fas fa-link"></i> ${t('nav.ec_assignments')}
             </button>
             <button class="nav-tab" onclick="loadStudentEnrollments()">
-                <i class="fas fa-user-graduate"></i> Inscriptions UE
+                <i class="fas fa-user-graduate"></i> ${t('nav.ue_enrollments')}
             </button>
             <button class="nav-tab" onclick="loadOnlineExams()">
-                <i class="fas fa-laptop-code"></i> Examens en Ligne
+                <i class="fas fa-laptop-code"></i> ${t('nav.online_exams')}
             </button>
             <button class="nav-tab" onclick="loadExamsHistory()">
-                <i class="fas fa-history"></i> Historique Examens
+                <i class="fas fa-history"></i> ${t('nav.exam_history')}
             </button>
             <button class="nav-tab" onclick="loadTranscripts()">
-                <i class="fas fa-file-alt"></i> Relevés de Notes
+                <i class="fas fa-file-alt"></i> ${t('nav.transcripts')}
             </button>
             <button class="nav-tab" onclick="loadReclamations()">
-                <i class="fas fa-exclamation-triangle"></i> Réclamations
+                <i class="fas fa-exclamation-triangle"></i> ${t('nav.reclamations')}
             </button>
-            <!-- ✅ NOUVEAU : Bouton Thème -->
-            <button class="nav-tab" onclick="toggleTheme()" id="theme-toggle-btn" title="Changer de thème">
+            <button class="nav-tab" onclick="toggleTheme()" id="theme-toggle-btn" title="${t('nav.change_theme')}">
                 <i class="fas fa-moon"></i>
             </button>
         </div>`;
     } else if (currentUser.role === 'professor') {
     tabs = `<div class="nav-tabs">
         <button class="nav-tab active" onclick="loadDashboard()">
-            <i class="fas fa-chart-line"></i> Dashboard
+            <i class="fas fa-chart-line"></i> ${t('nav.dashboard')}
         </button>
         <button class="nav-tab" onclick="showCreateCourseWithAISuggestionsModal()">
-            <i class="fas fa-magic"></i> Créer Cours + IA
+            <i class="fas fa-magic"></i> ${t('nav.ai_suggestions')}
         </button>
         <button class="nav-tab" onclick="loadCreateSubject()">
-            <i class="fas fa-plus-circle"></i> Créer Sujet
+            <i class="fas fa-plus-circle"></i> ${t('nav.create_subject')}
         </button>
         <button class="nav-tab" onclick="loadCorrectPapers()">
-            <i class="fas fa-pencil-alt"></i> Corriger Copies
+            <i class="fas fa-pencil-alt"></i> ${t('nav.correct_papers')}
         </button>
         <button class="nav-tab" onclick="loadCorrectedPapersList()">
-            <i class="fas fa-check-circle"></i> Copies Corrigées
+            <i class="fas fa-check-circle"></i> ${t('nav.corrected_papers')}
         </button>
         <button class="nav-tab" onclick="loadMySubjects()">
-            <i class="fas fa-book"></i> Mes Sujets
+            <i class="fas fa-book"></i> ${t('nav.my_subjects')}
         </button>
         <button class="nav-tab" onclick="loadOnlineExams()">
-            <i class="fas fa-laptop-code"></i> Examens en Ligne
+            <i class="fas fa-laptop-code"></i> ${t('nav.online_exams')}
         </button>
         <button class="nav-tab" onclick="loadExamCorrections()">
-            <i class="fas fa-check-circle"></i> Corriger Examens en Ligne
+            <i class="fas fa-check-circle"></i> ${t('nav.correct_online')}
         </button>
         <button class="nav-tab" onclick="loadViewResults()">
-            <i class="fas fa-chart-bar"></i> Résultats
+            <i class="fas fa-chart-bar"></i> ${t('nav.results')}
         </button>
         <button class="nav-tab" onclick="loadTranscripts()">
-            <i class="fas fa-file-alt"></i> Relevés de Notes
+            <i class="fas fa-file-alt"></i> ${t('nav.transcripts')}
         </button>
         <button class="nav-tab" onclick="loadReclamations()">
-            <i class="fas fa-exclamation-triangle"></i> Réclamations
+            <i class="fas fa-exclamation-triangle"></i> ${t('nav.reclamations')}
         </button>
         <button class="nav-tab" id="notif-tab" onclick="showProfessorNotifications()" style="position: relative;">
-            <i class="fas fa-bell"></i> Notifications
+            <i class="fas fa-bell"></i> ${t('nav.notifications')}
             <span id="notif-badge" style="display: none; position: absolute; top: 5px; right: 5px; background: #ef4444; color: white; border-radius: 50%; width: 20px; height: 20px; font-size: 11px; line-height: 20px; text-align: center;"></span>
         </button>
-        <!-- ✅ NOUVEAU : Bouton Thème -->
-        <button class="nav-tab" onclick="toggleTheme()" id="theme-toggle-btn" title="Changer de thème">
+        <button class="nav-tab" onclick="toggleTheme()" id="theme-toggle-btn" title="${t('nav.change_theme')}">
             <i class="fas fa-moon"></i>
         </button>
     </div>`;
 
+    } else if (currentUser.role === 'surveillant') {
+        tabs = `<div class="nav-tabs">
+            <button class="nav-tab active" onclick="loadDashboard()">
+                <i class="fas fa-chart-line"></i> ${t('nav.dashboard')}
+            </button>
+            <button class="nav-tab" onclick="loadSurveillantExams()">
+                <i class="fas fa-laptop-code"></i> ${t('nav.my_exams_surv')}
+            </button>
+            <button class="nav-tab" onclick="toggleTheme()" id="theme-toggle-btn" title="${t('nav.change_theme')}">
+                <i class="fas fa-moon"></i>
+            </button>
+        </div>`;
     } else {
         tabs = `<div class="nav-tabs">
             <button class="nav-tab active" onclick="loadDashboard()">
-                <i class="fas fa-chart-bar"></i> Mes Notes
+                <i class="fas fa-chart-bar"></i> ${t('nav.my_grades')}
             </button>
             <button class="nav-tab" onclick="loadOnlineExams()">
-                <i class="fas fa-laptop-code"></i> Mes Examens en Ligne
+                <i class="fas fa-laptop-code"></i> ${t('nav.my_exams')}
             </button>
             <button class="nav-tab" onclick="loadMyTranscripts()">
-                <i class="fas fa-file-alt"></i> Mes Relevés
+                <i class="fas fa-file-alt"></i> ${t('nav.my_transcripts')}
             </button>
             <button class="nav-tab" onclick="loadMyReclamations()">
-                <i class="fas fa-exclamation-circle"></i> Mes Réclamations
+                <i class="fas fa-exclamation-circle"></i> ${t('nav.my_reclamations')}
             </button>
-            <button class="nav-tab" onclick="toggleTheme()" id="theme-toggle-btn" title="Changer de thème">
+            <button class="nav-tab" onclick="toggleTheme()" id="theme-toggle-btn" title="${t('nav.change_theme')}">
                 <i class="fas fa-moon"></i>
             </button>
         </div>`;
@@ -331,8 +394,10 @@ function setActiveTab(button) {
 // Dashboard
 async function loadDashboard() {
     if (window.event && window.event.target) setActiveTab(window.event.target);
+    window._currentView = loadDashboard;
     if (currentUser.role === 'admin') await loadAdminDashboard();
     else if (currentUser.role === 'professor') await loadProfessorDashboard();
+    else if (currentUser.role === 'surveillant') await loadSurveillantDashboard();
     else await loadStudentDashboard();
 }
 
@@ -346,41 +411,45 @@ async function loadAdminDashboard() {
         const data = await response.json();
         document.getElementById('main-content').innerHTML = `
             <div class="page-header">
-                <h2><i class="fas fa-chart-line"></i> Tableau de Bord Administrateur</h2>
+                <h2><i class="fas fa-chart-line"></i> ${t('section.admin_dashboard')}</h2>
             </div>
             <div class="grid">
                 <div class="stat-card">
-                    <div class="stat-label"><i class="fas fa-users"></i> Total Utilisateurs</div>
+                    <div class="stat-label"><i class="fas fa-users"></i> ${t('section.total_users')}</div>
                     <div class="stat-value">${data.total_users || 0}</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-label"><i class="fas fa-user-graduate"></i> Étudiants</div>
+                    <div class="stat-label"><i class="fas fa-user-graduate"></i> ${t('section.total_students')}</div>
                     <div class="stat-value">${data.total_students || 0}</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-label"><i class="fas fa-chalkboard-teacher"></i> Professeurs</div>
+                    <div class="stat-label"><i class="fas fa-chalkboard-teacher"></i> ${t('section.total_professors')}</div>
                     <div class="stat-value">${data.total_professors || 0}</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-label"><i class="fas fa-file-alt"></i> Sujets</div>
+                    <div class="stat-label"><i class="fas fa-eye"></i> ${t('section.total_surveillants')}</div>
+                    <div class="stat-value">${data.total_surveillants || 0}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label"><i class="fas fa-file-alt"></i> ${t('section.total_subjects')}</div>
                     <div class="stat-value">${data.total_subjects || 0}</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-label"><i class="fas fa-file"></i> Copies</div>
+                    <div class="stat-label"><i class="fas fa-file"></i> ${t('section.total_copies')}</div>
                     <div class="stat-value">${data.total_papers || 0}</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-label"><i class="fas fa-check-circle"></i> Copies Corrigées</div>
+                    <div class="stat-label"><i class="fas fa-check-circle"></i> ${t('section.corrected_copies')}</div>
                     <div class="stat-value">${data.total_corrected_papers || 0}</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-label"><i class="fas fa-exclamation-triangle"></i> Réclamations</div>
+                    <div class="stat-label"><i class="fas fa-exclamation-triangle"></i> ${t('section.reclamations')}</div>
                     <div class="stat-value">${data.pending_reclamations || 0}</div>
                 </div>
             </div>
             <div style="margin-top:16px;">
                 <button class="btn btn-primary" onclick="loadAdminCorrectedPapers()">
-                    <i class="fas fa-file-pdf"></i> Voir copies corrigées récentes
+                    <i class="fas fa-file-pdf"></i> ${t('section.recent_copies')}
                 </button>
             </div>
         `;
@@ -404,35 +473,33 @@ async function loadProfessorDashboard() {
     showLoader(true);
     try {
         const response = await authenticatedFetch('/api/professor/dashboard');
-        if (!response.ok) {
-            throw new Error(await response.text());
-        }
+        if (!response.ok) throw new Error(await response.text());
         const data = await response.json();
         document.getElementById('main-content').innerHTML = `
             <div class="page-header">
-                <h2><i class="fas fa-chart-line"></i> Tableau de Bord Professeur</h2>
-                <p>Bienvenue ${currentUser.full_name}</p>
+                <h2><i class="fas fa-chart-line"></i> ${t('section.professor_dashboard')}</h2>
+                <p>${t('section.welcome')} ${currentUser.full_name}</p>
             </div>
             <div class="grid">
                 <div class="stat-card">
-                    <div class="stat-label"><i class="fas fa-book"></i> Mes Sujets</div>
+                    <div class="stat-label"><i class="fas fa-book"></i> ${t('section.my_subjects')}</div>
                     <div class="stat-value">${data.my_subjects}</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-label"><i class="fas fa-check-circle"></i> Copies Corrigées</div>
+                    <div class="stat-label"><i class="fas fa-check-circle"></i> ${t('section.corrected_copies')}</div>
                     <div class="stat-value">${data.papers_corrected}</div>
                 </div>
             </div>
             <div class="card mt-3">
                 <div class="card-header">
-                    <h3><i class="fas fa-rocket"></i> Actions Rapides</h3>
+                    <h3><i class="fas fa-rocket"></i> ${t('section.quick_actions')}</h3>
                 </div>
                 <div class="d-flex gap-2">
                     <button class="btn btn-primary" onclick="loadCreateSubject()">
-                        <i class="fas fa-plus-circle"></i> Créer un Sujet
+                        <i class="fas fa-plus-circle"></i> ${t('btn.create_subject_action')}
                     </button>
                     <button class="btn btn-success" onclick="loadCorrectPapers()">
-                        <i class="fas fa-pencil-alt"></i> Corriger des Copies
+                        <i class="fas fa-pencil-alt"></i> ${t('btn.correct_papers_action')}
                     </button>
                 </div>
             </div>
@@ -452,12 +519,12 @@ async function loadAdminCorrectedPapers() {
         if (!response.ok) throw new Error(await response.text());
         const data = await response.json();
         let html = `<div class="page-header">
-            <h2><i class="fas fa-file-pdf"></i> Copies corrigées récentes</h2>
+            <h2><i class="fas fa-file-pdf"></i> ${t('nav.corrected_papers')}</h2>
         </div>`;
         if (!data.papers || data.papers.length === 0) {
             html += `<div class="alert alert-info">
                 <i class="fas fa-info-circle"></i>
-                <div>Aucune copie corrigée récemment.</div>
+                <div>${t('section.no_copies_recent')}</div>
             </div>`;
         } else {
             html += `<div class="card">
@@ -510,12 +577,12 @@ async function loadStudentDashboard() {
         if (papers.length === 0) {
             content.innerHTML = `
                 <div class="page-header">
-                    <h2><i class="fas fa-chart-bar"></i> Mes Notes</h2>
-                    <p>Bienvenue ${currentUser.full_name}</p>
+                    <h2><i class="fas fa-chart-bar"></i> ${t('section.student_dashboard')}</h2>
+                    <p>${t('section.welcome')} ${currentUser.full_name}</p>
                 </div>
                 <div class="alert alert-info">
                     <i class="fas fa-info-circle"></i>
-                    <div>Vous n'avez pas encore de copies corrigées.</div>
+                    <div>${t('section.no_copies_yet')}</div>
                 </div>
             `;
         } else {
@@ -528,48 +595,48 @@ async function loadStudentDashboard() {
                     <td>${paper.subject_title}</td>
                     <td><span class="status-badge ${scoreClass}">
                         <i class="fas ${paper.score >= 10 ? 'fa-check' : 'fa-times'}"></i>
-                        ${paper.score ? paper.score + '/20' : 'En attente'}
+                        ${paper.score ? paper.score + '/20' : t('section.awaiting')}
                     </span></td>
-                    <td><i class="fas fa-calendar"></i> ${new Date(paper.created_at).toLocaleDateString('fr-FR')}</td>
+                    <td><i class="fas fa-calendar"></i> ${new Date(paper.created_at).toLocaleDateString(_locale())}</td>
                     <td>
                         ${paper.score ? `
-                            <button class="btn btn-sm btn-success" onclick="exportPaperPDF(${paper.id})" title="Télécharger la copie corrigée">
-                                <i class="fas fa-file-pdf"></i> Export PDF
+                            <button class="btn btn-sm btn-success" onclick="exportPaperPDF(${paper.id})">
+                                <i class="fas fa-file-pdf"></i> ${t('btn.export_pdf')}
                             </button>
-                            <button class="btn btn-sm btn-warning" onclick="showCreateReclamationModal(${paper.id})" title="Contester la note">
-                                <i class="fas fa-exclamation-triangle"></i> Réclamer
+                            <button class="btn btn-sm btn-warning" onclick="showCreateReclamationModal(${paper.id})">
+                                <i class="fas fa-exclamation-triangle"></i> ${t('btn.claim')}
                             </button>
-                        ` : '<span style="color: #94a3b8;"><i class="fas fa-clock"></i> En attente de correction</span>'}
+                        ` : `<span style="color:#94a3b8;"><i class="fas fa-clock"></i> ${t('section.waiting_correction')}</span>`}
                     </td>
                 </tr>`;
             }).join('');
 
             content.innerHTML = `
                 <div class="page-header">
-                    <h2><i class="fas fa-chart-bar"></i> Mes Notes</h2>
-                    <p>Bienvenue ${currentUser.full_name}</p>
+                    <h2><i class="fas fa-chart-bar"></i> ${t('section.student_dashboard')}</h2>
+                    <p>${t('section.welcome')} ${currentUser.full_name}</p>
                 </div>
                 <div class="grid">
                     <div class="stat-card">
-                        <div class="stat-label"><i class="fas fa-file"></i> Copies</div>
+                        <div class="stat-label"><i class="fas fa-file"></i> ${t('section.total_copies')}</div>
                         <div class="stat-value">${papers.length}</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-label"><i class="fas fa-star"></i> Moyenne</div>
+                        <div class="stat-label"><i class="fas fa-star"></i> ${t('table.average')}</div>
                         <div class="stat-value">${average}/20</div>
                     </div>
                 </div>
                 <div class="card mt-3">
                     <div class="card-header">
-                        <h3><i class="fas fa-file-alt"></i> Mes Copies</h3>
+                        <h3><i class="fas fa-file-alt"></i> ${t('section.my_copies')}</h3>
                     </div>
                     <table>
                         <thead>
                             <tr>
-                                <th><i class="fas fa-book"></i> Sujet</th>
-                                <th><i class="fas fa-star"></i> Note</th>
-                                <th><i class="fas fa-calendar"></i> Date</th>
-                                <th><i class="fas fa-cog"></i> Actions</th>
+                                <th><i class="fas fa-book"></i> ${t('table.subjects')}</th>
+                                <th><i class="fas fa-star"></i> ${t('table.score')}</th>
+                                <th><i class="fas fa-calendar"></i> ${t('table.date')}</th>
+                                <th><i class="fas fa-cog"></i> ${t('table.actions')}</th>
                             </tr>
                         </thead>
                         <tbody>${papersHTML}</tbody>
@@ -590,165 +657,166 @@ async function loadStudentDashboard() {
 async function loadUsers() {
     if (window.event && window.event.target) setActiveTab(window.event.target);
     showLoader(true);
-   
     try {
         const response = await authenticatedFetch('/api/admin/users');
         const users = await response.json();
-       
-        const students = users.filter(u => u.role === 'student');
-        const professors = users.filter(u => u.role === 'professor');
-        const admins = users.filter(u => u.role === 'admin');
-       
-        let html = `
-        <div class="user-management">
-            <div class="user-header">
-                <h2>Gestion des Utilisateurs</h2>
-                <div class="user-stats">
-                    <span>${admins.length} admin(s)</span>
-                    <span>${professors.length} professeur(s)</span>
-                    <span>${students.length} étudiant(s)</span>
+
+        const students      = users.filter(u => u.role === 'student');
+        const professors    = users.filter(u => u.role === 'professor');
+        const admins        = users.filter(u => u.role === 'admin');
+        const surveillants  = users.filter(u => u.role === 'surveillant');
+
+        const makeRow = (user, canDelete) => {
+            const initials  = user.full_name.split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
+            const statusBadge = user.is_active
+                ? `<span style="display:inline-flex;align-items:center;gap:4px;background:#dcfce7;color:#15803d;padding:3px 9px;border-radius:99px;font-size:11px;font-weight:600;"><i class="fas fa-circle" style="font-size:5px;"></i> ${t('status.active')}</span>`
+                : `<span style="display:inline-flex;align-items:center;gap:4px;background:#fee2e2;color:#991b1b;padding:3px 9px;border-radius:99px;font-size:11px;font-weight:600;"><i class="fas fa-circle" style="font-size:5px;"></i> ${t('status.inactive')}</span>`;
+            return `
+                <tr style="transition:background .15s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+                    <td style="padding:12px 16px;border-bottom:1px solid #f1f5f9;">
+                        <div style="display:flex;align-items:center;gap:9px;">
+                            <div style="width:32px;height:32px;border-radius:50%;background:#dbeafe;color:#1d4ed8;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${initials}</div>
+                            <span style="font-size:13px;font-weight:600;color:#0f172a;">${user.full_name}</span>
+                        </div>
+                    </td>
+                    <td style="padding:12px 16px;border-bottom:1px solid #f1f5f9;font-size:13px;color:#64748b;">${user.email}</td>
+                    <td style="padding:12px 16px;border-bottom:1px solid #f1f5f9;">${statusBadge}</td>
+                    <td style="padding:12px 16px;border-bottom:1px solid #f1f5f9;">
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <button onclick="showEditUserModal(${user.id})"
+                                style="display:inline-flex;align-items:center;gap:5px;padding:6px 11px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;"
+                                onmouseover="this.style.background='#dbeafe'" onmouseout="this.style.background='#eff6ff'">
+                                <i class="fas fa-pen-to-square"></i> ${t('btn.edit')}
+                            </button>
+                            ${canDelete ? `
+                            <button onclick="deleteUser(${user.id})"
+                                style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;background:#fff;color:#94a3b8;border:1px solid #e2e8f0;border-radius:6px;cursor:pointer;transition:all .15s;"
+                                onmouseover="this.style.background='#fee2e2';this.style.color='#ef4444';this.style.borderColor='#fecaca'"
+                                onmouseout="this.style.background='#fff';this.style.color='#94a3b8';this.style.borderColor='#e2e8f0'"
+                                title="Supprimer">
+                                <i class="fas fa-trash-can" style="font-size:11px;"></i>
+                            </button>` : ''}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        };
+
+        const makeTable = (list, canDelete) => `
+            <div style="overflow-x:auto;">
+                <table style="width:100%;border-collapse:collapse;">
+                    <thead>
+                        <tr style="background:#f8fafc;">
+                            <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e2e8f0;">Nom</th>
+                            <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e2e8f0;">Email</th>
+                            <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e2e8f0;">Statut</th>
+                            <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e2e8f0;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>${list.map(u => makeRow(u, canDelete)).join('')}</tbody>
+                </table>
+            </div>
+        `;
+
+        const makeSection = (title, icon, color, bg, list, canDelete, emptyMsg) => `
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+                <div style="padding:14px 20px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:10px;">
+                    <div style="width:32px;height:32px;border-radius:8px;background:${bg};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class="${icon}" style="color:${color};font-size:14px;"></i>
+                    </div>
+                    <h3 style="margin:0;font-size:15px;color:#0f172a;font-weight:600;">${title}</h3>
+                    <span style="background:#f1f5f9;color:#64748b;padding:1px 8px;border-radius:99px;font-size:12px;margin-left:2px;">${list.length}</span>
+                </div>
+                ${list.length === 0
+                    ? `<p style="padding:32px 20px;text-align:center;color:#94a3b8;margin:0;font-size:13px;"><i class="fas fa-inbox" style="display:block;font-size:28px;margin-bottom:8px;"></i>${emptyMsg}</p>`
+                    : makeTable(list, canDelete)}
+            </div>
+        `;
+
+        document.getElementById('main-content').innerHTML = `
+            <!-- En-tête + boutons -->
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px;">
+                <div>
+                    <h2 style="margin:0;font-size:20px;color:#0f172a;display:flex;align-items:center;gap:10px;">
+                        <i class="fas fa-users" style="color:#3b82f6;"></i> ${t('section.users_management')}
+                    </h2>
+                    <p style="margin:4px 0 0;color:#64748b;font-size:13px;">${t('section.users_management_desc')}</p>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <button onclick="showCreateUserModal('student')"
+                        style="display:inline-flex;align-items:center;gap:6px;padding:9px 14px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;"
+                        onmouseover="this.style.background='#dbeafe'" onmouseout="this.style.background='#eff6ff'">
+                        <i class="fas fa-user-plus"></i> ${t('role.student')}
+                    </button>
+                    <button onclick="showCreateUserModal('professor')"
+                        style="display:inline-flex;align-items:center;gap:6px;padding:9px 14px;background:#f0fdf4;color:#15803d;border:1px solid #86efac;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;"
+                        onmouseover="this.style.background='#dcfce7'" onmouseout="this.style.background='#f0fdf4'">
+                        <i class="fas fa-chalkboard-user"></i> ${t('role.professor')}
+                    </button>
+                    <button onclick="showCreateUserModal('surveillant')"
+                        style="display:inline-flex;align-items:center;gap:6px;padding:9px 14px;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;"
+                        onmouseover="this.style.background='#fde68a'" onmouseout="this.style.background='#fef3c7'">
+                        <i class="fas fa-eye"></i> ${t('role.surveillant')}
+                    </button>
+                    <button onclick="showCreateStudentNoEmailModal()"
+                        style="display:inline-flex;align-items:center;gap:6px;padding:9px 14px;background:#faf5ff;color:#6d28d9;border:1px solid #ddd6fe;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;"
+                        onmouseover="this.style.background='#ede9fe'" onmouseout="this.style.background='#faf5ff'">
+                        <i class="fas fa-user-slash"></i> ${t('section.without_email')}
+                    </button>
+                    <button onclick="showImportUsersModal()"
+                        style="display:inline-flex;align-items:center;gap:6px;padding:9px 14px;background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;"
+                        onmouseover="this.style.background='#ffedd5'" onmouseout="this.style.background='#fff7ed'">
+                        <i class="fas fa-file-csv"></i> ${t('section.import_csv')}
+                    </button>
                 </div>
             </div>
-            <div class="create-buttons">
-                <button onclick="showCreateUserModal('student')" class="btn btn-primary">
-                    Créer Étudiant
-                </button>
-                <button onclick="showCreateUserModal('professor')" class="btn btn-primary">
-                    Créer Professeur
-                </button>
-                <button onclick="showCreateStudentNoEmailModal()" class="btn btn-success">
-                    <i class="fas fa-user-plus"></i> Créer Étudiant (Sans Email)
-                </button>
-                <button onclick="showImportUsersModal()" class="btn btn-success">
-                    Import CSV Bulk
-                </button>
+
+            <!-- Compteurs -->
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px;">
+                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;display:flex;align-items:center;gap:14px;">
+                    <div style="width:40px;height:40px;border-radius:10px;background:#fffbeb;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class="fas fa-crown" style="color:#f59e0b;font-size:16px;"></i>
+                    </div>
+                    <div>
+                        <p style="margin:0;font-size:22px;font-weight:800;color:#0f172a;">${admins.length}</p>
+                        <p style="margin:0;font-size:12px;color:#64748b;">${t('section.counter_admins')}</p>
+                    </div>
+                </div>
+                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;display:flex;align-items:center;gap:14px;">
+                    <div style="width:40px;height:40px;border-radius:10px;background:#dcfce7;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class="fas fa-chalkboard-user" style="color:#10b981;font-size:16px;"></i>
+                    </div>
+                    <div>
+                        <p style="margin:0;font-size:22px;font-weight:800;color:#0f172a;">${professors.length}</p>
+                        <p style="margin:0;font-size:12px;color:#64748b;">${t('section.counter_professors')}</p>
+                    </div>
+                </div>
+                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;display:flex;align-items:center;gap:14px;">
+                    <div style="width:40px;height:40px;border-radius:10px;background:#fef3c7;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class="fas fa-eye" style="color:#f59e0b;font-size:16px;"></i>
+                    </div>
+                    <div>
+                        <p style="margin:0;font-size:22px;font-weight:800;color:#0f172a;">${surveillants.length}</p>
+                        <p style="margin:0;font-size:12px;color:#64748b;">${t('section.counter_surveillants')}</p>
+                    </div>
+                </div>
+                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;display:flex;align-items:center;gap:14px;">
+                    <div style="width:40px;height:40px;border-radius:10px;background:#eff6ff;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class="fas fa-user-graduate" style="color:#3b82f6;font-size:16px;"></i>
+                    </div>
+                    <div>
+                        <p style="margin:0;font-size:22px;font-weight:800;color:#0f172a;">${students.length}</p>
+                        <p style="margin:0;font-size:12px;color:#64748b;">${t('section.counter_students')}</p>
+                    </div>
+                </div>
             </div>
-    `;
-        // Section ADMINISTRATEURS
-        if (admins.length > 0) {
-            html += `
-                <div class="user-section">
-                    <h3><i class="fas fa-crown"></i> Administrateurs (${admins.length})</h3>
-                    <table class="user-table">
-                        <thead>
-                            <tr>
-                                <th><i class="fas fa-user"></i> Nom</th>
-                                <th><i class="fas fa-envelope"></i> Email</th>
-                                <th><i class="fas fa-check-circle"></i> Statut</th>
-                                <th><i class="fas fa-cog"></i> Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-            `;
-           
-            admins.forEach(user => {
-                html += `
-                    <tr>
-                        <td>${user.full_name}</td>
-                        <td>${user.email}</td>
-                        <td>${user.is_active ? '<i class="fas fa-check-circle" style="color: var(--success)"></i> Actif' : '<i class="fas fa-times-circle" style="color: var(--danger)"></i> Inactif'}</td>
-                        <td>
-                            <button onclick="showEditUserModal(${user.id})" class="btn-icon-sm btn-primary">
-                                <i class="fas fa-edit"></i> Modifier
-                            </button>
-                        </td>
-                    </tr>
-                `;
-            });
-           
-            html += `</tbody></table></div>`;
-        }
-       
-        // Section PROFESSEURS
-        html += `
-            <div class="user-section">
-                <h3><i class="fas fa-chalkboard-teacher"></i> Professeurs (${professors.length})</h3>
+
+            ${makeSection(t('section.section_admins'), 'fas fa-crown', '#f59e0b', '#fffbeb', admins, false, t('section.no_admins'))}
+            ${makeSection(t('section.section_professors'), 'fas fa-chalkboard-user', '#10b981', '#dcfce7', professors, true, t('section.no_professors'))}
+            ${makeSection(t('section.section_surveillants'), 'fas fa-eye', '#f59e0b', '#fef3c7', surveillants, true, t('section.no_surveillants'))}
+            ${makeSection(t('section.section_students'), 'fas fa-user-graduate', '#3b82f6', '#dbeafe', students, true, t('section.no_students'))}
         `;
-       
-        if (professors.length === 0) {
-            html += `<p class="empty-message"><i class="fas fa-inbox"></i> Aucun professeur pour le moment</p>`;
-        } else {
-            html += `
-                <table class="user-table">
-                    <thead>
-                        <tr>
-                            <th><i class="fas fa-user"></i> Nom</th>
-                            <th><i class="fas fa-envelope"></i> Email</th>
-                            <th><i class="fas fa-check-circle"></i> Statut</th>
-                            <th><i class="fas fa-cog"></i> Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-           
-            professors.forEach(user => {
-                html += `
-                    <tr>
-                        <td>${user.full_name}</td>
-                        <td>${user.email}</td>
-                        <td>${user.is_active ? '<i class="fas fa-check-circle" style="color: var(--success)"></i> Actif' : '<i class="fas fa-times-circle" style="color: var(--danger)"></i> Inactif'}</td>
-                        <td>
-                            <button onclick="showEditUserModal(${user.id})" class="btn-icon-sm btn-primary">
-                                <i class="fas fa-edit"></i> Modifier
-                            </button>
-                            <button onclick="deleteUser(${user.id})" class="btn-icon-sm btn-danger">
-                                <i class="fas fa-trash"></i> Supprimer
-                            </button>
-                        </td>
-                    </tr>
-                `;
-            });
-           
-            html += `</tbody></table>`;
-        }
-        html += `</div>`;
-       
-        // Section ÉTUDIANTS
-        html += `
-            <div class="user-section">
-                <h3><i class="fas fa-user-graduate"></i> Étudiants (${students.length})</h3>
-        `;
-       
-        if (students.length === 0) {
-            html += `<p class="empty-message"><i class="fas fa-inbox"></i> Aucun étudiant pour le moment</p>`;
-        } else {
-            html += `
-                <table class="user-table">
-                    <thead>
-                        <tr>
-                            <th><i class="fas fa-user"></i> Nom</th>
-                            <th><i class="fas fa-envelope"></i> Email</th>
-                            <th><i class="fas fa-check-circle"></i> Statut</th>
-                            <th><i class="fas fa-cog"></i> Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-           
-            students.forEach(user => {
-                html += `
-                    <tr>
-                        <td>${user.full_name}</td>
-                        <td>${user.email}</td>
-                        <td>${user.is_active ? '<i class="fas fa-check-circle" style="color: var(--success)"></i> Actif' : '<i class="fas fa-times-circle" style="color: var(--danger)"></i> Inactif'}</td>
-                        <td>
-                            <button onclick="showEditUserModal(${user.id})" class="btn-icon-sm btn-primary">
-                                <i class="fas fa-edit"></i> Modifier
-                            </button>
-                            <button onclick="deleteUser(${user.id})" class="btn-icon-sm btn-danger">
-                                <i class="fas fa-trash"></i> Supprimer
-                            </button>
-                        </td>
-                    </tr>
-                `;
-            });
-           
-            html += `</tbody></table>`;
-        }
-        html += `</div></div>`;
-       
-        document.getElementById('main-content').innerHTML = html;
-       
+
     } catch (error) {
         showAlert(humanError(error), 'error');
     } finally {
@@ -757,8 +825,9 @@ async function loadUsers() {
 }
 
 function showCreateUserModal(role = 'student') {
+    const roleLabels = { student: t('role.student'), professor: t('role.professor'), surveillant: t('role.surveillant'), admin: t('role.admin') };
     const modalContent = `
-        <h2><i class="fas fa-user-plus"></i> Créer un ${role === 'professor' ? 'Professeur' : 'Étudiant'}</h2>
+        <h2><i class="fas fa-user-plus"></i> Créer un ${roleLabels[role] || 'Utilisateur'}</h2>
         <form id="create-user-form">
             <div class="form-group">
                 <label><i class="fas fa-user"></i> Nom Complet *</label>
@@ -775,8 +844,9 @@ function showCreateUserModal(role = 'student') {
             <div class="form-group">
                 <label><i class="fas fa-user-tag"></i> Rôle</label>
                 <select id="new-user-role">
-                    <option value="student" ${role === 'student' ? 'selected' : ''}>Étudiant</option>
-                    <option value="professor" ${role === 'professor' ? 'selected' : ''}>Professeur</option>
+                    <option value="student" ${role === 'student' ? 'selected' : ''}>${t('role.student')}</option>
+                    <option value="professor" ${role === 'professor' ? 'selected' : ''}>${t('role.professor')}</option>
+                    <option value="surveillant" ${role === 'surveillant' ? 'selected' : ''}>${t('role.surveillant')}</option>
                 </select>
             </div>
             <div class="d-flex gap-2 mt-2">
@@ -809,7 +879,7 @@ function showCreateUserModal(role = 'student') {
                 closeModal();
                 loadUsers();
             } else {
-                showAlert(data.error || 'Une erreur est survenue. Veuillez réessayer.', 'error');
+                showAlert(data.error || 'Impossible de créer l\'utilisateur. Vérifiez que l\'email n\'est pas déjà utilisé.', 'error');
             }
         } catch (error) {
             showAlert(humanError(error), 'error');
@@ -838,7 +908,7 @@ async function showEditUserModal(userId) {
         }
 
         const modalContent = `
-            <h2><i class="fas fa-user-edit"></i> Modifier l'Utilisateur</h2>
+            <h2><i class="fas fa-user-edit"></i> ${t('section.edit_user')}</h2>
             <form id="edit-user-form">
                 <div class="form-group">
                     <label><i class="fas fa-user"></i> Nom Complet *</label>
@@ -849,21 +919,22 @@ async function showEditUserModal(userId) {
                     <input type="email" id="edit-user-email" required value="${user.email}">
                 </div>
                 <div class="form-group">
-                    <label><i class="fas fa-lock"></i> Nouveau Mot de Passe (laisser vide pour ne pas changer)</label>
+                    <label><i class="fas fa-lock"></i> ${t('section.new_password_optional')}</label>
                     <input type="password" id="edit-user-password" placeholder="Nouveau mot de passe (optionnel)">
                 </div>
                 <div class="form-group">
                     <label><i class="fas fa-user-tag"></i> Rôle</label>
                     <select id="edit-user-role">
-                        <option value="student" ${user.role === 'student' ? 'selected' : ''}>Étudiant</option>
-                        <option value="professor" ${user.role === 'professor' ? 'selected' : ''}>Professeur</option>
-                        <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Administrateur</option>
+                        <option value="student" ${user.role === 'student' ? 'selected' : ''}>${t('role.student')}</option>
+                        <option value="professor" ${user.role === 'professor' ? 'selected' : ''}>${t('role.professor')}</option>
+                        <option value="surveillant" ${user.role === 'surveillant' ? 'selected' : ''}>${t('role.surveillant')}</option>
+                        <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>${t('role.admin')}</option>
                     </select>
                 </div>
                 <div class="form-group">
                     <label>
                         <input type="checkbox" id="edit-user-active" ${user.is_active ? 'checked' : ''}>
-                        Compte actif
+                        ${t('section.active_account')}
                     </label>
                 </div>
                 <div class="d-flex gap-2 mt-2">
@@ -911,7 +982,7 @@ async function showEditUserModal(userId) {
                     closeModal();
                     loadUsers(); // Recharger la liste
                 } else {
-                    showAlert(data.error || 'Une erreur est survenue. Veuillez réessayer.', 'error');
+                    showAlert(data.error || 'Impossible de modifier l\'utilisateur. L\'email est peut-être déjà utilisé.', 'error');
                 }
             } catch (error) {
                 showAlert(humanError(error), 'error');
@@ -921,7 +992,7 @@ async function showEditUserModal(userId) {
         });
 
     } catch (error) {
-        showAlert('Impossible de charger les données. Veuillez réessayer.', 'error');
+        showAlert('Impossible de charger les données de l\'utilisateur. Veuillez actualiser la page.', 'error');
         showLoader(false);
     }
 }
@@ -936,7 +1007,7 @@ async function deleteUser(userId) {
             showAlert("L'utilisateur a été supprimé définitivement.", 'success');
             loadUsers();
         } else {
-            showAlert(data.error || 'Une erreur est survenue. Veuillez réessayer.', 'error');
+            showAlert(data.error || 'Impossible de supprimer cet utilisateur. Il est peut-être lié à des examens ou des copies.', 'error');
         }
     } catch (error) {
         showAlert(humanError(error), 'error');
@@ -954,61 +1025,186 @@ async function loadSubjects() {
     try {
         const response = await authenticatedFetch('/api/subjects');
         const subjects = await response.json();
+        const isProfessor = currentUser.role === 'professor';
+        const isAdmin     = currentUser.role === 'admin';
+
         if (subjects.length === 0) {
             document.getElementById('main-content').innerHTML = `
-                <div class="page-header">
-                    <h2><i class="fas fa-file-alt"></i> Gestion des Sujets</h2>
-                </div>
-                <div class="alert alert-info">
-                    <i class="fas fa-info-circle"></i>
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:24px;">
                     <div>
-                        ${currentUser.role === 'professor' ?
-                            'Vous n\'avez créé aucun sujet. <button class="btn btn-primary" onclick="loadCreateSubject()"><i class="fas fa-plus"></i> Créer un Sujet</button>' :
-                            'Aucun sujet disponible.'
-                        }
+                        <h2 style="margin:0;font-size:20px;color:#0f172a;display:flex;align-items:center;gap:10px;">
+                            <i class="fas fa-file-alt" style="color:#3b82f6;"></i> ${t('section.subjects_management')}
+                        </h2>
+                        <p style="margin:4px 0 0;color:#64748b;font-size:13px;">Vos sujets d'examen et leurs barèmes générés par l'IA</p>
                     </div>
+                    ${isProfessor ? `
+                    <button class="btn btn-primary" onclick="loadCreateSubject()" style="border-radius:8px;padding:10px 18px;font-weight:600;">
+                        <i class="fas fa-plus"></i> Nouveau Sujet
+                    </button>` : ''}
+                </div>
+                <div style="text-align:center;padding:64px 24px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;">
+                    <i class="fas fa-folder-open" style="font-size:52px;color:#94a3b8;margin-bottom:18px;display:block;"></i>
+                    <h3 style="color:#334155;margin:0 0 10px;">Aucun sujet disponible</h3>
+                    <p style="color:#64748b;margin:0 0 24px;max-width:400px;margin-left:auto;margin-right:auto;">
+                        ${isProfessor
+                            ? 'Vous n\'avez pas encore créé de sujet. Créez votre premier sujet et l\'IA générera automatiquement le barème de notation.'
+                            : 'Aucun sujet n\'a encore été créé sur la plateforme.'}
+                    </p>
+                    ${isProfessor ? `
+                    <button class="btn btn-primary" onclick="loadCreateSubject()" style="padding:12px 28px;font-size:15px;border-radius:8px;font-weight:600;">
+                        <i class="fas fa-plus-circle"></i> Créer mon premier sujet
+                    </button>` : ''}
                 </div>
             `;
             showLoader(false);
             return;
         }
-        let subjectsHTML = subjects.map(s => {
-            const ecInfo = s.ec_code ? `<br><small><i class="fas fa-book"></i> ${s.ec_code}: ${s.ec_name}</small>` : '';
+
+        const activeCount = subjects.filter(s => s.is_active).length;
+
+        const rows = subjects.map(s => {
+            const canDelete = isAdmin || (isProfessor && s.creator_id === currentUser.id);
+            const dateStr   = new Date(s.created_at).toLocaleDateString('fr-FR', { day:'2-digit', month:'short', year:'numeric' });
+            const initials  = (s.creator_name || 'N/A').split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
+            const ecBadge   = s.ec_code
+                ? `<span style="display:inline-flex;align-items:center;gap:4px;background:#ede9fe;color:#6d28d9;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;margin-top:4px;">
+                       <i class="fas fa-book" style="font-size:9px;"></i> ${s.ec_code}
+                   </span>`
+                : '';
+
             return `
-            <tr>
-                <td>${s.title}${ecInfo}</td>
-                <td>${s.creator_name || 'N/A'}</td>
-                <td><i class="fas fa-calendar"></i> ${new Date(s.created_at).toLocaleDateString('fr-FR')}</td>
-                <td>${s.is_active ? '<i class="fas fa-check-circle" style="color: var(--success)"></i>' : '<i class="fas fa-times-circle" style="color: var(--danger)"></i>'}</td>
-                <td>
-                    <button class="btn btn-sm btn-primary" onclick="viewSubjectDetail(${s.id})">
-                        <i class="fas fa-eye"></i> Voir
-                    </button>
-                    ${currentUser.role === 'admin' || (currentUser.role === 'professor' && s.creator_id === currentUser.id) ?
-                        `<button class="btn btn-sm btn-danger" onclick="deleteSubject(${s.id})"><i class="fas fa-trash"></i></button>` : ''}
-                </td>
-            </tr>
-        `}).join('');
+                <tr style="transition:background .15s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+                    <td style="padding:14px 16px;border-bottom:1px solid #f1f5f9;max-width:320px;">
+                        <p style="margin:0;font-weight:600;color:#0f172a;font-size:14px;line-height:1.4;">${s.title}</p>
+                        ${ecBadge}
+                    </td>
+                    <td style="padding:14px 16px;border-bottom:1px solid #f1f5f9;white-space:nowrap;">
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <div style="width:30px;height:30px;border-radius:50%;background:#dbeafe;color:#1d4ed8;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${initials}</div>
+                            <span style="font-size:13px;color:#334155;">${s.creator_name || 'N/A'}</span>
+                        </div>
+                    </td>
+                    <td style="padding:14px 16px;border-bottom:1px solid #f1f5f9;white-space:nowrap;">
+                        <div style="display:flex;align-items:center;gap:6px;color:#64748b;font-size:13px;">
+                            <i class="fas fa-calendar-day" style="color:#94a3b8;font-size:12px;"></i>
+                            ${dateStr}
+                        </div>
+                    </td>
+                    <td style="padding:14px 16px;border-bottom:1px solid #f1f5f9;">
+                        ${s.is_active
+                            ? `<span style="display:inline-flex;align-items:center;gap:5px;background:#dcfce7;color:#15803d;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:600;">
+                                   <i class="fas fa-circle" style="font-size:6px;"></i> ${t('status.active')}
+                               </span>`
+                            : `<span style="display:inline-flex;align-items:center;gap:5px;background:#f1f5f9;color:#64748b;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:600;">
+                                   <i class="fas fa-circle" style="font-size:6px;"></i> ${t('status.inactive')}
+                               </span>`}
+                    </td>
+                    <td style="padding:14px 16px;border-bottom:1px solid #f1f5f9;white-space:nowrap;">
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <button onclick="viewSubjectDetail(${s.id})"
+                                style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;"
+                                onmouseover="this.style.background='#dbeafe'" onmouseout="this.style.background='#eff6ff'"
+                                title="Voir les détails">
+                                <i class="fas fa-eye"></i> Détails
+                            </button>
+                            ${canDelete ? `
+                            <button onclick="deleteSubject(${s.id})"
+                                style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;background:#fff;color:#94a3b8;border:1px solid #e2e8f0;border-radius:6px;cursor:pointer;transition:all .15s;"
+                                onmouseover="this.style.background='#fee2e2';this.style.color='#ef4444';this.style.borderColor='#fecaca'"
+                                onmouseout="this.style.background='#fff';this.style.color='#94a3b8';this.style.borderColor='#e2e8f0'"
+                                title="Supprimer ce sujet">
+                                <i class="fas fa-trash-can" style="font-size:12px;"></i>
+                            </button>` : ''}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
         document.getElementById('main-content').innerHTML = `
-            <div class="page-header">
-                <h2><i class="fas fa-file-alt"></i> Gestion des Sujets</h2>
-                <p>${subjects.length} sujet(s) ${currentUser.role === 'professor' ? '(vos sujets uniquement)' : ''}</p>
+            <!-- En-tête -->
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px;">
+                <div>
+                    <h2 style="margin:0;font-size:20px;color:#0f172a;display:flex;align-items:center;gap:10px;">
+                        <i class="fas fa-file-alt" style="color:#3b82f6;"></i> ${t('section.subjects_management')}
+                    </h2>
+                    <p style="margin:4px 0 0;color:#64748b;font-size:13px;">
+                        ${isProfessor ? 'Vos sujets d\'examen' : 'Tous les sujets de la plateforme'}
+                    </p>
+                </div>
+                ${isProfessor ? `
+                <button class="btn btn-primary" onclick="loadCreateSubject()" style="border-radius:8px;padding:10px 18px;font-weight:600;">
+                    <i class="fas fa-plus"></i> Nouveau Sujet
+                </button>` : ''}
             </div>
-            <div class="card">
-                <table>
-                    <thead>
-                        <tr>
-                            <th><i class="fas fa-heading"></i> Titre</th>
-                            <th><i class="fas fa-user"></i> Créateur</th>
-                            <th><i class="fas fa-calendar"></i> Date</th>
-                            <th><i class="fas fa-check-circle"></i> Statut</th>
-                            <th><i class="fas fa-cog"></i> Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>${subjectsHTML || '<tr><td colspan="5">Aucun sujet</td></tr>'}</tbody>
-                </table>
+
+            <!-- Compteurs -->
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px;">
+                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;display:flex;align-items:center;gap:14px;">
+                    <div style="width:40px;height:40px;border-radius:10px;background:#eff6ff;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class="fas fa-file-alt" style="color:#3b82f6;font-size:16px;"></i>
+                    </div>
+                    <div>
+                        <p style="margin:0;font-size:22px;font-weight:800;color:#0f172a;">${subjects.length}</p>
+                        <p style="margin:0;font-size:12px;color:#64748b;">Total sujets</p>
+                    </div>
+                </div>
+                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;display:flex;align-items:center;gap:14px;">
+                    <div style="width:40px;height:40px;border-radius:10px;background:#dcfce7;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class="fas fa-circle-check" style="color:#10b981;font-size:16px;"></i>
+                    </div>
+                    <div>
+                        <p style="margin:0;font-size:22px;font-weight:800;color:#0f172a;">${activeCount}</p>
+                        <p style="margin:0;font-size:12px;color:#64748b;">${t('section.active_subjects')}</p>
+                    </div>
+                </div>
+                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;display:flex;align-items:center;gap:14px;">
+                    <div style="width:40px;height:40px;border-radius:10px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class="fas fa-robot" style="color:#8b5cf6;font-size:16px;"></i>
+                    </div>
+                    <div>
+                        <p style="margin:0;font-size:22px;font-weight:800;color:#0f172a;">${subjects.length}</p>
+                        <p style="margin:0;font-size:12px;color:#64748b;">${t('section.generated_rubrics')}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tableau -->
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
+                <div style="padding:16px 20px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+                    <h3 style="margin:0;font-size:15px;color:#0f172a;font-weight:600;display:flex;align-items:center;gap:8px;">
+                        <i class="fas fa-list" style="color:#64748b;font-size:13px;"></i>
+                        ${t('section.subjects_list')}
+                        <span style="background:#f1f5f9;color:#64748b;padding:1px 8px;border-radius:99px;font-size:12px;font-weight:500;">${subjects.length}</span>
+                    </h3>
+                </div>
+                <div style="overflow-x:auto;">
+                    <table style="width:100%;border-collapse:collapse;">
+                        <thead>
+                            <tr style="background:#f8fafc;">
+                                <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e2e8f0;">
+                                    Titre du Sujet
+                                </th>
+                                <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e2e8f0;">
+                                    Créateur
+                                </th>
+                                <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e2e8f0;">
+                                    Date
+                                </th>
+                                <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e2e8f0;">
+                                    Statut
+                                </th>
+                                <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e2e8f0;">
+                                    Actions
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
             </div>
         `;
+
     } catch (error) {
         showAlert(humanError(error), 'error');
     } finally {
@@ -1028,6 +1224,7 @@ function showLoader(show) {
 }
 
 function showAlert(message, type = 'info') {
+    if (!message) return;
     const icons = {
         'info': 'fa-info-circle',
         'success': 'fa-check-circle',
@@ -1106,48 +1303,247 @@ async function loadCreateSubject() {
     try {
         const ecsResponse = await authenticatedFetch('/api/ecs');
         const ecs = await ecsResponse.json();
-        let ecsOptions = '<option value="">-- Optionnel: Lier à un EC --</option>';
+        let ecsOptions = '<option value="">— Aucun (sujet indépendant) —</option>';
         ecs.forEach(ec => {
-            ecsOptions += `<option value="${ec.id}">${ec.ue_code} - ${ec.code}: ${ec.name}</option>`;
+            ecsOptions += `<option value="${ec.id}">${ec.ue_code} › ${ec.code} — ${ec.name}</option>`;
         });
+
         document.getElementById('main-content').innerHTML = `
             <div class="page-header">
-                <h2><i class="fas fa-plus-circle"></i> Créer un Sujet d'Examen</h2>
-                <p>Uploadez un fichier PDF, DOCX ou TXT contenant le sujet</p>
+                <h2><i class="fas fa-file-circle-plus" style="color:#3b82f6;"></i> Créer un Sujet d'Examen</h2>
+                <p>Déposez votre fichier — l'IA génère automatiquement le barème de notation</p>
             </div>
-            <div class="card">
-                <form id="create-subject-form">
-                    <div class="form-group">
-                        <label><i class="fas fa-layer-group"></i> Élément Constitutif (EC)</label>
-                        <select id="subject-ec">${ecsOptions}</select>
-                        <small class="form-help"><i class="fas fa-info-circle"></i> Associez ce sujet à un EC de la maquette pédagogique</small>
+
+            <!-- Indicateur d'étapes -->
+            <div style="display:flex;align-items:center;gap:0;margin-bottom:28px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:18px 24px;overflow-x:auto;">
+                <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+                    <div style="width:32px;height:32px;border-radius:50%;background:#3b82f6;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;">1</div>
+                    <span style="font-size:13px;font-weight:600;color:#0f172a;">Remplir le formulaire</span>
+                </div>
+                <div style="flex:1;min-width:24px;height:2px;background:#e2e8f0;margin:0 12px;"></div>
+                <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+                    <div style="width:32px;height:32px;border-radius:50%;background:#e2e8f0;color:#64748b;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;">2</div>
+                    <span style="font-size:13px;color:#64748b;">Analyse IA du fichier</span>
+                </div>
+                <div style="flex:1;min-width:24px;height:2px;background:#e2e8f0;margin:0 12px;"></div>
+                <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+                    <div style="width:32px;height:32px;border-radius:50%;background:#e2e8f0;color:#64748b;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;">3</div>
+                    <span style="font-size:13px;color:#64748b;">Barème généré automatiquement</span>
+                </div>
+                <div style="flex:1;min-width:24px;height:2px;background:#e2e8f0;margin:0 12px;"></div>
+                <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+                    <div style="width:32px;height:32px;border-radius:50%;background:#e2e8f0;color:#64748b;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;">4</div>
+                    <span style="font-size:13px;color:#64748b;">Sujet prêt à l'emploi</span>
+                </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 340px;gap:24px;align-items:start;">
+
+                <!-- Formulaire principal -->
+                <div class="card" style="border-top:3px solid #3b82f6;">
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid #e2e8f0;">
+                        <i class="fas fa-pen-to-square" style="color:#3b82f6;font-size:18px;"></i>
+                        <h3 style="margin:0;font-size:16px;color:#0f172a;">Informations du sujet</h3>
                     </div>
-                    <div class="form-group">
-                        <label><i class="fas fa-heading"></i> Titre du Sujet *</label>
-                        <input type="text" id="subject-title" required placeholder="Ex: Examen Blockchain">
+
+                    <form id="create-subject-form">
+
+                        <!-- Titre -->
+                        <div class="form-group" style="margin-bottom:22px;">
+                            <label style="font-weight:600;color:#334155;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+                                <i class="fas fa-heading" style="color:#3b82f6;width:16px;"></i>
+                                Titre du Sujet
+                                <span style="color:#ef4444;font-size:11px;margin-left:2px;">obligatoire</span>
+                            </label>
+                            <input type="text" id="subject-title" required
+                                placeholder="Ex: Examen final — Réseaux informatiques S2"
+                                style="font-size:15px;padding:12px 14px;border:2px solid #e2e8f0;border-radius:8px;width:100%;transition:border-color .2s;"
+                                onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e2e8f0'">
+                            <small style="color:#64748b;margin-top:6px;display:block;">
+                                <i class="fas fa-lightbulb" style="color:#f59e0b;"></i>
+                                Choisissez un titre clair qui identifie la matière et le niveau
+                            </small>
+                        </div>
+
+                        <!-- EC -->
+                        <div class="form-group" style="margin-bottom:22px;">
+                            <label style="font-weight:600;color:#334155;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+                                <i class="fas fa-layer-group" style="color:#8b5cf6;width:16px;"></i>
+                                Élément Constitutif (EC)
+                                <span style="color:#94a3b8;font-size:11px;margin-left:2px;font-weight:400;">optionnel</span>
+                            </label>
+                            <select id="subject-ec"
+                                style="font-size:14px;padding:11px 14px;border:2px solid #e2e8f0;border-radius:8px;width:100%;background:#fff;transition:border-color .2s;"
+                                onfocus="this.style.borderColor='#8b5cf6'" onblur="this.style.borderColor='#e2e8f0'">
+                                ${ecsOptions}
+                            </select>
+                            <small style="color:#64748b;margin-top:6px;display:block;">
+                                <i class="fas fa-info-circle" style="color:#8b5cf6;"></i>
+                                Liez ce sujet à un EC pour l'associer à votre maquette pédagogique
+                            </small>
+                        </div>
+
+                        <!-- Zone de dépôt fichier -->
+                        <div class="form-group" style="margin-bottom:28px;">
+                            <label style="font-weight:600;color:#334155;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+                                <i class="fas fa-file-arrow-up" style="color:#10b981;width:16px;"></i>
+                                Fichier du Sujet
+                                <span style="color:#ef4444;font-size:11px;margin-left:2px;">obligatoire</span>
+                            </label>
+
+                            <label for="subject-file" id="drop-zone"
+                                style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:36px 24px;border:2px dashed #cbd5e1;border-radius:12px;cursor:pointer;background:#f8fafc;transition:all .2s;text-align:center;"
+                                ondragover="event.preventDefault();this.style.borderColor='#10b981';this.style.background='#f0fdf4';"
+                                ondragleave="this.style.borderColor='#cbd5e1';this.style.background='#f8fafc';"
+                                ondrop="event.preventDefault();this.style.borderColor='#cbd5e1';this.style.background='#f8fafc';document.getElementById('subject-file').files=event.dataTransfer.files;updateDropZone(event.dataTransfer.files[0]);">
+                                <i class="fas fa-cloud-arrow-up" id="drop-icon" style="font-size:40px;color:#94a3b8;"></i>
+                                <div>
+                                    <p id="drop-text" style="margin:0;font-weight:600;color:#475569;font-size:15px;">Glissez votre fichier ici</p>
+                                    <p style="margin:4px 0 0;color:#94a3b8;font-size:13px;">ou cliquez pour parcourir</p>
+                                </div>
+                                <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
+                                    <span style="background:#dbeafe;color:#1d4ed8;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:600;">PDF</span>
+                                    <span style="background:#ede9fe;color:#6d28d9;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:600;">DOCX</span>
+                                    <span style="background:#dcfce7;color:#15803d;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:600;">TXT</span>
+                                </div>
+                            </label>
+                            <input type="file" id="subject-file" accept=".pdf,.docx,.doc,.txt" required
+                                style="display:none;"
+                                onchange="updateDropZone(this.files[0])">
+                            <div id="file-info" style="display:none;margin-top:10px;padding:10px 14px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;display:flex;align-items:center;gap:10px;">
+                                <i class="fas fa-file-check" style="color:#10b981;font-size:18px;"></i>
+                                <div>
+                                    <p id="file-name" style="margin:0;font-weight:600;color:#15803d;font-size:13px;"></p>
+                                    <p id="file-size" style="margin:0;color:#64748b;font-size:12px;"></p>
+                                </div>
+                                <button type="button" onclick="clearFile()" style="margin-left:auto;background:none;border:none;color:#94a3b8;cursor:pointer;font-size:16px;" title="Supprimer">
+                                    <i class="fas fa-times-circle"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Boutons -->
+                        <div style="display:flex;gap:12px;padding-top:8px;border-top:1px solid #f1f5f9;">
+                            <button type="submit" class="btn btn-primary" style="flex:1;padding:13px;font-size:15px;font-weight:600;border-radius:8px;">
+                                <i class="fas fa-wand-magic-sparkles"></i> Créer le Sujet
+                            </button>
+                            <button type="button" class="btn btn-secondary" onclick="loadDashboard()" style="padding:13px 20px;border-radius:8px;">
+                                <i class="fas fa-times"></i> Annuler
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Panneau d'information latéral -->
+                <div style="display:flex;flex-direction:column;gap:16px;">
+
+                    <!-- Formats acceptés -->
+                    <div class="card" style="border-top:3px solid #10b981;padding:20px;">
+                        <h4 style="margin:0 0 14px;font-size:14px;color:#0f172a;display:flex;align-items:center;gap:8px;">
+                            <i class="fas fa-file-circle-check" style="color:#10b981;"></i> Formats acceptés
+                        </h4>
+                        <div style="display:flex;flex-direction:column;gap:10px;">
+                            <div style="display:flex;align-items:center;gap:10px;padding:10px;background:#f8fafc;border-radius:8px;">
+                                <i class="fas fa-file-pdf" style="color:#ef4444;font-size:20px;width:24px;text-align:center;"></i>
+                                <div>
+                                    <p style="margin:0;font-weight:600;font-size:13px;color:#334155;">PDF</p>
+                                    <p style="margin:0;font-size:11px;color:#64748b;">Documents imprimés scannés ou natifs</p>
+                                </div>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:10px;padding:10px;background:#f8fafc;border-radius:8px;">
+                                <i class="fas fa-file-word" style="color:#2563eb;font-size:20px;width:24px;text-align:center;"></i>
+                                <div>
+                                    <p style="margin:0;font-weight:600;font-size:13px;color:#334155;">DOCX / DOC</p>
+                                    <p style="margin:0;font-size:11px;color:#64748b;">Documents Microsoft Word</p>
+                                </div>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:10px;padding:10px;background:#f8fafc;border-radius:8px;">
+                                <i class="fas fa-file-lines" style="color:#10b981;font-size:20px;width:24px;text-align:center;"></i>
+                                <div>
+                                    <p style="margin:0;font-weight:600;font-size:13px;color:#334155;">TXT</p>
+                                    <p style="margin:0;font-size:11px;color:#64748b;">Texte brut</p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label><i class="fas fa-file-upload"></i> Fichier du Sujet (PDF, DOCX, TXT) *</label>
-                        <input type="file" id="subject-file" accept=".pdf,.docx,.doc,.txt" required>
-                        <small class="form-help"><i class="fas fa-lightbulb"></i> Le système analysera automatiquement le sujet et générera un barème de notation</small>
+
+                    <!-- Ce que fait l'IA -->
+                    <div class="card" style="border-top:3px solid #8b5cf6;padding:20px;">
+                        <h4 style="margin:0 0 14px;font-size:14px;color:#0f172a;display:flex;align-items:center;gap:8px;">
+                            <i class="fas fa-robot" style="color:#8b5cf6;"></i> Ce que fait l'IA
+                        </h4>
+                        <div style="display:flex;flex-direction:column;gap:10px;">
+                            <div style="display:flex;gap:10px;align-items:flex-start;">
+                                <i class="fas fa-magnifying-glass" style="color:#8b5cf6;margin-top:2px;flex-shrink:0;"></i>
+                                <p style="margin:0;font-size:13px;color:#475569;">Analyse le contenu et structure des questions</p>
+                            </div>
+                            <div style="display:flex;gap:10px;align-items:flex-start;">
+                                <i class="fas fa-scale-balanced" style="color:#8b5cf6;margin-top:2px;flex-shrink:0;"></i>
+                                <p style="margin:0;font-size:13px;color:#475569;">Attribue des points à chaque question selon la difficulté</p>
+                            </div>
+                            <div style="display:flex;gap:10px;align-items:flex-start;">
+                                <i class="fas fa-list-check" style="color:#8b5cf6;margin-top:2px;flex-shrink:0;"></i>
+                                <p style="margin:0;font-size:13px;color:#475569;">Génère un barème détaillé prêt à utiliser pour la correction</p>
+                            </div>
+                        </div>
                     </div>
-                    <div class="d-flex gap-2">
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-plus-circle"></i> Créer le Sujet
-                        </button>
-                        <button type="button" class="btn btn-secondary" onclick="loadDashboard()">
-                            <i class="fas fa-times"></i> Annuler
-                        </button>
+
+                    <!-- Conseil -->
+                    <div style="padding:16px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;">
+                        <p style="margin:0 0 6px;font-weight:600;font-size:13px;color:#92400e;">
+                            <i class="fas fa-lightbulb" style="color:#f59e0b;"></i> Conseil
+                        </p>
+                        <p style="margin:0;font-size:12px;color:#78350f;line-height:1.6;">
+                            Pour un meilleur barème, assurez-vous que les questions sont numérotées clairement dans votre document.
+                        </p>
                     </div>
-                </form>
+                </div>
             </div>
         `;
+
         document.getElementById('create-subject-form').addEventListener('submit', handleCreateSubject);
+
     } catch (error) {
         showAlert(humanError(error), 'error');
     } finally {
         showLoader(false);
     }
+}
+
+function updateDropZone(file) {
+    if (!file) return;
+    const zone = document.getElementById('drop-zone');
+    const icon = document.getElementById('drop-icon');
+    const text = document.getElementById('drop-text');
+    const info = document.getElementById('file-info');
+    const nameEl = document.getElementById('file-name');
+    const sizeEl = document.getElementById('file-size');
+
+    zone.style.borderColor = '#10b981';
+    zone.style.background = '#f0fdf4';
+    icon.className = 'fas fa-file-check';
+    icon.style.color = '#10b981';
+    text.textContent = 'Fichier sélectionné';
+
+    const sizeMb = (file.size / 1024 / 1024).toFixed(2);
+    nameEl.textContent = file.name;
+    sizeEl.textContent = `${sizeMb} Mo`;
+    info.style.display = 'flex';
+}
+
+function clearFile() {
+    document.getElementById('subject-file').value = '';
+    const zone = document.getElementById('drop-zone');
+    const icon = document.getElementById('drop-icon');
+    const text = document.getElementById('drop-text');
+    const info = document.getElementById('file-info');
+
+    zone.style.borderColor = '#cbd5e1';
+    zone.style.background = '#f8fafc';
+    icon.className = 'fas fa-cloud-arrow-up';
+    icon.style.color = '#94a3b8';
+    text.textContent = 'Glissez votre fichier ici';
+    info.style.display = 'none';
 }
 
 async function handleCreateSubject(e) {
@@ -1176,7 +1572,7 @@ async function handleCreateSubject(e) {
         if (data.success) {
             showSubjectCreatedPreview(data.subject);
         } else {
-            showAlert(data.error || 'Une erreur est survenue. Veuillez réessayer.', 'error');
+            showAlert(data.error || 'Impossible de créer le sujet. Vérifiez le fichier (PDF, DOCX ou TXT requis) et les champs obligatoires.', 'error');
         }
     } catch (error) {
         showAlert(humanError(error), 'error');
@@ -1215,7 +1611,7 @@ function showSubjectCreatedPreview(subject) {
                         <small style="color:#64748b;">
                             <i class="fas fa-calendar"></i> Créé le ${new Date(subject.created_at).toLocaleString('fr-FR')}
                             &nbsp;·&nbsp;
-                            <i class="fas fa-check-circle" style="color:#10b981;"></i> Actif
+                            <i class="fas fa-check-circle" style="color:#10b981;"></i> ${t('status.active')}
                         </small>
                     </div>
                 </div>
@@ -1257,87 +1653,106 @@ function showSubjectCreatedPreview(subject) {
 
 async function viewSubjectDetail(subjectId) {
     showLoader(true);
-    
     try {
         const response = await authenticatedFetch(`/api/subjects/${subjectId}`);
-        
-        if (!response.ok) {
-            throw new Error('Erreur lors du chargement du sujet');
-        }
-        
+        if (!response.ok) throw new Error('Erreur lors du chargement du sujet');
         const subject = await response.json();
-        
-        const ecInfo = subject.ec_code ? `
-            <div class="form-group">
-                <label><i class="fas fa-book"></i> EC Associé</label>
-                <div style="padding: 10px; background: #f8fafc; border-radius: 6px;">
-                    <strong>${subject.ec_code}</strong>: ${subject.ec_name}
-                    <br><small style="color: #64748b;">UE ${subject.ue_code}</small>
-                </div>
-            </div>
-        ` : '<p style="color: #94a3b8;"><i class="fas fa-info-circle"></i> Aucun EC associé</p>';
-        
+
+        const canDelete  = currentUser.role === 'admin' || subject.creator_id === currentUser.id;
+        const dateStr    = new Date(subject.created_at).toLocaleString('fr-FR');
+        const initials   = (subject.creator_name || 'N').split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
+        const statusBadge = subject.is_active
+            ? `<span style="display:inline-flex;align-items:center;gap:5px;background:#dcfce7;color:#15803d;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:600;"><i class="fas fa-circle" style="font-size:6px;"></i> ${t('status.active')}</span>`
+            : `<span style="display:inline-flex;align-items:center;gap:5px;background:#f1f5f9;color:#64748b;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:600;"><i class="fas fa-circle" style="font-size:6px;"></i> ${t('status.inactive')}</span>`;
+        const ecBadge = subject.ec_code
+            ? `<span style="display:inline-flex;align-items:center;gap:5px;background:#ede9fe;color:#6d28d9;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:600;">
+                   <i class="fas fa-book" style="font-size:10px;"></i> ${subject.ec_code} — ${subject.ec_name}
+                   ${subject.ue_code ? `<span style="color:#a78bfa;">· UE ${subject.ue_code}</span>` : ''}
+               </span>`
+            : `<span style="color:#94a3b8;font-size:13px;"><i class="fas fa-minus" style="font-size:10px;"></i> Aucun EC associé</span>`;
+
+        const contentHtml = (subject.content || 'Contenu non disponible').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        const rubricHtml  = (subject.rubric  || 'Barème non disponible').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
         const modalContent = `
-            <h2><i class="fas fa-file-alt"></i> Détails du Sujet</h2>
-            
-            <div class="form-group">
-                <label><i class="fas fa-heading"></i> Titre</label>
-                <div style="padding: 10px; background: #f8fafc; border-radius: 6px;">
-                    <strong>${subject.title}</strong>
+            <!-- En-tête modal -->
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid #e2e8f0;">
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <div style="width:44px;height:44px;border-radius:10px;background:#eff6ff;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class="fas fa-file-alt" style="color:#3b82f6;font-size:18px;"></i>
+                    </div>
+                    <div>
+                        <h2 style="margin:0;font-size:17px;color:#0f172a;font-weight:700;">${subject.title}</h2>
+                        <div style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap;">
+                            ${statusBadge}
+                            ${ecBadge}
+                        </div>
+                    </div>
                 </div>
             </div>
-            
-            ${ecInfo}
-            
-            <div class="form-group">
-                <label><i class="fas fa-user"></i> Créé par</label>
-                <div style="padding: 10px; background: #f8fafc; border-radius: 6px;">
-                    ${subject.creator_name || 'N/A'}
+
+            <!-- Méta-données -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;">
+                <div style="padding:12px 14px;background:#f8fafc;border-radius:8px;border:1px solid #f1f5f9;">
+                    <p style="margin:0 0 4px;font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;font-weight:600;">Créateur</p>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <div style="width:26px;height:26px;border-radius:50%;background:#dbeafe;color:#1d4ed8;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;">${initials}</div>
+                        <span style="font-size:13px;font-weight:600;color:#334155;">${subject.creator_name || 'N/A'}</span>
+                    </div>
+                </div>
+                <div style="padding:12px 14px;background:#f8fafc;border-radius:8px;border:1px solid #f1f5f9;">
+                    <p style="margin:0 0 4px;font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;font-weight:600;">Date de création</p>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <i class="fas fa-calendar-day" style="color:#94a3b8;font-size:12px;"></i>
+                        <span style="font-size:13px;font-weight:600;color:#334155;">${dateStr}</span>
+                    </div>
                 </div>
             </div>
-            
-            <div class="form-group">
-                <label><i class="fas fa-calendar"></i> Date de Création</label>
-                <div style="padding: 10px; background: #f8fafc; border-radius: 6px;">
-                    ${new Date(subject.created_at).toLocaleString('fr-FR')}
-                </div>
+
+            <!-- Onglets Contenu / Barème -->
+            <div style="display:flex;border-bottom:2px solid #e2e8f0;margin-bottom:16px;gap:0;">
+                <button id="sd-tab-content" onclick="switchSubjectDetailTab('content')"
+                    style="padding:9px 18px;border:none;border-bottom:2px solid #3b82f6;margin-bottom:-2px;background:none;color:#3b82f6;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;">
+                    <i class="fas fa-file-lines"></i> Contenu du sujet
+                </button>
+                <button id="sd-tab-rubric" onclick="switchSubjectDetailTab('rubric')"
+                    style="padding:9px 18px;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;background:none;color:#64748b;font-weight:600;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;">
+                    <i class="fas fa-clipboard-list"></i> Barème IA
+                    <span style="background:#ede9fe;color:#6d28d9;padding:1px 6px;border-radius:99px;font-size:10px;font-weight:700;">IA</span>
+                </button>
             </div>
-            
-            <div class="form-group">
-                <label><i class="fas fa-file-alt"></i> Contenu du Sujet</label>
-                <div style="max-height: 300px; overflow-y: auto; padding: 12px; background: #f8fafc; border-radius: 6px; white-space: pre-wrap; font-family: monospace; font-size: 13px;">
-${subject.content}
-                </div>
+
+            <div id="sd-panel-content">
+                <div style="max-height:280px;overflow-y:auto;padding:16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;font-family:'Courier New',monospace;font-size:12.5px;line-height:1.8;color:#334155;white-space:pre-wrap;">${contentHtml}</div>
             </div>
-            
-            <div class="form-group">
-                <label><i class="fas fa-clipboard-list"></i> Barème de Notation</label>
-                <div style="max-height: 300px; overflow-y: auto; padding: 12px; background: #f1f5f9; border-radius: 6px; white-space: pre-wrap; font-family: monospace; font-size: 13px;">
-${subject.rubric}
+            <div id="sd-panel-rubric" style="display:none;">
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">
+                    <i class="fas fa-robot" style="color:#8b5cf6;"></i>
+                    <span style="font-size:12px;color:#64748b;">Barème généré automatiquement par l'IA à partir du contenu du sujet</span>
                 </div>
+                <div style="max-height:280px;overflow-y:auto;padding:16px;background:#faf5ff;border:1px solid #ddd6fe;border-radius:8px;font-family:'Courier New',monospace;font-size:12.5px;line-height:1.8;color:#3b0764;white-space:pre-wrap;">${rubricHtml}</div>
             </div>
-            
-            <div class="form-group">
-                <label><i class="fas fa-check-circle"></i> Statut</label>
-                <div style="padding: 10px; background: #f8fafc; border-radius: 6px;">
-                    ${subject.is_active ? '<i class="fas fa-check-circle" style="color: var(--success)"></i> Actif' : '<i class="fas fa-times-circle" style="color: var(--danger)"></i> Inactif'}
+
+            <!-- Boutons actions -->
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:20px;padding-top:16px;border-top:1px solid #f1f5f9;flex-wrap:wrap;gap:10px;">
+                <div>
+                    ${canDelete ? `
+                    <button onclick="closeModal();deleteSubject(${subject.id})"
+                        style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:#fff;color:#ef4444;border:1px solid #fecaca;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;"
+                        onmouseover="this.style.background='#fee2e2'" onmouseout="this.style.background='#fff'">
+                        <i class="fas fa-trash-can"></i> Supprimer
+                    </button>` : ''}
                 </div>
-            </div>
-            
-            <div style="display: flex; gap: 12px; margin-top: 20px;">
-                ${currentUser.role === 'admin' || subject.creator_id === currentUser.id ? `
-                    <button class="btn btn-danger" onclick="deleteSubject(${subject.id}); closeModal();">
-                        <i class="fas fa-trash"></i> Supprimer
-                    </button>
-                ` : ''}
-                <button class="btn btn-secondary" onclick="closeModal()">
+                <button onclick="closeModal()"
+                    style="display:inline-flex;align-items:center;gap:6px;padding:8px 18px;background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;"
+                    onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">
                     <i class="fas fa-times"></i> Fermer
                 </button>
             </div>
         `;
-        
-        showModal(modalContent, '800px');
-        
+
+        showModal(modalContent, '760px');
+
     } catch (error) {
         showAlert(humanError(error), 'error');
     } finally {
@@ -1345,34 +1760,68 @@ ${subject.rubric}
     }
 }
 
+function switchSubjectDetailTab(tab) {
+    const isContent = tab === 'content';
+    document.getElementById('sd-panel-content').style.display = isContent ? 'block' : 'none';
+    document.getElementById('sd-panel-rubric').style.display  = isContent ? 'none'  : 'block';
+    const tabC = document.getElementById('sd-tab-content');
+    const tabR = document.getElementById('sd-tab-rubric');
+    tabC.style.color        = isContent ? '#3b82f6' : '#64748b';
+    tabC.style.fontWeight   = isContent ? '700' : '600';
+    tabC.style.borderBottom = isContent ? '2px solid #3b82f6' : '2px solid transparent';
+    tabR.style.color        = isContent ? '#64748b' : '#8b5cf6';
+    tabR.style.fontWeight   = isContent ? '600' : '700';
+    tabR.style.borderBottom = isContent ? '2px solid transparent' : '2px solid #8b5cf6';
+}
+
 async function deleteSubject(subjectId) {
-    if (!confirm('⚠️ ATTENTION !\n\nLa suppression de ce sujet entraînera également :\n• La suppression de TOUS les examens en ligne associés\n• La suppression de TOUTES les copies corrigées\n\nCette action est IRRÉVERSIBLE.\n\nÊtes-vous absolument certain de vouloir continuer ?')) {
-        return;
-    }
-    
-    showLoader(true);
-    
+    showModal(`
+        <div style="text-align:center;padding:8px 0;">
+            <div style="width:56px;height:56px;border-radius:50%;background:#fee2e2;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+                <i class="fas fa-triangle-exclamation" style="font-size:24px;color:#ef4444;"></i>
+            </div>
+            <h3 style="margin:0 0 8px;color:#0f172a;">Supprimer ce sujet ?</h3>
+            <p style="margin:0 0 6px;color:#64748b;font-size:14px;">Cette action est <strong>irréversible</strong>.</p>
+            <div style="background:#fff8f8;border:1px solid #fecaca;border-radius:8px;padding:12px 16px;margin:16px 0;text-align:left;">
+                <p style="margin:0 0 6px;font-size:13px;font-weight:600;color:#991b1b;">
+                    <i class="fas fa-circle-exclamation"></i> Seront également supprimés :
+                </p>
+                <ul style="margin:0;padding-left:20px;font-size:13px;color:#7f1d1d;line-height:1.9;">
+                    <li>Tous les examens en ligne liés à ce sujet</li>
+                    <li>Toutes les copies corrigées associées</li>
+                    <li>Le barème de notation généré par l'IA</li>
+                </ul>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:center;">
+                <button onclick="closeModal()"
+                    style="flex:1;max-width:160px;padding:10px;background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">
+                    <i class="fas fa-times"></i> Annuler
+                </button>
+                <button id="confirm-delete-btn" onclick="confirmDeleteSubject(${subjectId})"
+                    style="flex:1;max-width:160px;padding:10px;background:#ef4444;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">
+                    <i class="fas fa-trash-can"></i> Supprimer
+                </button>
+            </div>
+        </div>
+    `);
+}
+
+async function confirmDeleteSubject(subjectId) {
+    const btn = document.getElementById('confirm-delete-btn');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Suppression…'; }
     try {
-        const response = await authenticatedFetch(`/api/subjects/${subjectId}`, {
-            method: 'DELETE'
-        });
-        
+        const response = await authenticatedFetch(`/api/subjects/${subjectId}`, { method: 'DELETE' });
         const data = await response.json();
-        
+        closeModal();
         if (data.success) {
-            showAlert(data.message || 'Sujet supprimé avec succès!', 'success');
-            
-            // Recharger la liste des sujets
-            if (currentUser.role === 'professor') {
-                loadMySubjects();
-            } else {
-                loadSubjects();
-            }
+            showAlert(data.message || 'Sujet supprimé avec succès.', 'success');
+            loadSubjects();
         } else {
-            showAlert(data.error || 'Une erreur est survenue. Veuillez réessayer.', 'error');
+            showAlert(data.error || 'Impossible de supprimer ce sujet. Il est peut-être utilisé dans un examen actif.', 'error');
         }
     } catch (error) {
-        showAlert('Impossible de supprimer cet élément. Vérifiez votre connexion et réessayez.', 'error');
+        closeModal();
+        showAlert('Impossible de supprimer ce sujet. Vérifiez votre connexion et réessayez.', 'error');
     } finally {
         showLoader(false);
     }
@@ -1596,98 +2045,371 @@ async function loadCorrectPapers() {
     try {
         const subjectsResponse = await authenticatedFetch('/api/subjects');
         const subjects = await subjectsResponse.json();
+
         if (subjects.length === 0) {
             document.getElementById('main-content').innerHTML = `
                 <div class="page-header">
-                    <h2>Corriger des Copies</h2>
+                    <h2><i class="fas fa-pen-ruler" style="color:#3b82f6;"></i> Corriger des Copies</h2>
+                    <p>Correction automatique avec IA</p>
                 </div>
-                <div class="alert alert-warning">
-                    ⚠️ Vous n'avez créé aucun sujet. Veuillez d'abord créer un sujet d'examen.
-                    <br><br>
-                    <button class="btn btn-primary" onclick="loadCreateSubject()">Créer un Sujet</button>
+                <div style="text-align:center;padding:60px 24px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;">
+                    <i class="fas fa-file-circle-exclamation" style="font-size:56px;color:#94a3b8;margin-bottom:20px;display:block;"></i>
+                    <h3 style="color:#334155;margin-bottom:10px;">Aucun sujet disponible</h3>
+                    <p style="color:#64748b;margin-bottom:24px;max-width:420px;margin-left:auto;margin-right:auto;">
+                        Vous devez d'abord créer un sujet d'examen avant de pouvoir corriger des copies.
+                        L'IA se basera sur ce sujet pour évaluer les copies de vos étudiants.
+                    </p>
+                    <button class="btn btn-primary" style="padding:12px 28px;font-size:15px;" onclick="loadCreateSubject()">
+                        <i class="fas fa-plus-circle"></i> Créer un Sujet d'Examen
+                    </button>
                 </div>
             `;
             showLoader(false);
             return;
         }
+
         const subjectsOptions = subjects.map(s => {
-            const ecInfo = s.ec_code ? ` [${s.ec_code}]` : '';
+            const ecInfo = s.ec_code ? ` — ${s.ec_code}` : '';
             return `<option value="${s.id}">${s.title}${ecInfo}</option>`;
         }).join('');
 
-        // NOTE: utiliser les mêmes IDs que les handlers (single-subject, single-student-name, single-paper-file,
-        // batch-subject, batch-papers-files, batch-auto-extract) et inclure la zone de résultats.
         document.getElementById('main-content').innerHTML = `
             <div class="page-header">
-                <h2>Corriger des Copies</h2>
-                <p>Correction automatique avec IA</p>
-            </div>
-
-            <div class="card mb-3">
-                <div class="card-header"><h3>Correction d'une Seule Copie</h3></div>
-                <form id="single-correction-form">
-                    <div class="form-group">
-                        <label>Sujet d'Examen *</label>
-                        <select id="single-subject" required>
-                            <option value="">-- Choisir un sujet --</option>
-                            ${subjectsOptions}
-                        </select>
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+                    <div>
+                        <h2 style="margin:0;"><i class="fas fa-pen-ruler" style="color:#3b82f6;"></i> Corriger des Copies</h2>
+                        <p style="margin:4px 0 0;color:#64748b;">L'IA analyse chaque copie et attribue une note avec un feedback détaillé</p>
                     </div>
-                    <div class="form-group">
-                        <label>Nom de l'Étudiant *</label>
-                        <input type="text" id="single-student-name" placeholder="Ex: Jean Dupont" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Copie de l'Étudiant (PDF, DOCX, TXT) *</label>
-                        <input type="file" id="single-paper-file" accept=".pdf,.docx,.doc,.txt" required>
-                    </div>
-                    <button type="submit" class="btn btn-primary">Corriger cette Copie</button>
-                </form>
-            </div>
-
-            <div class="card">
-                <div class="card-header">
-                    <h3>Correction en Lot (Plusieurs Copies)</h3>
-                    <p style="color: #64748b; font-size: 14px; margin-top: 8px;">
-                        💡 Sélectionnez plusieurs fichiers à la fois ou glissez-déposez un dossier complet
-                    </p>
+                    <span style="background:#ede9fe;color:#6d28d9;padding:6px 14px;border-radius:99px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;">
+                        <i class="fas fa-robot"></i> Correction par IA
+                    </span>
                 </div>
-                <form id="batch-correction-form">
-                    <div class="form-group">
-                        <label>Sujet d'Examen *</label>
-                        <select id="batch-subject" required>
-                            <option value="">-- Choisir un sujet --</option>
-                            ${subjectsOptions}
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Copies des Étudiants (PDF, DOCX, TXT) *</label>
-                        <input type="file" id="batch-papers-files" accept=".pdf,.docx,.doc,.txt" multiple required webkitdirectory directory>
-                        <small class="form-help">
-                            💡 <strong>Astuce:</strong> Nommez vos fichiers avec le nom de l'étudiant (ex: copie_jean_dupont.pdf)<br>
-                            📁 Vous pouvez aussi sélectionner un dossier entier contenant toutes les copies
-                        </small>
-                    </div>
-                    <div class="form-group">
-                        <label><input type="checkbox" id="batch-auto-extract" checked> Extraire automatiquement les noms depuis les copies et envoyer les emails aux étudiants (si adresse valide)</label>
-                    </div>
-                    <button type="submit" class="btn btn-success">Corriger Toutes les Copies</button>
-                </form>
             </div>
 
-            <div id="correction-results" class="card mt-3" style="display: none;">
-                <div class="card-header"><h3>Résultats</h3></div>
+            <!-- Sélecteur de mode -->
+            <div style="display:flex;gap:0;margin-bottom:24px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
+                <button id="tab-single" onclick="switchCorrectionTab('single')"
+                    style="flex:1;padding:14px 20px;border:none;background:#3b82f6;color:#fff;font-weight:600;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s;">
+                    <i class="fas fa-user"></i> Copie Individuelle
+                </button>
+                <button id="tab-batch" onclick="switchCorrectionTab('batch')"
+                    style="flex:1;padding:14px 20px;border:none;background:#f8fafc;color:#64748b;font-weight:600;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s;">
+                    <i class="fas fa-layer-group"></i> Lot de Copies
+                    <span style="background:#e2e8f0;color:#475569;padding:1px 8px;border-radius:99px;font-size:11px;">${subjects.length > 0 ? 'Plusieurs fichiers' : ''}</span>
+                </button>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 300px;gap:24px;align-items:start;">
+
+                <!-- ── PANNEAU COPIE INDIVIDUELLE ── -->
+                <div id="panel-single">
+                    <div class="card" style="border-top:3px solid #3b82f6;">
+                        <div style="display:flex;align-items:center;gap:10px;margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid #e2e8f0;">
+                            <i class="fas fa-user-graduate" style="color:#3b82f6;font-size:18px;"></i>
+                            <h3 style="margin:0;font-size:16px;color:#0f172a;">Correction d'une Seule Copie</h3>
+                        </div>
+                        <form id="single-correction-form">
+
+                            <div class="form-group" style="margin-bottom:20px;">
+                                <label style="font-weight:600;color:#334155;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+                                    <i class="fas fa-file-alt" style="color:#3b82f6;width:16px;"></i> Sujet d'Examen
+                                    <span style="color:#ef4444;font-size:11px;">obligatoire</span>
+                                </label>
+                                <select id="single-subject" required
+                                    style="font-size:14px;padding:11px 14px;border:2px solid #e2e8f0;border-radius:8px;width:100%;background:#fff;transition:border-color .2s;"
+                                    onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e2e8f0'">
+                                    <option value="">— Choisir un sujet —</option>
+                                    ${subjectsOptions}
+                                </select>
+                            </div>
+
+                            <div class="form-group" style="margin-bottom:20px;">
+                                <label style="font-weight:600;color:#334155;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+                                    <i class="fas fa-user" style="color:#8b5cf6;width:16px;"></i> Nom de l'Étudiant
+                                    <span style="color:#ef4444;font-size:11px;">obligatoire</span>
+                                </label>
+                                <input type="text" id="single-student-name" required
+                                    placeholder="Ex: Amadou Diallo"
+                                    style="font-size:15px;padding:12px 14px;border:2px solid #e2e8f0;border-radius:8px;width:100%;transition:border-color .2s;"
+                                    onfocus="this.style.borderColor='#8b5cf6'" onblur="this.style.borderColor='#e2e8f0'">
+                            </div>
+
+                            <div class="form-group" style="margin-bottom:28px;">
+                                <label style="font-weight:600;color:#334155;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+                                    <i class="fas fa-file-arrow-up" style="color:#10b981;width:16px;"></i> Copie de l'Étudiant
+                                    <span style="color:#ef4444;font-size:11px;">obligatoire</span>
+                                </label>
+                                <label for="single-paper-file" id="single-drop-zone"
+                                    style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:32px 20px;border:2px dashed #cbd5e1;border-radius:12px;cursor:pointer;background:#f8fafc;transition:all .2s;text-align:center;"
+                                    ondragover="event.preventDefault();this.style.borderColor='#10b981';this.style.background='#f0fdf4';"
+                                    ondragleave="this.style.borderColor='#cbd5e1';this.style.background='#f8fafc';"
+                                    ondrop="event.preventDefault();this.style.borderColor='#cbd5e1';this.style.background='#f8fafc';document.getElementById('single-paper-file').files=event.dataTransfer.files;updateSingleDropZone(event.dataTransfer.files[0]);">
+                                    <i class="fas fa-cloud-arrow-up" id="single-drop-icon" style="font-size:36px;color:#94a3b8;"></i>
+                                    <div>
+                                        <p id="single-drop-text" style="margin:0;font-weight:600;color:#475569;font-size:14px;">Glissez la copie ici</p>
+                                        <p style="margin:4px 0 0;color:#94a3b8;font-size:12px;">ou cliquez pour parcourir</p>
+                                    </div>
+                                    <div style="display:flex;gap:6px;">
+                                        <span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;">PDF</span>
+                                        <span style="background:#ede9fe;color:#6d28d9;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;">DOCX</span>
+                                        <span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;">TXT</span>
+                                    </div>
+                                </label>
+                                <input type="file" id="single-paper-file" accept=".pdf,.docx,.doc,.txt" required
+                                    style="display:none;" onchange="updateSingleDropZone(this.files[0])">
+                                <div id="single-file-info" style="display:none;margin-top:10px;padding:10px 14px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;align-items:center;gap:10px;">
+                                    <i class="fas fa-file-check" style="color:#10b981;font-size:18px;flex-shrink:0;"></i>
+                                    <div style="flex:1;min-width:0;">
+                                        <p id="single-file-name" style="margin:0;font-weight:600;color:#15803d;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></p>
+                                        <p id="single-file-size" style="margin:0;color:#64748b;font-size:12px;"></p>
+                                    </div>
+                                    <button type="button" onclick="clearSingleFile()" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:16px;flex-shrink:0;" title="Supprimer">
+                                        <i class="fas fa-times-circle"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div style="display:flex;gap:12px;padding-top:8px;border-top:1px solid #f1f5f9;">
+                                <button type="submit" class="btn btn-primary" style="flex:1;padding:13px;font-size:15px;font-weight:600;border-radius:8px;">
+                                    <i class="fas fa-wand-magic-sparkles"></i> Corriger cette Copie
+                                </button>
+                                <button type="button" class="btn btn-secondary" onclick="loadCorrectPapers()" style="padding:13px 18px;border-radius:8px;">
+                                    <i class="fas fa-redo"></i>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- ── PANNEAU LOT DE COPIES ── -->
+                <div id="panel-batch" style="display:none;">
+                    <div class="card" style="border-top:3px solid #10b981;">
+                        <div style="display:flex;align-items:center;gap:10px;margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid #e2e8f0;">
+                            <i class="fas fa-layer-group" style="color:#10b981;font-size:18px;"></i>
+                            <h3 style="margin:0;font-size:16px;color:#0f172a;">Correction en Lot</h3>
+                            <span style="margin-left:auto;background:#dcfce7;color:#15803d;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:600;">Plusieurs copies à la fois</span>
+                        </div>
+                        <form id="batch-correction-form">
+
+                            <div class="form-group" style="margin-bottom:20px;">
+                                <label style="font-weight:600;color:#334155;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+                                    <i class="fas fa-file-alt" style="color:#10b981;width:16px;"></i> Sujet d'Examen
+                                    <span style="color:#ef4444;font-size:11px;">obligatoire</span>
+                                </label>
+                                <select id="batch-subject" required
+                                    style="font-size:14px;padding:11px 14px;border:2px solid #e2e8f0;border-radius:8px;width:100%;background:#fff;transition:border-color .2s;"
+                                    onfocus="this.style.borderColor='#10b981'" onblur="this.style.borderColor='#e2e8f0'">
+                                    <option value="">— Choisir un sujet —</option>
+                                    ${subjectsOptions}
+                                </select>
+                            </div>
+
+                            <div class="form-group" style="margin-bottom:20px;">
+                                <label style="font-weight:600;color:#334155;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+                                    <i class="fas fa-folder-open" style="color:#f59e0b;width:16px;"></i> Copies des Étudiants
+                                    <span style="color:#ef4444;font-size:11px;">obligatoire</span>
+                                </label>
+                                <label for="batch-papers-files" id="batch-drop-zone"
+                                    style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:36px 20px;border:2px dashed #cbd5e1;border-radius:12px;cursor:pointer;background:#f8fafc;transition:all .2s;text-align:center;"
+                                    ondragover="event.preventDefault();this.style.borderColor='#f59e0b';this.style.background='#fffbeb';"
+                                    ondragleave="this.style.borderColor='#cbd5e1';this.style.background='#f8fafc';">
+                                    <i class="fas fa-folder-arrow-up" id="batch-drop-icon" style="font-size:40px;color:#94a3b8;"></i>
+                                    <div>
+                                        <p id="batch-drop-text" style="margin:0;font-weight:600;color:#475569;font-size:14px;">Glissez un dossier de copies ici</p>
+                                        <p style="margin:4px 0 0;color:#94a3b8;font-size:12px;">ou cliquez pour sélectionner un dossier</p>
+                                    </div>
+                                    <div style="display:flex;gap:6px;">
+                                        <span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;">PDF</span>
+                                        <span style="background:#ede9fe;color:#6d28d9;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;">DOCX</span>
+                                        <span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;">TXT</span>
+                                    </div>
+                                </label>
+                                <input type="file" id="batch-papers-files" accept=".pdf,.docx,.doc,.txt" multiple required webkitdirectory directory
+                                    style="display:none;" onchange="updateBatchDropZone(this.files)">
+                                <div id="batch-file-info" style="display:none;margin-top:10px;padding:12px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;align-items:center;gap:10px;">
+                                    <i class="fas fa-folder-check" style="color:#f59e0b;font-size:20px;flex-shrink:0;"></i>
+                                    <div style="flex:1;">
+                                        <p id="batch-file-count" style="margin:0;font-weight:600;color:#92400e;font-size:13px;"></p>
+                                        <p id="batch-file-names" style="margin:2px 0 0;color:#78350f;font-size:12px;"></p>
+                                    </div>
+                                    <button type="button" onclick="clearBatchFiles()" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:16px;flex-shrink:0;">
+                                        <i class="fas fa-times-circle"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="form-group" style="margin-bottom:24px;">
+                                <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:14px;background:#f8fafc;border:2px solid #e2e8f0;border-radius:8px;transition:border-color .2s;"
+                                    onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='#e2e8f0'">
+                                    <input type="checkbox" id="batch-auto-extract" checked style="width:16px;height:16px;margin-top:2px;accent-color:#3b82f6;flex-shrink:0;">
+                                    <div>
+                                        <p style="margin:0;font-weight:600;color:#334155;font-size:13px;">
+                                            <i class="fas fa-wand-magic-sparkles" style="color:#8b5cf6;"></i>
+                                            Extraction automatique des noms
+                                        </p>
+                                        <p style="margin:4px 0 0;font-size:12px;color:#64748b;">
+                                            L'IA extrait le nom de l'étudiant depuis chaque copie et envoie un email de résultat si son adresse est connue
+                                        </p>
+                                    </div>
+                                </label>
+                            </div>
+
+                            <div style="padding:12px 14px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;margin-bottom:20px;font-size:12px;color:#15803d;">
+                                <i class="fas fa-lightbulb" style="color:#10b981;"></i>
+                                <strong>Astuce :</strong> Nommez vos fichiers avec le nom de l'étudiant
+                                (ex: <code>copie_amadou_diallo.pdf</code>) pour faciliter l'identification.
+                            </div>
+
+                            <div style="display:flex;gap:12px;padding-top:8px;border-top:1px solid #f1f5f9;">
+                                <button type="submit" class="btn btn-success" style="flex:1;padding:13px;font-size:15px;font-weight:600;border-radius:8px;">
+                                    <i class="fas fa-wand-magic-sparkles"></i> Corriger Toutes les Copies
+                                </button>
+                                <button type="button" class="btn btn-secondary" onclick="loadCorrectPapers()" style="padding:13px 18px;border-radius:8px;">
+                                    <i class="fas fa-redo"></i>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Panneau latéral -->
+                <div style="display:flex;flex-direction:column;gap:16px;">
+
+                    <div class="card" style="border-top:3px solid #8b5cf6;padding:20px;">
+                        <h4 style="margin:0 0 14px;font-size:14px;color:#0f172a;display:flex;align-items:center;gap:8px;">
+                            <i class="fas fa-robot" style="color:#8b5cf6;"></i> Comment ça marche
+                        </h4>
+                        <div style="display:flex;flex-direction:column;gap:12px;">
+                            <div style="display:flex;gap:10px;align-items:flex-start;">
+                                <div style="width:22px;height:22px;border-radius:50%;background:#8b5cf6;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">1</div>
+                                <p style="margin:0;font-size:12px;color:#475569;">Sélectionnez le sujet d'examen de référence</p>
+                            </div>
+                            <div style="display:flex;gap:10px;align-items:flex-start;">
+                                <div style="width:22px;height:22px;border-radius:50%;background:#8b5cf6;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">2</div>
+                                <p style="margin:0;font-size:12px;color:#475569;">Déposez la copie (ou le dossier de copies)</p>
+                            </div>
+                            <div style="display:flex;gap:10px;align-items:flex-start;">
+                                <div style="width:22px;height:22px;border-radius:50%;background:#8b5cf6;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">3</div>
+                                <p style="margin:0;font-size:12px;color:#475569;">L'IA compare la copie au barème et attribue une note /20</p>
+                            </div>
+                            <div style="display:flex;gap:10px;align-items:flex-start;">
+                                <div style="width:22px;height:22px;border-radius:50%;background:#8b5cf6;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">4</div>
+                                <p style="margin:0;font-size:12px;color:#475569;">Un feedback détaillé et un PDF sont générés automatiquement</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card" style="border-top:3px solid #f59e0b;padding:20px;">
+                        <h4 style="margin:0 0 12px;font-size:14px;color:#0f172a;display:flex;align-items:center;gap:8px;">
+                            <i class="fas fa-circle-info" style="color:#f59e0b;"></i> Quand utiliser chaque mode ?
+                        </h4>
+                        <div style="display:flex;flex-direction:column;gap:10px;">
+                            <div style="padding:10px;background:#eff6ff;border-radius:8px;">
+                                <p style="margin:0 0 4px;font-weight:600;font-size:12px;color:#1d4ed8;"><i class="fas fa-user"></i> Copie individuelle</p>
+                                <p style="margin:0;font-size:11px;color:#475569;">Pour corriger une copie spécifique ou tester le système</p>
+                            </div>
+                            <div style="padding:10px;background:#f0fdf4;border-radius:8px;">
+                                <p style="margin:0 0 4px;font-weight:600;font-size:12px;color:#15803d;"><i class="fas fa-layer-group"></i> Lot de copies</p>
+                                <p style="margin:0;font-size:11px;color:#475569;">Pour corriger toute une classe en une seule opération — gain de temps maximum</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="padding:14px 16px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;">
+                        <p style="margin:0 0 6px;font-weight:600;font-size:12px;color:#991b1b;">
+                            <i class="fas fa-triangle-exclamation" style="color:#ef4444;"></i> À savoir
+                        </p>
+                        <p style="margin:0;font-size:11px;color:#7f1d1d;line-height:1.6;">
+                            La correction peut prendre quelques secondes par copie selon la longueur du document. Ne fermez pas la page pendant le traitement.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Zone de résultats -->
+            <div id="correction-results" style="display:none;margin-top:24px;">
                 <div id="correction-results-content"></div>
             </div>
         `;
-        // attacher les handlers
+
         document.getElementById('single-correction-form').addEventListener('submit', handleSingleCorrection);
         document.getElementById('batch-correction-form').addEventListener('submit', handleBatchCorrection);
+
     } catch (error) {
         showAlert(humanError(error), 'error');
     } finally {
         showLoader(false);
     }
+}
+
+function switchCorrectionTab(tab) {
+    const single = document.getElementById('panel-single');
+    const batch  = document.getElementById('panel-batch');
+    const tabS   = document.getElementById('tab-single');
+    const tabB   = document.getElementById('tab-batch');
+
+    if (tab === 'single') {
+        single.style.display = 'block';
+        batch.style.display  = 'none';
+        tabS.style.background = '#3b82f6'; tabS.style.color = '#fff';
+        tabB.style.background = '#f8fafc'; tabB.style.color = '#64748b';
+    } else {
+        single.style.display = 'none';
+        batch.style.display  = 'block';
+        tabS.style.background = '#f8fafc'; tabS.style.color = '#64748b';
+        tabB.style.background = '#10b981'; tabB.style.color = '#fff';
+    }
+}
+
+function updateSingleDropZone(file) {
+    if (!file) return;
+    const zone = document.getElementById('single-drop-zone');
+    const icon = document.getElementById('single-drop-icon');
+    const text = document.getElementById('single-drop-text');
+    const info = document.getElementById('single-file-info');
+    zone.style.borderColor = '#10b981'; zone.style.background = '#f0fdf4';
+    icon.className = 'fas fa-file-check'; icon.style.color = '#10b981';
+    text.textContent = 'Fichier sélectionné';
+    document.getElementById('single-file-name').textContent = file.name;
+    document.getElementById('single-file-size').textContent = (file.size / 1024 / 1024).toFixed(2) + ' Mo';
+    info.style.display = 'flex';
+}
+
+function clearSingleFile() {
+    document.getElementById('single-paper-file').value = '';
+    const zone = document.getElementById('single-drop-zone');
+    const icon = document.getElementById('single-drop-icon');
+    const text = document.getElementById('single-drop-text');
+    zone.style.borderColor = '#cbd5e1'; zone.style.background = '#f8fafc';
+    icon.className = 'fas fa-cloud-arrow-up'; icon.style.color = '#94a3b8';
+    text.textContent = 'Glissez la copie ici';
+    document.getElementById('single-file-info').style.display = 'none';
+}
+
+function updateBatchDropZone(files) {
+    if (!files || files.length === 0) return;
+    const zone  = document.getElementById('batch-drop-zone');
+    const icon  = document.getElementById('batch-drop-icon');
+    const text  = document.getElementById('batch-drop-text');
+    const info  = document.getElementById('batch-file-info');
+    zone.style.borderColor = '#f59e0b'; zone.style.background = '#fffbeb';
+    icon.className = 'fas fa-folder-check'; icon.style.color = '#f59e0b';
+    text.textContent = `${files.length} fichier(s) sélectionné(s)`;
+    document.getElementById('batch-file-count').textContent = `${files.length} copie(s) prête(s) à corriger`;
+    const names = Array.from(files).slice(0, 3).map(f => f.name).join(', ');
+    document.getElementById('batch-file-names').textContent = files.length > 3 ? names + ` … et ${files.length - 3} autre(s)` : names;
+    info.style.display = 'flex';
+}
+
+function clearBatchFiles() {
+    document.getElementById('batch-papers-files').value = '';
+    const zone = document.getElementById('batch-drop-zone');
+    const icon = document.getElementById('batch-drop-icon');
+    const text = document.getElementById('batch-drop-text');
+    zone.style.borderColor = '#cbd5e1'; zone.style.background = '#f8fafc';
+    icon.className = 'fas fa-folder-arrow-up'; icon.style.color = '#94a3b8';
+    text.textContent = 'Glissez un dossier de copies ici';
+    document.getElementById('batch-file-info').style.display = 'none';
 }
 
 async function handleSingleCorrection(e) {
@@ -1720,50 +2442,68 @@ async function handleSingleCorrection(e) {
         const data = await response.json();
         
         if (data.success) {
-            showAlert('Copie corrigée avec succès!', 'success');
-            
-            // Afficher les résultats
+            const scoreColor = data.paper.score >= 10 ? '#10b981' : '#ef4444';
+            const scoreBg    = data.paper.score >= 10 ? '#dcfce7' : '#fee2e2';
+            const mention    = data.paper.score >= 16 ? 'Très Bien' : data.paper.score >= 14 ? 'Bien' : data.paper.score >= 12 ? 'Assez Bien' : data.paper.score >= 10 ? 'Passable' : 'Insuffisant';
+            const feedbackHtml = (data.paper.feedback || '').replace(/\n/g, '<br>');
+
             const resultsContainer = document.getElementById('correction-results');
-            const resultsContent = document.getElementById('correction-results-content');
-            
+            const resultsContent   = document.getElementById('correction-results-content');
+
             resultsContent.innerHTML = `
-                <div class="alert alert-success">
-                    <h4><i class="fas fa-check-circle"></i> Correction Terminée</h4>
-                    <p><strong>Étudiant:</strong> ${data.paper.student_name}</p>
-                    <p><strong>Note:</strong> ${data.paper.score}/20</p>
-                    <p><strong>Sujet:</strong> ${data.paper.subject_title}</p>
-                </div>
-                
-                <div class="card mt-2">
-                    <div class="card-header">
-                        <h4><i class="fas fa-clipboard-list"></i> Détails de la Correction</h4>
-                    </div>
-                    <div style="padding: 15px;">
-                        <p><strong><i class="fas fa-comment"></i> Feedback:</strong></p>
-                        <div style="background: #f8fafc; padding: 12px; border-radius: 6px; white-space: pre-wrap;">
-${data.paper.feedback}
+                <div class="card" style="border-top:3px solid ${scoreColor};margin-bottom:0;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid #e2e8f0;">
+                        <div style="display:flex;align-items:center;gap:14px;">
+                            <div style="width:48px;height:48px;border-radius:50%;background:${scoreBg};display:flex;align-items:center;justify-content:center;">
+                                <i class="fas fa-check-circle" style="font-size:24px;color:${scoreColor};"></i>
+                            </div>
+                            <div>
+                                <h3 style="margin:0;color:#0f172a;">Correction terminée</h3>
+                                <p style="margin:2px 0 0;color:#64748b;font-size:13px;">${data.paper.subject_title}</p>
+                            </div>
+                        </div>
+                        <div style="display:flex;gap:10px;">
+                            <button class="btn btn-primary" onclick="exportPaperPDF(${data.paper.id})" style="border-radius:8px;">
+                                <i class="fas fa-file-pdf"></i> Télécharger PDF
+                            </button>
+                            <button class="btn btn-secondary" onclick="document.getElementById('correction-results').style.display='none'" style="border-radius:8px;">
+                                <i class="fas fa-times"></i>
+                            </button>
                         </div>
                     </div>
-                </div>
-                
-                <div style="margin-top: 15px;">
-                    <button class="btn btn-primary" onclick="exportPaperPDF(${data.paper.id})">
-                        <i class="fas fa-file-pdf"></i> Télécharger PDF
-                    </button>
-                    <button class="btn btn-secondary" onclick="document.getElementById('correction-results').style.display='none'">
-                        <i class="fas fa-times"></i> Fermer
-                    </button>
+
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:24px;">
+                        <div style="padding:16px;background:#f8fafc;border-radius:10px;text-align:center;">
+                            <p style="margin:0 0 4px;font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.5px;">Étudiant</p>
+                            <p style="margin:0;font-weight:700;font-size:15px;color:#0f172a;">${data.paper.student_name}</p>
+                        </div>
+                        <div style="padding:16px;background:${scoreBg};border-radius:10px;text-align:center;">
+                            <p style="margin:0 0 4px;font-size:12px;color:${scoreColor};text-transform:uppercase;letter-spacing:.5px;font-weight:600;">Note</p>
+                            <p style="margin:0;font-weight:800;font-size:28px;color:${scoreColor};">${data.paper.score}<span style="font-size:14px;font-weight:500;">/20</span></p>
+                        </div>
+                        <div style="padding:16px;background:#f8fafc;border-radius:10px;text-align:center;">
+                            <p style="margin:0 0 4px;font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.5px;">Mention</p>
+                            <p style="margin:0;font-weight:700;font-size:15px;color:#0f172a;">${mention}</p>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+                            <i class="fas fa-comment-dots" style="color:#8b5cf6;"></i>
+                            <h4 style="margin:0;font-size:14px;color:#0f172a;">Feedback détaillé de l'IA</h4>
+                        </div>
+                        <div style="padding:16px;background:#f8fafc;border-radius:8px;font-size:13px;line-height:1.8;color:#334155;max-height:320px;overflow-y:auto;">${feedbackHtml}</div>
+                    </div>
                 </div>
             `;
-            
+
             resultsContainer.style.display = 'block';
             resultsContainer.scrollIntoView({ behavior: 'smooth' });
-            
-            // Réinitialiser le formulaire
             document.getElementById('single-correction-form').reset();
+            clearSingleFile();
             
         } else {
-            showAlert(data.error || 'Une erreur est survenue. Veuillez réessayer.', 'error');
+            showAlert(data.error || 'Impossible de corriger la copie. Vérifiez que le sujet sélectionné a un barème valide.', 'error');
         }
     } catch (error) {
         showAlert('Impossible de corriger la copie. Vérifiez votre connexion et réessayez.', 'error');
@@ -1821,30 +2561,100 @@ async function handleBatchCorrection(e) {
         try { data = await response.json(); } catch (e) { /* ignore */ }
 
         if (response.ok && data.success) {
-            showAlert(`Correction en lot terminée : ${data.corrected} copie(s) corrigée(s) avec succès.`, 'success');
+            const corrected = data.corrected || 0;
+            const errors    = data.errors || 0;
+            const total     = corrected + errors;
+            const avg       = data.results && data.results.length > 0
+                ? (data.results.filter(r => typeof r.score === 'number').reduce((a, r) => a + r.score, 0) /
+                   data.results.filter(r => typeof r.score === 'number').length).toFixed(1)
+                : null;
 
-            let resultsHTML = `<div class="alert alert-success"><strong>${data.corrected} copie(s) corrigée(s)</strong></div>`;
+            let resultsHTML = `
+                <div class="card" style="border-top:3px solid #10b981;margin-bottom:0;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid #e2e8f0;">
+                        <div style="display:flex;align-items:center;gap:12px;">
+                            <div style="width:44px;height:44px;border-radius:50%;background:#dcfce7;display:flex;align-items:center;justify-content:center;">
+                                <i class="fas fa-layer-group" style="font-size:20px;color:#10b981;"></i>
+                            </div>
+                            <div>
+                                <h3 style="margin:0;color:#0f172a;">Correction en lot terminée</h3>
+                                <p style="margin:2px 0 0;color:#64748b;font-size:13px;">${total} copie(s) traitée(s)</p>
+                            </div>
+                        </div>
+                        <button class="btn btn-secondary" onclick="document.getElementById('correction-results').style.display='none'" style="border-radius:8px;">
+                            <i class="fas fa-times"></i> Fermer
+                        </button>
+                    </div>
+
+                    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:24px;">
+                        <div style="padding:14px;background:#dcfce7;border-radius:10px;text-align:center;">
+                            <p style="margin:0 0 2px;font-size:11px;color:#15803d;text-transform:uppercase;letter-spacing:.5px;font-weight:600;">Corrigées</p>
+                            <p style="margin:0;font-weight:800;font-size:26px;color:#15803d;">${corrected}</p>
+                        </div>
+                        ${avg !== null ? `
+                        <div style="padding:14px;background:#eff6ff;border-radius:10px;text-align:center;">
+                            <p style="margin:0 0 2px;font-size:11px;color:#1d4ed8;text-transform:uppercase;letter-spacing:.5px;font-weight:600;">Moyenne</p>
+                            <p style="margin:0;font-weight:800;font-size:26px;color:#1d4ed8;">${avg}<span style="font-size:13px;font-weight:500;">/20</span></p>
+                        </div>` : '<div></div>'}
+                        <div style="padding:14px;background:${errors > 0 ? '#fee2e2' : '#f8fafc'};border-radius:10px;text-align:center;">
+                            <p style="margin:0 0 2px;font-size:11px;color:${errors > 0 ? '#991b1b' : '#64748b'};text-transform:uppercase;letter-spacing:.5px;font-weight:600;">Erreurs</p>
+                            <p style="margin:0;font-weight:800;font-size:26px;color:${errors > 0 ? '#ef4444' : '#94a3b8'};">${errors}</p>
+                        </div>
+                    </div>
+            `;
 
             if (data.results && data.results.length > 0) {
-                resultsHTML += '<table><thead><tr><th>Fichier</th><th>Étudiant</th><th>Note</th><th>Statut</th></tr></thead><tbody>';
-                data.results.forEach(result => {
-                    const scoreClass = (typeof result.score === 'number' && result.score >= 10) ? 'success' : 'danger';
-                    resultsHTML += `<tr>
-                        <td>${result.filename}</td>
-                        <td>${result.student_name || 'N/A'}</td>
-                        <td>${typeof result.score === 'number' ? result.score + '/20' : 'N/A'}</td>
-                        <td>${result.error ? `<span class="text-danger">${result.error}</span>` : '✅ Corrigée'}</td>
-                    </tr>`;
+                resultsHTML += `
+                    <div style="overflow-x:auto;border-radius:8px;border:1px solid #e2e8f0;">
+                        <table style="width:100%;border-collapse:collapse;">
+                            <thead>
+                                <tr style="background:#f8fafc;">
+                                    <th style="padding:10px 14px;text-align:left;font-size:12px;color:#64748b;font-weight:600;border-bottom:1px solid #e2e8f0;">Fichier</th>
+                                    <th style="padding:10px 14px;text-align:left;font-size:12px;color:#64748b;font-weight:600;border-bottom:1px solid #e2e8f0;">Étudiant</th>
+                                    <th style="padding:10px 14px;text-align:center;font-size:12px;color:#64748b;font-weight:600;border-bottom:1px solid #e2e8f0;">Note</th>
+                                    <th style="padding:10px 14px;text-align:center;font-size:12px;color:#64748b;font-weight:600;border-bottom:1px solid #e2e8f0;">Statut</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+                data.results.forEach((result, i) => {
+                    const sc = typeof result.score === 'number';
+                    const scoreColor = sc && result.score >= 10 ? '#10b981' : '#ef4444';
+                    const bg = i % 2 === 0 ? '#fff' : '#fafafa';
+                    resultsHTML += `
+                        <tr style="background:${bg};">
+                            <td style="padding:10px 14px;font-size:13px;color:#475569;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${result.filename}</td>
+                            <td style="padding:10px 14px;font-size:13px;font-weight:600;color:#0f172a;">${result.student_name || '—'}</td>
+                            <td style="padding:10px 14px;text-align:center;">
+                                ${sc ? `<span style="font-weight:700;font-size:15px;color:${scoreColor};">${result.score}/20</span>` : '<span style="color:#94a3b8;font-size:13px;">—</span>'}
+                            </td>
+                            <td style="padding:10px 14px;text-align:center;">
+                                ${result.error
+                                    ? `<span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;">Erreur</span>`
+                                    : `<span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;">✓ Corrigée</span>`}
+                            </td>
+                        </tr>
+                    `;
                 });
-                resultsHTML += '</tbody></table>';
+                resultsHTML += `</tbody></table></div>`;
             }
 
-            if (data.errors && data.errors > 0 && data.error_details && data.error_details.length > 0) {
-                resultsHTML += `<div class="alert alert-warning mt-2"><strong>⚠️ ${data.errors} erreur(s)</strong><br>${data.error_details.join('<br>')}</div>`;
+            if (errors > 0 && data.error_details && data.error_details.length > 0) {
+                resultsHTML += `
+                    <div style="margin-top:16px;padding:14px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;">
+                        <p style="margin:0 0 8px;font-weight:600;font-size:13px;color:#991b1b;">
+                            <i class="fas fa-triangle-exclamation"></i> ${errors} erreur(s) rencontrée(s)
+                        </p>
+                        <ul style="margin:0;padding-left:20px;font-size:12px;color:#7f1d1d;line-height:1.8;">
+                            ${data.error_details.map(e => `<li>${e}</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
             }
 
-            // afficher résultats dans la page
-            const resultsCard = document.getElementById('correction-results');
+            resultsHTML += `</div>`;
+
+            const resultsCard    = document.getElementById('correction-results');
             const resultsContent = document.getElementById('correction-results-content');
             if (resultsContent) {
                 resultsContent.innerHTML = resultsHTML;
@@ -1852,8 +2662,8 @@ async function handleBatchCorrection(e) {
                 resultsCard.scrollIntoView({ behavior: 'smooth' });
             }
 
-            // reset form
             document.getElementById('batch-correction-form').reset();
+            clearBatchFiles();
         } else {
             // message d'erreur serveur
             const errMsg = (data && (data.error || data.message)) ? (data.error || data.message) : `Erreur serveur (${response.status})`;
@@ -2011,7 +2821,7 @@ function showCreateReclamationModal(paperId) {
                 closeModal();
                 loadDashboard();
             } else {
-                showAlert(data.error || 'Une erreur est survenue. Veuillez réessayer.', 'error');
+                showAlert(data.error || 'Impossible d\'envoyer la réclamation. Vérifiez que tous les champs sont remplis.', 'error');
             }
         } catch (error) {
             showAlert(humanError(error), 'error');
@@ -2028,66 +2838,115 @@ async function loadECAssignments() {
     if (window.event && window.event.target) setActiveTab(window.event.target);
     showLoader(true);
     try {
-        const ecsResponse = await authenticatedFetch('/api/ecs');
-        const ecs = await ecsResponse.json();
-        
-        const usersResponse = await authenticatedFetch('/api/admin/users');
-        const allUsers = await usersResponse.json();
+        const [ecsRes, usersRes] = await Promise.all([
+            authenticatedFetch('/api/ecs'),
+            authenticatedFetch('/api/admin/users')
+        ]);
+        const ecs        = await ecsRes.json();
+        const allUsers   = await usersRes.json();
         const professors = allUsers.filter(u => u.role === 'professor');
-        
-        let html = `
-            <div class="page-header">
-                <h2><i class="fas fa-link"></i> Affectations EC aux Professeurs</h2>
-                <p>Assignez les ECs aux professeurs responsables</p>
-            </div>
-            <div class="card">
-                <div class="card-header">
-                    <h3><i class="fas fa-layer-group"></i> Liste des ECs</h3>
-                </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th><i class="fas fa-tag"></i> Code EC</th>
-                            <th><i class="fas fa-book"></i> Nom</th>
-                            <th><i class="fas fa-layer-group"></i> UE</th>
-                            <th><i class="fas fa-user"></i> Professeur Assigné</th>
-                            <th><i class="fas fa-cog"></i> Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-        `;
-        
-        let professorsOptions = '<option value="">-- Sélectionner un professeur --</option>';
-        professors.forEach(prof => {
-            professorsOptions += `<option value="${prof.id}">${prof.full_name}</option>`;
-        });
-        
-        if (ecs.length === 0) {
-            html += '<tr><td colspan="5"><i class="fas fa-inbox"></i> Aucun EC disponible</td></tr>';
-        } else {
-            ecs.forEach(ec => {
-                html += `
-                    <tr>
-                        <td><strong>${ec.code}</strong></td>
-                        <td>${ec.name}</td>
-                        <td>${ec.ue_code}</td>
-                        <td>
-                            <select id="ec-professor-${ec.id}" class="ec-professor-select" data-ec-id="${ec.id}">
-                                ${professorsOptions}
-                            </select>
+
+        const profOptions = '<option value="">— Sélectionner un professeur —</option>'
+            + professors.map(p => `<option value="${p.id}">${p.full_name}</option>`).join('');
+
+        const assignedCount = ecs.filter(e => e.professor_id).length;
+
+        const rows = ecs.length === 0
+            ? `<tr><td colspan="5" style="padding:40px;text-align:center;color:#94a3b8;">
+                   <i class="fas fa-inbox" style="font-size:32px;display:block;margin-bottom:10px;"></i>
+                   Aucun EC disponible. Créez d'abord des formations et des UEs.
+               </td></tr>`
+            : ecs.map(ec => {
+                const assigned = ec.professor_name
+                    ? `<span style="display:inline-flex;align-items:center;gap:5px;background:#dcfce7;color:#15803d;padding:3px 9px;border-radius:99px;font-size:11px;font-weight:600;">
+                           <i class="fas fa-circle-check" style="font-size:9px;"></i> ${ec.professor_name}
+                       </span>`
+                    : `<span style="display:inline-flex;align-items:center;gap:5px;background:#f1f5f9;color:#94a3b8;padding:3px 9px;border-radius:99px;font-size:11px;font-weight:600;">
+                           <i class="fas fa-circle-minus" style="font-size:9px;"></i> Non assigné
+                       </span>`;
+                return `
+                    <tr style="transition:background .15s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+                        <td style="padding:13px 16px;border-bottom:1px solid #f1f5f9;">
+                            <span style="display:inline-block;background:#ede9fe;color:#6d28d9;padding:3px 9px;border-radius:6px;font-size:12px;font-weight:700;">${ec.code}</span>
                         </td>
-                        <td>
-                            <button class="btn btn-sm btn-primary" onclick="assignECToProfessor(${ec.id})">
-                                <i class="fas fa-link"></i> Assigner
-                            </button>
+                        <td style="padding:13px 16px;border-bottom:1px solid #f1f5f9;">
+                            <p style="margin:0;font-size:13px;font-weight:600;color:#0f172a;">${ec.name}</p>
+                        </td>
+                        <td style="padding:13px 16px;border-bottom:1px solid #f1f5f9;">
+                            <span style="font-size:12px;color:#64748b;background:#f1f5f9;padding:2px 8px;border-radius:4px;">${ec.ue_code}</span>
+                        </td>
+                        <td style="padding:13px 16px;border-bottom:1px solid #f1f5f9;">${assigned}</td>
+                        <td style="padding:13px 16px;border-bottom:1px solid #f1f5f9;">
+                            <div style="display:flex;align-items:center;gap:8px;">
+                                <select id="ec-professor-${ec.id}" class="ec-professor-select" data-ec-id="${ec.id}"
+                                    style="font-size:13px;padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:7px;background:#fff;color:#334155;transition:border-color .2s;min-width:180px;"
+                                    onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e2e8f0'">
+                                    ${profOptions}
+                                </select>
+                                <button onclick="assignECToProfessor(${ec.id})"
+                                    style="display:inline-flex;align-items:center;gap:5px;padding:7px 12px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;transition:all .15s;"
+                                    onmouseover="this.style.background='#dbeafe'" onmouseout="this.style.background='#eff6ff'">
+                                    <i class="fas fa-link"></i> Assigner
+                                </button>
+                            </div>
                         </td>
                     </tr>
                 `;
-            });
-        }
-        
-        html += `</tbody></table></div>`;
-        document.getElementById('main-content').innerHTML = html;
+            }).join('');
+
+        document.getElementById('main-content').innerHTML = `
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px;">
+                <div>
+                    <h2 style="margin:0;font-size:20px;color:#0f172a;display:flex;align-items:center;gap:10px;">
+                        <i class="fas fa-link" style="color:#3b82f6;"></i> Affectations EC aux Professeurs
+                    </h2>
+                    <p style="margin:4px 0 0;color:#64748b;font-size:13px;">Assignez les Éléments Constitutifs aux professeurs responsables</p>
+                </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px;">
+                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;display:flex;align-items:center;gap:14px;">
+                    <div style="width:40px;height:40px;border-radius:10px;background:#eff6ff;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class="fas fa-layer-group" style="color:#3b82f6;font-size:16px;"></i>
+                    </div>
+                    <div>
+                        <p style="margin:0;font-size:22px;font-weight:800;color:#0f172a;">${ecs.length}</p>
+                        <p style="margin:0;font-size:12px;color:#64748b;">ECs au total</p>
+                    </div>
+                </div>
+                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;display:flex;align-items:center;gap:14px;">
+                    <div style="width:40px;height:40px;border-radius:10px;background:#dcfce7;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class="fas fa-circle-check" style="color:#10b981;font-size:16px;"></i>
+                    </div>
+                    <div>
+                        <p style="margin:0;font-size:22px;font-weight:800;color:#0f172a;">${assignedCount}</p>
+                        <p style="margin:0;font-size:12px;color:#64748b;">ECs assignés</p>
+                    </div>
+                </div>
+            </div>
+
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
+                <div style="padding:14px 20px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:8px;">
+                    <i class="fas fa-list" style="color:#64748b;font-size:13px;"></i>
+                    <h3 style="margin:0;font-size:15px;color:#0f172a;font-weight:600;">Liste des ECs</h3>
+                    <span style="background:#f1f5f9;color:#64748b;padding:1px 8px;border-radius:99px;font-size:12px;margin-left:4px;">${ecs.length}</span>
+                </div>
+                <div style="overflow-x:auto;">
+                    <table style="width:100%;border-collapse:collapse;">
+                        <thead>
+                            <tr style="background:#f8fafc;">
+                                <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e2e8f0;">Code EC</th>
+                                <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e2e8f0;">Intitulé</th>
+                                <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e2e8f0;">UE</th>
+                                <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e2e8f0;">Professeur actuel</th>
+                                <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e2e8f0;">Nouvelle affectation</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
+            </div>
+        `;
     } catch (error) {
         showAlert(humanError(error), 'error');
     } finally {
@@ -2128,78 +2987,131 @@ async function loadStudentEnrollments() {
     if (window.event && window.event.target) setActiveTab(window.event.target);
     showLoader(true);
     try {
-        const formationsResponse = await authenticatedFetch('/api/formations');
-        const formations = await formationsResponse.json();
-        
-        const studentsResponse = await authenticatedFetch('/api/students/list');
-        const students = await studentsResponse.json();
-        
+        const [formationsRes, studentsRes] = await Promise.all([
+            authenticatedFetch('/api/formations'),
+            authenticatedFetch('/api/students/list')
+        ]);
+        const formations = await formationsRes.json();
+        const students   = await studentsRes.json();
+
         let ues = [];
         for (const formation of formations) {
             try {
-                const semestersResponse = await authenticatedFetch(`/api/formations/${formation.id}/semesters`);
-                const semesters = await semestersResponse.json();
+                const semRes  = await authenticatedFetch(`/api/formations/${formation.id}/semesters`);
+                const semesters = await semRes.json();
                 for (const semester of semesters) {
                     try {
-                        const uesResponse = await authenticatedFetch(`/api/semesters/${semester.id}/ues`);
-                        const uesData = await uesResponse.json();
-                        ues = ues.concat(uesData);
+                        const ueRes  = await authenticatedFetch(`/api/semesters/${semester.id}/ues`);
+                        const ueData = await ueRes.json();
+                        ues = ues.concat(ueData);
                     } catch (e) {}
                 }
             } catch (e) {}
         }
-        
-        let html = `
-            <div class="page-header">
-                <h2><i class="fas fa-user-graduate"></i> Inscriptions UE des Étudiants</h2>
-                <p>Gérez les inscriptions aux UEs</p>
-            </div>
-            <div class="card">
-                <div class="card-header">
-                    <h3><i class="fas fa-users"></i> Étudiants</h3>
-                </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th><i class="fas fa-user"></i> Nom Étudiant</th>
-                            <th><i class="fas fa-envelope"></i> Email</th>
-                            <th><i class="fas fa-layer-group"></i> UE Sélectionnée</th>
-                            <th><i class="fas fa-cog"></i> Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-        `;
-        
-        let uesOptions = '<option value="">-- Sélectionner une UE --</option>';
-        ues.forEach(ue => {
-            uesOptions += `<option value="${ue.id}">${ue.code}: ${ue.name}</option>`;
-        });
-        
-        if (students.length === 0) {
-            html += '<tr><td colspan="4"><i class="fas fa-inbox"></i> Aucun étudiant disponible</td></tr>';
-        } else {
-            students.forEach(student => {
-                html += `
-                    <tr>
-                        <td><strong>${student.full_name}</strong></td>
-                        <td>${student.email}</td>
-                        <td>
-                            <select id="student-ue-${student.id}" class="student-ue-select">
-                                ${uesOptions}
+
+        const ueOptions = '<option value="">— Sélectionner une UE —</option>'
+            + ues.map(u => `<option value="${u.id}">${u.code} — ${u.name}</option>`).join('');
+
+        const rows = students.length === 0
+            ? `<tr><td colspan="4" style="padding:40px;text-align:center;color:#94a3b8;">
+                   <i class="fas fa-inbox" style="font-size:32px;display:block;margin-bottom:10px;"></i>
+                   Aucun étudiant enregistré. Créez d'abord des comptes étudiants.
+               </td></tr>`
+            : students.map(student => {
+                const initials = student.full_name.split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
+                return `
+                    <tr style="transition:background .15s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+                        <td style="padding:12px 16px;border-bottom:1px solid #f1f5f9;">
+                            <div style="display:flex;align-items:center;gap:9px;">
+                                <div style="width:32px;height:32px;border-radius:50%;background:#dbeafe;color:#1d4ed8;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${initials}</div>
+                                <span style="font-size:13px;font-weight:600;color:#0f172a;">${student.full_name}</span>
+                            </div>
+                        </td>
+                        <td style="padding:12px 16px;border-bottom:1px solid #f1f5f9;">
+                            <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#64748b;">
+                                <i class="fas fa-envelope" style="font-size:11px;color:#94a3b8;"></i>
+                                ${student.email}
+                            </div>
+                        </td>
+                        <td style="padding:12px 16px;border-bottom:1px solid #f1f5f9;">
+                            <select id="student-ue-${student.id}" class="student-ue-select"
+                                style="font-size:13px;padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:7px;background:#fff;color:#334155;width:100%;min-width:200px;transition:border-color .2s;"
+                                onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e2e8f0'">
+                                ${ueOptions}
                             </select>
                         </td>
-                        <td>
-                            <button class="btn btn-sm btn-primary" onclick="enrollStudentToUE(${student.id})">
-                                <i class="fas fa-check"></i> Inscrire
+                        <td style="padding:12px 16px;border-bottom:1px solid #f1f5f9;">
+                            <button onclick="enrollStudentToUE(${student.id})"
+                                style="display:inline-flex;align-items:center;gap:5px;padding:7px 13px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;transition:all .15s;"
+                                onmouseover="this.style.background='#dbeafe'" onmouseout="this.style.background='#eff6ff'">
+                                <i class="fas fa-circle-plus"></i> Inscrire
                             </button>
                         </td>
                     </tr>
                 `;
-            });
-        }
-        
-        html += `</tbody></table></div>`;
-        document.getElementById('main-content').innerHTML = html;
+            }).join('');
+
+        document.getElementById('main-content').innerHTML = `
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px;">
+                <div>
+                    <h2 style="margin:0;font-size:20px;color:#0f172a;display:flex;align-items:center;gap:10px;">
+                        <i class="fas fa-user-graduate" style="color:#3b82f6;"></i> Inscriptions UE des Étudiants
+                    </h2>
+                    <p style="margin:4px 0 0;color:#64748b;font-size:13px;">Inscrivez les étudiants aux Unités d'Enseignement</p>
+                </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px;">
+                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;display:flex;align-items:center;gap:14px;">
+                    <div style="width:40px;height:40px;border-radius:10px;background:#eff6ff;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class="fas fa-users" style="color:#3b82f6;font-size:16px;"></i>
+                    </div>
+                    <div>
+                        <p style="margin:0;font-size:22px;font-weight:800;color:#0f172a;">${students.length}</p>
+                        <p style="margin:0;font-size:12px;color:#64748b;">Étudiants</p>
+                    </div>
+                </div>
+                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;display:flex;align-items:center;gap:14px;">
+                    <div style="width:40px;height:40px;border-radius:10px;background:#dcfce7;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class="fas fa-layer-group" style="color:#10b981;font-size:16px;"></i>
+                    </div>
+                    <div>
+                        <p style="margin:0;font-size:22px;font-weight:800;color:#0f172a;">${ues.length}</p>
+                        <p style="margin:0;font-size:12px;color:#64748b;">UEs disponibles</p>
+                    </div>
+                </div>
+            </div>
+
+            ${ues.length === 0 ? `
+            <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:14px 18px;margin-bottom:20px;display:flex;align-items:flex-start;gap:12px;">
+                <i class="fas fa-triangle-exclamation" style="color:#f59e0b;font-size:18px;flex-shrink:0;margin-top:1px;"></i>
+                <div>
+                    <p style="margin:0;font-weight:600;font-size:13px;color:#92400e;">Aucune UE disponible</p>
+                    <p style="margin:4px 0 0;font-size:12px;color:#78350f;">Créez d'abord des formations, des semestres et des UEs dans l'onglet <strong>Maquette Pédagogique</strong> avant d'inscrire des étudiants.</p>
+                </div>
+            </div>` : ''}
+
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
+                <div style="padding:14px 20px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:8px;">
+                    <i class="fas fa-list" style="color:#64748b;font-size:13px;"></i>
+                    <h3 style="margin:0;font-size:15px;color:#0f172a;font-weight:600;">Liste des étudiants</h3>
+                    <span style="background:#f1f5f9;color:#64748b;padding:1px 8px;border-radius:99px;font-size:12px;margin-left:4px;">${students.length}</span>
+                </div>
+                <div style="overflow-x:auto;">
+                    <table style="width:100%;border-collapse:collapse;">
+                        <thead>
+                            <tr style="background:#f8fafc;">
+                                <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e2e8f0;">Étudiant</th>
+                                <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e2e8f0;">Email</th>
+                                <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e2e8f0;">Choisir une UE</th>
+                                <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e2e8f0;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
+            </div>
+        `;
     } catch (error) {
         showAlert(humanError(error), 'error');
     } finally {
@@ -2313,7 +3225,7 @@ async function loadMaquette() {
                         <i class="fas fa-plus"></i> Nouvelle Formation
                     </button>
                     <button class="btn btn-success" onclick="showImportMaquetteModal()">
-                        <i class="fas fa-file-csv"></i> Import CSV Bulk
+                        <i class="fas fa-file-csv"></i> ${t('section.import_csv')} Bulk
                     </button>
                 </div>
         `;
@@ -2543,7 +3455,7 @@ function showCreateFormationModal() {
                 closeModal();
                 loadMaquette();
             } else {
-                showAlert(data.error || 'Une erreur est survenue. Veuillez réessayer.', 'error');
+                showAlert(data.error || 'Impossible de créer la formation. Le code est peut-être déjà utilisé.', 'error');
             }
         } catch (error) {
             showAlert(humanError(error), 'error');
@@ -2629,7 +3541,7 @@ async function showEditFormationModal(formationId) {
                     closeModal();
                     loadMaquette();
                 } else {
-                    showAlert(data.error || 'Une erreur est survenue. Veuillez réessayer.', 'error');
+                    showAlert(data.error || 'Impossible de modifier la formation. Le code est peut-être déjà utilisé.', 'error');
                 }
             } catch (error) {
                 showAlert(humanError(error), 'error');
@@ -2655,7 +3567,7 @@ async function deleteFormation(formationId) {
             showAlert('La formation a été supprimée avec succès.', 'success');
             loadMaquette();
         } else {
-            showAlert(data.error || 'Une erreur est survenue. Veuillez réessayer.', 'error');
+            showAlert(data.error || 'Impossible de supprimer la formation. Des semestres ou UEs lui sont peut-être encore liés.', 'error');
         }
     } catch (error) {
         showAlert(humanError(error), 'error');
@@ -2715,7 +3627,7 @@ function showCreateSemesterModal(formationId) {
                 closeModal();
                 loadMaquette();
             } else {
-                showAlert(data.error || 'Une erreur est survenue. Veuillez réessayer.', 'error');
+                showAlert(data.error || 'Impossible de créer le semestre. Vérifiez que le numéro n\'existe pas déjà dans cette formation.', 'error');
             }
         } catch (error) {
             showAlert(humanError(error), 'error');
@@ -2798,7 +3710,7 @@ async function showEditSemesterModal(semesterId) {
                     closeModal();
                     loadMaquette();
                 } else {
-                    showAlert(data.error || 'Une erreur est survenue. Veuillez réessayer.', 'error');
+                    showAlert(data.error || 'Impossible de modifier le semestre.', 'error');
                 }
             } catch (error) {
                 showAlert(humanError(error), 'error');
@@ -2824,7 +3736,7 @@ async function deleteSemester(semesterId) {
             showAlert('Le semestre et ses UEs/ECs associés ont été supprimés.', 'success');
             loadMaquette();
         } else {
-            showAlert(data.error || 'Une erreur est survenue. Veuillez réessayer.', 'error');
+            showAlert(data.error || 'Impossible de supprimer ce semestre. Des ECs ou copies lui sont peut-être encore liés.', 'error');
         }
     } catch (error) {
         showAlert(humanError(error), 'error');
@@ -2884,7 +3796,7 @@ function showCreateUEModal(semesterId) {
                 closeModal();
                 loadMaquette();
             } else {
-                showAlert(data.error || 'Une erreur est survenue. Veuillez réessayer.', 'error');
+                showAlert(data.error || 'Impossible de créer l\'UE. Le code est peut-être déjà utilisé dans cette formation.', 'error');
             }
         } catch (error) {
             showAlert(humanError(error), 'error');
@@ -2960,7 +3872,7 @@ async function showEditUEModal(ueId) {
                     closeModal();
                     loadMaquette();
                 } else {
-                    showAlert(data.error || 'Une erreur est survenue. Veuillez réessayer.', 'error');
+                    showAlert(data.error || 'Impossible de modifier l\'UE. Le code est peut-être déjà utilisé.', 'error');
                 }
             } catch (error) {
                 showAlert(humanError(error), 'error');
@@ -2986,7 +3898,7 @@ async function deleteUE(ueId) {
             showAlert("L'UE et ses ECs associés ont été supprimés.", 'success');
             loadMaquette();
         } else {
-            showAlert(data.error || 'Une erreur est survenue. Veuillez réessayer.', 'error');
+            showAlert(data.error || 'Impossible de supprimer cette UE. Des copies ou examens lui sont peut-être liés.', 'error');
         }
     } catch (error) {
         showAlert(humanError(error), 'error');
@@ -3075,7 +3987,7 @@ function showCreateECModal(ueId) {
                 closeModal();
                 loadMaquette();
             } else {
-                showAlert(data.error || 'Une erreur est survenue. Veuillez réessayer.', 'error');
+                showAlert(data.error || 'Impossible de créer l\'EC. Le code est peut-être déjà utilisé dans cette UE.', 'error');
             }
         } catch (error) {
             showAlert(humanError(error), 'error');
@@ -3156,7 +4068,7 @@ async function showEditECModal(ecId) {
                     closeModal();
                     loadMaquette();
                 } else {
-                    showAlert(data.error || 'Une erreur est survenue. Veuillez réessayer.', 'error');
+                    showAlert(data.error || 'Impossible de modifier l\'EC. Le code est peut-être déjà utilisé.', 'error');
                 }
             } catch (error) {
                 showAlert(humanError(error), 'error');
@@ -3330,14 +4242,14 @@ async function handleImportUsers(e) {
             document.getElementById('import-results').style.display = 'block';
             
             showAlert(`Import CSV terminé : ${data.created} utilisateur(s) créé(s), ${data.errors} erreur(s).`, 'success');
-            
+
             // Recharger la liste après 2 secondes
             setTimeout(() => {
                 closeModal();
                 loadUsers();
             }, 2000);
         } else {
-            showAlert(data.error || 'Une erreur est survenue. Veuillez réessayer.', 'error');
+            showAlert(data.error || 'Impossible d\'importer le fichier CSV. Vérifiez le format et les colonnes requises.', 'error');
         }
     } catch (error) {
         showAlert(humanError(error), 'error');
@@ -3469,14 +4381,14 @@ async function handleImportMaquette(e) {
             document.getElementById('maquette-import-results').style.display = 'block';
             
             showAlert('La maquette pédagogique a été importée avec succès.', 'success');
-            
+
             // Recharger la maquette après 2 secondes
             setTimeout(() => {
                 closeModal();
                 loadMaquette();
             }, 2000);
         } else {
-            showAlert(data.error || 'Une erreur est survenue. Veuillez réessayer.', 'error');
+            showAlert(data.error || 'Impossible d\'importer la maquette. Vérifiez le format du fichier CSV et les colonnes requises.', 'error');
         }
     } catch (error) {
         showAlert(humanError(error), 'error');
@@ -3633,7 +4545,7 @@ ${paper.feedback || 'Aucun feedback disponible'}
                     closeModal();
                     loadReclamations();
                 } else {
-                    showAlert(data.error || 'Une erreur est survenue. Veuillez réessayer.', 'error');
+                    showAlert(data.error || 'Impossible d\'envoyer la réponse à la réclamation.', 'error');
                 }
             } catch (error) {
                 showAlert(humanError(error), 'error');
@@ -3728,11 +4640,11 @@ ${data.ia_decision || data.ia_proposed_reason || 'Aucune justification fournie'}
             `;
 
             showModal(modalContent, '800px');
-            
+
             // Recharger les réclamations pour voir la mise à jour
             loadReclamations();
         } else {
-            showAlert(data.error || 'Une erreur est survenue. Veuillez réessayer.', 'error');
+            showAlert(data.error || 'Impossible d\'analyser cette réclamation avec l\'IA.', 'error');
         }
     } catch (error) {
         showAlert("Impossible de lancer l'analyse IA. Vérifiez votre connexion et réessayez.", 'error');
@@ -3946,8 +4858,15 @@ async function loadOnlineExams() {
                     }
                 } else {
                     actionsHTML += `<button class="btn btn-sm" onclick="viewOnlineExamDetails(${exam.id})" title="Détails" style="background:#f1f5f9;color:#475569;flex:1;"><i class="fas fa-eye"></i> Détails</button>`;
+                    if (exam.status === 'closed' && exam.attempts_count > 0) {
+                        actionsHTML += `<button class="btn btn-sm btn-primary" onclick="viewExamSubmissions(${exam.id})" title="Voir les copies" style="flex:1;"><i class="fas fa-file-alt"></i> Copies</button>`;
+                    }
+                    // Gestion des surveillants : disponible dès la création (draft/scheduled/active), pas après clôture
+                    if (isProfOrAdmin && exam.status !== 'closed') {
+                        actionsHTML += `<button class="btn btn-sm" onclick="showManageProctorsModal(${exam.id})" title="Gérer les surveillants affectés à cet examen" style="background:rgba(245,158,11,.1);color:#d97706;flex:1;"><i class="fas fa-user-shield"></i> Surveillants</button>`;
+                    }
                     if (exam.status === 'active') {
-                        actionsHTML += `<button class="btn btn-sm" onclick="openProctoringDashboard(${exam.id})" title="Surveiller" style="background:rgba(124,58,237,.1);color:#7c3aed;flex:1;"><i class="fas fa-shield-alt"></i> Surveiller</button>`;
+                        actionsHTML += `<button class="btn btn-sm" onclick="openProctoringDashboard(${exam.id})" title="Surveiller en temps réel" style="background:rgba(124,58,237,.1);color:#7c3aed;flex:1;"><i class="fas fa-shield-alt"></i> Surveiller</button>`;
                         actionsHTML += `<button class="btn btn-sm btn-danger" onclick="closeExam(${exam.id})" title="Clôturer" style="flex:1;"><i class="fas fa-stop-circle"></i> Clôturer</button>`;
                     }
                     if (exam.status === 'scheduled' || exam.status === 'draft') {
@@ -4254,7 +5173,7 @@ async function closeExam(examId) {
             showAlert("L'examen a été clôturé. Les étudiants ne peuvent plus soumettre.", 'success');
             loadOnlineExams();
         } else {
-            showAlert(data.error || 'Une erreur est survenue. Veuillez réessayer.', 'error');
+            showAlert(data.error || 'Impossible de clôturer l\'examen. Il est peut-être déjà terminé ou non démarré.', 'error');
         }
     } catch (error) {
         showAlert(humanError(error), 'error');
@@ -4535,30 +5454,76 @@ async function _doStartOnlineExam(examId) {
     showLoader(true);
 
     try {
-        const response = await authenticatedFetch(`/api/online_exams/${examId}/start`, {
-            method: 'POST'
-        });
+        // Utiliser fetch directement pour contrôler finement chaque code d'erreur
+        const headers = { 'Content-Type': 'application/json' };
+        if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+        const response = await fetch(`/api/online_exams/${examId}/start`, { method: 'POST', headers });
+        const data = await response.json().catch(() => ({}));
 
-        const data = await response.json();
+        showLoader(false);
 
-        if (data.banned) {
-            showAlert('Vous avez été exclu de cet examen pour non-respect des règles de surveillance.', 'error');
-            showLoader(false);
+        if (response.status === 400) {
+            // Examen non actif ou pas encore commencé → alerte claire
+            const errMsg = data.error || "L'examen n'est pas disponible.";
+            const startsAt = data.starts_at ? new Date(data.starts_at) : null;
+
+            let html = `<div style="text-align:center;padding:8px 0 16px;">
+                <div style="width:72px;height:72px;background:rgba(245,158,11,.12);border-radius:50%;
+                            display:flex;align-items:center;justify-content:center;
+                            margin:0 auto 18px;font-size:32px;color:#f59e0b;">
+                    <i class="fas fa-clock"></i>
+                </div>
+                <h2 style="margin:0 0 12px;font-size:19px;color:#1e293b;">Examen non disponible</h2>
+                <p style="color:#64748b;font-size:14px;line-height:1.6;margin-bottom:0;">${errMsg}</p>`;
+
+            if (startsAt) {
+                const opts = { weekday:'long', year:'numeric', month:'long', day:'numeric',
+                               hour:'2-digit', minute:'2-digit', timeZone:'UTC' };
+                html += `<div style="margin-top:16px;background:#fef3c7;border:1px solid #fcd34d;
+                                     border-radius:10px;padding:14px;font-size:13px;color:#92400e;">
+                    <i class="fas fa-calendar-alt" style="margin-right:6px;"></i>
+                    Début prévu : <strong>${startsAt.toLocaleDateString('fr-FR', opts)} (UTC)</strong>
+                </div>`;
+            }
+
+            html += `<button onclick="closeModal()" class="btn btn-primary"
+                        style="margin-top:20px;width:100%;padding:12px;">
+                    <i class="fas fa-check"></i> Compris
+                </button></div>`;
+
+            showModal('', html);
+            return;
+        }
+
+        if (response.status === 403) {
+            if (data.banned) {
+                showModal('', `<div style="text-align:center;padding:12px 0 16px;">
+                    <div style="font-size:48px;color:#ef4444;margin-bottom:16px;"><i class="fas fa-ban"></i></div>
+                    <h2 style="color:#ef4444;margin:0 0 12px;">Accès refusé</h2>
+                    <p style="color:#64748b;">Vous avez été exclu de cet examen pour non-respect des règles de surveillance.</p>
+                    <button onclick="closeModal()" class="btn btn-primary" style="margin-top:16px;width:100%;">Fermer</button>
+                </div>`);
+            } else {
+                showAlert(data.error || 'Accès non autorisé.', 'error');
+            }
+            return;
+        }
+
+        if (!response.ok) {
+            showAlert(data.error || "Impossible de démarrer l'examen. Vérifiez que l'examen est actif et dans les délais autorisés.", 'error');
             return;
         }
 
         if (data.success) {
             currentExamAttempt = data.attempt;
-            showLoader(false);
-            // ── Redirection vers la page d'examen surveillée ──
             window.location.href = `/proctor/exam/${data.attempt.id}`;
         } else {
-            showAlert(data.error || "Impossible de démarrer l'examen. Il est peut-être clôturé ou votre tentative est déjà soumise.", 'error');
-            showLoader(false);
+            showAlert(data.error || "Impossible de démarrer l'examen.", 'error');
         }
+
     } catch (error) {
-        showAlert(humanError(error), 'error');
         showLoader(false);
+        showAlert("Erreur de connexion. Vérifiez votre réseau et réessayez.", 'error');
     }
 }
 
@@ -4717,7 +5682,7 @@ async function showExamCompositionInterface(examId, attempt) {
 
                 <div class="form-group">
                     <label><i class="fas fa-edit"></i> Vos Réponses *</label>
-                    <textarea id="exam-answers" rows="20" placeholder="Rédigez vos réponses ici en indiquant clairement le numéro de chaque question..." style="font-family: monospace; font-size: 14px;">${attempt.answers !== '{}' ? JSON.parse(attempt.answers).content || '' : ''}</textarea>
+                    <textarea id="exam-answers" rows="20" placeholder="Rédigez vos réponses ici en indiquant clairement le numéro de chaque question..." style="font-family: monospace; font-size: 14px;">${(() => { try { const d = JSON.parse(attempt.answers || '{}'); return d.content || d.reponse || d.answer || d.text || ''; } catch(e) { return attempt.answers || ''; } })()}</textarea>
                     <small class="form-help">
                         <i class="fas fa-save"></i> Sauvegarde automatique toutes les 30 secondes
                     </small>
@@ -4736,7 +5701,19 @@ async function showExamCompositionInterface(examId, attempt) {
     `;
     
     document.getElementById('main-content').innerHTML = html;
-    
+
+    // Ajouter la prévisualisation caméra flottante
+    const camBox = document.createElement('div');
+    camBox.id = 'camera-preview-container';
+    camBox.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:9999;background:#0f172a;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.5);border:2px solid #334155;';
+    camBox.innerHTML = `
+        <video id="exam-camera-preview" autoplay muted playsinline style="width:160px;height:120px;display:block;transform:scaleX(-1);object-fit:cover;"></video>
+        <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.75);padding:3px 6px;display:flex;align-items:center;gap:5px;">
+            <span id="cam-status-dot" style="width:7px;height:7px;border-radius:50%;background:#64748b;flex-shrink:0;"></span>
+            <span id="cam-status-text" style="color:#94a3b8;font-size:10px;font-weight:500;">Initialisation...</span>
+        </div>`;
+    document.body.appendChild(camBox);
+
     // Initialiser la surveillance anti-triche
     initExamSurveillance(exam, attempt);
     
@@ -4815,6 +5792,57 @@ function initExamSurveillance(exam, attempt) {
             logExamActivity(attempt.id, 'devtools_attempt');
         }
     });
+
+    // Surveillance faciale (si caméra disponible)
+    _startFaceDetection(attempt);
+}
+
+async function _startFaceDetection(attempt) {
+    const dotEl  = document.getElementById('cam-status-dot');
+    const textEl = document.getElementById('cam-status-text');
+
+    function _setStatus(color, label) {
+        if (dotEl)  dotEl.style.background  = color;
+        if (textEl) textEl.style.color = color, textEl.textContent = label;
+    }
+
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        const videoEl = document.getElementById('exam-camera-preview');
+        if (!videoEl) { stream.getTracks().forEach(t => t.stop()); return; }
+        videoEl.srcObject = stream;
+        window._examCameraStream = stream;
+
+        _setStatus('#f59e0b', 'Chargement modèle...');
+
+        await FaceDetector.start(videoEl, attempt.id, (type, faceCount) => {
+            if (type === 'no_face') {
+                _setStatus('#ef4444', 'Visage absent');
+                showAlert('Visage non détecté — Restez devant la caméra', 'warning');
+            } else if (type === 'multiple_faces') {
+                _setStatus('#f97316', `${faceCount} visages!`);
+                showAlert(`Plusieurs visages détectés (${faceCount}) — Un seul candidat autorisé`, 'error');
+            }
+        });
+
+        _setStatus('#22c55e', 'Surveillance active');
+
+    } catch (err) {
+        console.warn('[FaceDetector] Caméra indisponible:', err);
+        _setStatus('#ef4444', 'Caméra indisponible');
+    }
+}
+
+function _stopFaceDetection() {
+    if (typeof FaceDetector !== 'undefined' && FaceDetector.isRunning()) {
+        FaceDetector.stop();
+    }
+    if (window._examCameraStream) {
+        window._examCameraStream.getTracks().forEach(t => t.stop());
+        window._examCameraStream = null;
+    }
+    const camBox = document.getElementById('camera-preview-container');
+    if (camBox) camBox.remove();
 }
 
 function startExamTimer(endTime, attemptId) {
@@ -4913,12 +5941,13 @@ async function submitExamNow() {
         
         if (data.success) {
             clearInterval(examAutoSaveInterval);
+            _stopFaceDetection();
             showAlert('Votre examen a été soumis avec succès. Votre note sera disponible après correction.', 'success');
             setTimeout(() => {
                 loadOnlineExams();
             }, 2000);
         } else {
-            showAlert(data.error || 'Une erreur est survenue. Veuillez réessayer.', 'error');
+            showAlert(data.error || 'Impossible de soumettre l\'examen. Le délai est peut-être dépassé ou l\'examen a été clôturé.', 'error');
         }
     } catch (error) {
         showAlert(humanError(error), 'error');
@@ -4941,6 +5970,7 @@ async function autoSubmitExam(attemptId) {
         });
         
         clearInterval(examAutoSaveInterval);
+        _stopFaceDetection();
         showAlert('Examen soumis automatiquement (temps écoulé)', 'info');
         setTimeout(() => {
             loadOnlineExams();
@@ -4974,34 +6004,66 @@ async function loadTranscripts() {
 }
 
 async function loadStudentTranscripts() {
-    const response = await authenticatedFetch('/api/student/transcripts');
-    const transcripts = await response.json();
-    
+    let transcripts = [];
+    let fetchError = null;
+    try {
+        const response = await authenticatedFetch('/api/student/transcripts');
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        transcripts = await response.json();
+    } catch (err) {
+        fetchError = err;
+    }
+
     let html = `
         <div class="page-header">
             <h2><i class="fas fa-file-alt"></i> Mes Relevés de Notes</h2>
             <p>Consultez et téléchargez vos relevés de notes officiels</p>
         </div>
     `;
-    
-    if (transcripts.length === 0) {
+
+    if (fetchError) {
         html += `
-            <div class="alert alert-info">
-                <i class="fas fa-info-circle"></i>
+            <div class="alert alert-danger" style="display:flex;gap:16px;align-items:flex-start;">
+                <i class="fas fa-exclamation-circle" style="font-size:28px;margin-top:2px;flex-shrink:0;"></i>
                 <div>
-                    <strong>Information:</strong> Les relevés de notes sont générés par vos professeurs ou l'administration.
-                    Ils apparaîtront ici dès qu'ils seront disponibles.
+                    <strong>Impossible de charger vos relevés</strong>
+                    <p style="margin:8px 0 12px;">Une erreur de connexion est survenue. Vérifiez votre connexion internet et réessayez.</p>
+                    <button class="btn btn-primary btn-sm" onclick="loadStudentTranscripts()">
+                        <i class="fas fa-redo"></i> Réessayer
+                    </button>
                 </div>
             </div>
-            
+        `;
+    } else if (transcripts.length === 0) {
+        html += `
+            <div class="alert alert-info" style="display:flex;gap:16px;align-items:flex-start;margin-bottom:24px;">
+                <i class="fas fa-info-circle" style="font-size:28px;margin-top:2px;flex-shrink:0;"></i>
+                <div>
+                    <strong>Pas encore de relevé disponible</strong>
+                    <p style="margin:8px 0 4px;">Votre relevé de notes est généré par votre professeur ou l'administration une fois vos examens corrigés et validés.</p>
+                    <p style="margin:4px 0;">Si vos examens ont déjà été corrigés et que vous n'avez toujours pas de relevé, contactez votre enseignant ou l'administration.</p>
+                </div>
+            </div>
+
             <div class="card">
                 <div class="card-header">
-                    <h3><i class="fas fa-history"></i> Historique</h3>
+                    <h3><i class="fas fa-question-circle"></i> Comment obtenir mon relevé ?</h3>
                 </div>
-                <p style="padding: 20px; color: #94a3b8; text-align: center;">
-                    <i class="fas fa-inbox" style="font-size: 48px; margin-bottom: 12px;"></i><br>
-                    Aucun relevé disponible pour le moment
-                </p>
+                <div style="padding:20px;">
+                    <ol style="margin:0;padding-left:24px;line-height:2.2;">
+                        <li><i class="fas fa-pencil-alt" style="color:#3b82f6;margin-right:8px;"></i> Passez vos examens via la plateforme CEI</li>
+                        <li><i class="fas fa-check-double" style="color:#10b981;margin-right:8px;"></i> Vos copies sont corrigées par vos professeurs</li>
+                        <li><i class="fas fa-file-alt" style="color:#f59e0b;margin-right:8px;"></i> Votre professeur ou l'admin génère votre relevé</li>
+                        <li><i class="fas fa-download" style="color:#8b5cf6;margin-right:8px;"></i> Le relevé apparaît ici — vous pouvez le télécharger en PDF</li>
+                    </ol>
+                    <div style="margin-top:16px;padding:12px 16px;background:#f1f5f9;border-radius:8px;color:#475569;font-size:0.93em;">
+                        <i class="fas fa-lightbulb" style="color:#f59e0b;margin-right:6px;"></i>
+                        <strong>Astuce :</strong> Si vous pensez que vos notes sont déjà disponibles, cliquez sur
+                        <button class="btn btn-sm btn-outline" onclick="loadStudentTranscripts()" style="padding:2px 10px;font-size:0.9em;">
+                            <i class="fas fa-sync-alt"></i> Actualiser
+                        </button> pour recharger cette page.
+                    </div>
+                </div>
             </div>
         `;
     } else {
@@ -5058,41 +6120,74 @@ async function loadStudentTranscripts() {
 }
 
 async function loadAllTranscripts() {
-    // Récupérer les relevés existants
-    const transcriptsResponse = await authenticatedFetch('/api/transcripts');
-    const existingTranscripts = await transcriptsResponse.json();
-    
-    const formationsResponse = await authenticatedFetch('/api/formations');
-    const formations = await formationsResponse.json();
-    
-    const usersResponse = await authenticatedFetch('/api/students/list'); 
-    const students = await usersResponse.json();  
-    
+    let existingTranscripts = [], students = [], loadErr = null;
+    try {
+        const [tRes, sRes] = await Promise.all([
+            authenticatedFetch('/api/transcripts'),
+            authenticatedFetch('/api/students/list')
+        ]);
+        if (!tRes.ok) throw new Error(`Relevés: HTTP ${tRes.status}`);
+        if (!sRes.ok) throw new Error(`Étudiants: HTTP ${sRes.status}`);
+        existingTranscripts = await tRes.json();
+        students = await sRes.json();
+    } catch (err) {
+        loadErr = err;
+    }
+
+    if (loadErr) {
+        document.getElementById('main-content').innerHTML = `
+            <div class="page-header">
+                <h2><i class="fas fa-file-alt"></i> Relevés de Notes</h2>
+            </div>
+            <div class="alert alert-danger" style="display:flex;gap:16px;align-items:flex-start;">
+                <i class="fas fa-exclamation-circle" style="font-size:28px;margin-top:2px;flex-shrink:0;"></i>
+                <div>
+                    <strong>Erreur de chargement</strong>
+                    <p style="margin:8px 0 12px;">Impossible de récupérer les données : ${loadErr.message}.<br>Vérifiez votre connexion et réessayez.</p>
+                    <button class="btn btn-primary btn-sm" onclick="loadAllTranscripts()">
+                        <i class="fas fa-redo"></i> Réessayer
+                    </button>
+                </div>
+            </div>
+        `;
+        return;
+    }
+
     let studentsOptions = '<option value="">-- Sélectionner un étudiant --</option>';
     students.forEach(s => {
         studentsOptions += `<option value="${s.id}">${s.full_name}</option>`;
     });
-    
+
     let semestersOptions = '<option value="">-- D\'abord sélectionner un étudiant --</option>';
-    
+
     let html = `
         <div class="page-header">
             <h2><i class="fas fa-file-alt"></i> Relevés de Notes</h2>
             <p>Générer et consulter les relevés de notes des étudiants</p>
         </div>
-        
+
         <!-- SECTION : Relevés Existants -->
         <div class="card" style="margin-bottom: 24px;">
             <div class="card-header">
                 <h3><i class="fas fa-list"></i> Relevés Générés (${existingTranscripts.length})</h3>
             </div>
     `;
-    
+
     if (existingTranscripts.length === 0) {
         html += `
-            <div style="padding: 20px; text-align: center; color: #94a3b8;">
-                <i class="fas fa-inbox" style="font-size: 48px; margin-bottom: 12px;"></i>
-                <p>Aucun relevé généré pour le moment</p>
+            <div style="padding:28px 24px;">
+                <div style="display:flex;gap:16px;align-items:flex-start;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:10px;padding:20px;">
+                    <i class="fas fa-file-circle-plus" style="font-size:36px;color:#94a3b8;flex-shrink:0;margin-top:4px;"></i>
+                    <div>
+                        <strong style="font-size:1.05em;color:#334155;">Aucun relevé n'a encore été généré</strong>
+                        <p style="margin:8px 0 4px;color:#64748b;">Pour créer le premier relevé d'un étudiant, utilisez le formulaire ci-dessous. Assurez-vous que :</p>
+                        <ul style="margin:6px 0 0 20px;color:#64748b;line-height:1.9;">
+                            <li>L'étudiant a passé au moins un examen pour ce semestre</li>
+                            <li>Les copies ont été corrigées (note attribuée)</li>
+                            <li>Les UEs/ECs du semestre ont des coefficients renseignés</li>
+                        </ul>
+                    </div>
+                </div>
             </div>
         `;
     } else {
@@ -5156,22 +6251,41 @@ async function loadAllTranscripts() {
             <div class="card-header">
                 <h3><i class="fas fa-plus"></i> Générer un Nouveau Relevé</h3>
             </div>
-            
-            <form id="generate-transcript-form">
+
+            <div style="padding:0 20px;">
+                <div class="alert alert-info" style="display:flex;gap:14px;align-items:flex-start;margin-bottom:20px;">
+                    <i class="fas fa-lightbulb" style="font-size:22px;margin-top:2px;flex-shrink:0;"></i>
+                    <div style="font-size:0.93em;">
+                        <strong>Prérequis avant de générer un relevé :</strong>
+                        <ol style="margin:6px 0 0 18px;line-height:1.8;">
+                            <li>Sélectionnez l'étudiant concerné dans la liste</li>
+                            <li>Choisissez le semestre pour lequel vous souhaitez générer le relevé</li>
+                            <li>Assurez-vous que les copies de l'étudiant pour ce semestre ont été corrigées (sinon le relevé ne peut pas être calculé)</li>
+                        </ol>
+                        <p style="margin:8px 0 0;color:#475569;">Le relevé sera calculé automatiquement à partir des notes des examens corrigés, puis téléchargé en PDF.</p>
+                    </div>
+                </div>
+            </div>
+
+            <form id="generate-transcript-form" style="padding:0 20px 20px;">
                 <div class="form-group">
                     <label><i class="fas fa-user"></i> Étudiant *</label>
                     <select id="transcript-student" required onchange="loadSemestersForStudent(this.value)">
                         ${studentsOptions}
                     </select>
+                    <small class="form-help"><i class="fas fa-info-circle"></i> Sélectionnez d'abord l'étudiant pour charger ses semestres disponibles</small>
                 </div>
-                
+
                 <div class="form-group">
                     <label><i class="fas fa-calendar"></i> Semestre *</label>
                     <select id="transcript-semester" required disabled>
                         ${semestersOptions}
                     </select>
+                    <small class="form-help" id="semester-help-text"><i class="fas fa-arrow-up"></i> Sélectionnez d'abord un étudiant pour activer ce champ</small>
                 </div>
-                
+
+                <div id="transcript-form-error" style="display:none;"></div>
+
                 <button type="submit" class="btn btn-primary">
                     <i class="fas fa-file-pdf"></i> Générer le Relevé
                 </button>
@@ -5186,34 +6300,68 @@ async function loadAllTranscripts() {
 
 async function loadSemestersForStudent(studentId) {
     if (!studentId) return;
-    
+
+    const semesterSelect = document.getElementById('transcript-semester');
+    const helpText = document.getElementById('semester-help-text');
+    const formError = document.getElementById('transcript-form-error');
+
+    semesterSelect.innerHTML = '<option value="">Chargement des semestres...</option>';
+    semesterSelect.disabled = true;
+    if (formError) { formError.style.display = 'none'; }
+
     showLoader(true);
-    
+
     try {
-        // Récupérer toutes les formations/semestres
         const formationsResponse = await authenticatedFetch('/api/formations');
+        if (!formationsResponse.ok) throw new Error(`HTTP ${formationsResponse.status}`);
         const formations = await formationsResponse.json();
-        
+
         let semestersOptions = '<option value="">-- Sélectionner un semestre --</option>';
-        
+        let totalSemesters = 0;
+
         for (const formation of formations) {
             const semestersResponse = await authenticatedFetch(`/api/formations/${formation.id}/semesters`);
+            if (!semestersResponse.ok) continue;
             const semesters = await semestersResponse.json();
-            
+
             if (semesters.length > 0) {
                 semestersOptions += `<optgroup label="${formation.name}">`;
                 semesters.forEach(s => {
                     semestersOptions += `<option value="${s.id}">${s.name}</option>`;
                 });
                 semestersOptions += `</optgroup>`;
+                totalSemesters += semesters.length;
             }
         }
-        
-        const semesterSelect = document.getElementById('transcript-semester');
+
         semesterSelect.innerHTML = semestersOptions;
         semesterSelect.disabled = false;
+
+        if (helpText) {
+            if (totalSemesters === 0) {
+                helpText.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:#f59e0b;"></i> Aucun semestre trouvé. Créez d\'abord une formation avec des semestres dans l\'onglet <strong>Formations</strong>.';
+            } else {
+                helpText.innerHTML = `<i class="fas fa-check" style="color:#10b981;"></i> ${totalSemesters} semestre(s) disponible(s) — choisissez celui pour lequel vous voulez générer le relevé`;
+            }
+        }
     } catch (error) {
-        showAlert(humanError(error), 'error');
+        semesterSelect.innerHTML = '<option value="">Erreur de chargement</option>';
+        semesterSelect.disabled = true;
+        if (formError) {
+            formError.style.display = 'block';
+            formError.innerHTML = `
+                <div class="alert alert-danger" style="display:flex;gap:12px;align-items:flex-start;">
+                    <i class="fas fa-exclamation-circle" style="font-size:20px;flex-shrink:0;margin-top:2px;"></i>
+                    <div>
+                        <strong>Impossible de charger les semestres</strong>
+                        <p style="margin:6px 0 10px;">Une erreur est survenue lors du chargement des formations. Vérifiez votre connexion.</p>
+                        <button class="btn btn-sm btn-primary" onclick="loadSemestersForStudent('${studentId}')">
+                            <i class="fas fa-redo"></i> Réessayer
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
     } finally {
         showLoader(false);
     }
@@ -5222,41 +6370,178 @@ async function loadSemestersForStudent(studentId) {
 async function handleGenerateTranscript(e) {
     e.preventDefault();
     showLoader(true);
-    
+
+    const formError = document.getElementById('transcript-form-error');
+    if (formError) formError.style.display = 'none';
+
     try {
         const studentId = document.getElementById('transcript-student').value;
         const semesterId = document.getElementById('transcript-semester').value;
-        
-        const response = await authenticatedFetch(`/api/transcripts/generate/${studentId}/${semesterId}`, {
-            method: 'POST'
+        const studentName = document.getElementById('transcript-student').selectedOptions[0]?.text || 'l\'étudiant';
+        const semesterName = document.getElementById('transcript-semester').selectedOptions[0]?.text || 'ce semestre';
+
+        const response = await fetch(`/api/transcripts/generate/${studentId}/${semesterId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` }
         });
-        
+
+        if (response.status === 401 || response.status === 422) {
+            showAlert('Votre session a expiré. Veuillez vous reconnecter.', 'warning');
+            showLogin();
+            return;
+        }
+
         const data = await response.json();
-        
+
         if (data.success) {
-            showAlert('Relevé généré avec succès!', 'success');
-            
-            // Télécharger le PDF
+            // Télécharger le PDF directement
             const pdfResponse = await fetch(`/api/transcripts/${data.transcript.id}/pdf`, {
                 headers: { 'Authorization': `Bearer ${authToken}` }
             });
-            
+
             if (pdfResponse.ok) {
                 const blob = await pdfResponse.blob();
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `releve_notes_${data.transcript.student_name}.pdf`;
+                a.download = `releve_notes_${data.transcript.student_name || studentName}.pdf`;
                 document.body.appendChild(a);
                 a.click();
                 window.URL.revokeObjectURL(url);
                 document.body.removeChild(a);
+                showModal(`
+                    <div style="text-align:center;padding:10px 0;">
+                        <i class="fas fa-check-circle" style="font-size:56px;color:#10b981;margin-bottom:16px;display:block;"></i>
+                        <h2 style="margin-bottom:8px;">Relevé généré avec succès !</h2>
+                        <p style="color:#64748b;margin-bottom:20px;">
+                            Le relevé de <strong>${studentName}</strong> pour <strong>${semesterName}</strong>
+                            a été généré et le téléchargement PDF a démarré automatiquement.
+                        </p>
+                        <div style="display:flex;gap:12px;justify-content:center;">
+                            <button class="btn btn-success" onclick="closeModal(); loadAllTranscripts()">
+                                <i class="fas fa-list"></i> Voir tous les relevés
+                            </button>
+                            <button class="btn btn-secondary" onclick="closeModal()">
+                                <i class="fas fa-times"></i> Fermer
+                            </button>
+                        </div>
+                    </div>
+                `);
+            } else {
+                showModal(`
+                    <div style="text-align:center;padding:10px 0;">
+                        <i class="fas fa-check-circle" style="font-size:48px;color:#10b981;margin-bottom:12px;display:block;"></i>
+                        <h2 style="margin-bottom:8px;">Relevé généré !</h2>
+                        <p style="color:#64748b;margin-bottom:8px;">Le relevé a été enregistré mais le téléchargement PDF a échoué.</p>
+                        <p style="color:#64748b;margin-bottom:20px;">Rendez-vous dans la liste des relevés ci-dessus et cliquez sur <strong>PDF</strong> pour le télécharger.</p>
+                        <button class="btn btn-primary" onclick="closeModal(); loadAllTranscripts()">
+                            <i class="fas fa-list"></i> Voir la liste des relevés
+                        </button>
+                    </div>
+                `);
             }
         } else {
-            showAlert(data.error || 'Une erreur est survenue. Veuillez réessayer.', 'error');
+            const errorMsg = data.error || '';
+            let helpHtml = '';
+
+            if (errorMsg.includes('Aucune note') || errorMsg.includes('note disponible')) {
+                helpHtml = `
+                    <div class="alert alert-warning" style="display:flex;gap:14px;align-items:flex-start;text-align:left;">
+                        <i class="fas fa-exclamation-triangle" style="font-size:24px;flex-shrink:0;margin-top:2px;"></i>
+                        <div>
+                            <strong>Aucune note disponible pour ce semestre</strong>
+                            <p style="margin:8px 0 4px;">Le relevé de <strong>${studentName}</strong> pour <strong>${semesterName}</strong> ne peut pas être généré car aucune copie corrigée n'a été trouvée.</p>
+                            <p style="margin:4px 0 12px;color:#64748b;">Pour résoudre ce problème :</p>
+                            <ol style="margin:0 0 12px 20px;color:#64748b;line-height:1.9;">
+                                <li>Vérifiez que l'étudiant a bien passé des examens pour ce semestre</li>
+                                <li>Vérifiez que les copies ont été corrigées dans l'onglet <strong>Corrections</strong></li>
+                                <li>Assurez-vous que les UEs/ECs de ce semestre ont des coefficients &gt; 0</li>
+                            </ol>
+                            <button class="btn btn-sm btn-primary" onclick="loadExamCorrections()">
+                                <i class="fas fa-check-circle"></i> Aller aux Corrections
+                            </button>
+                        </div>
+                    </div>
+                `;
+            } else if (errorMsg.includes('Étudiant non trouvé')) {
+                helpHtml = `
+                    <div class="alert alert-danger" style="display:flex;gap:14px;align-items:flex-start;text-align:left;">
+                        <i class="fas fa-user-times" style="font-size:24px;flex-shrink:0;margin-top:2px;"></i>
+                        <div>
+                            <strong>Étudiant introuvable</strong>
+                            <p style="margin:8px 0 10px;color:#64748b;">L'étudiant sélectionné n'existe plus dans le système. Actualisez la page pour recharger la liste.</p>
+                            <button class="btn btn-sm btn-primary" onclick="loadAllTranscripts()">
+                                <i class="fas fa-redo"></i> Actualiser
+                            </button>
+                        </div>
+                    </div>
+                `;
+            } else if (errorMsg.includes('Semestre non trouvé')) {
+                helpHtml = `
+                    <div class="alert alert-danger" style="display:flex;gap:14px;align-items:flex-start;text-align:left;">
+                        <i class="fas fa-calendar-times" style="font-size:24px;flex-shrink:0;margin-top:2px;"></i>
+                        <div>
+                            <strong>Semestre introuvable</strong>
+                            <p style="margin:8px 0 10px;color:#64748b;">Le semestre sélectionné n'existe plus. Actualisez la page et resélectionnez l'étudiant.</p>
+                            <button class="btn btn-sm btn-primary" onclick="loadAllTranscripts()">
+                                <i class="fas fa-redo"></i> Actualiser
+                            </button>
+                        </div>
+                    </div>
+                `;
+            } else if (errorMsg.includes('non autorisé') || errorMsg.includes('403')) {
+                helpHtml = `
+                    <div class="alert alert-danger" style="display:flex;gap:14px;align-items:flex-start;text-align:left;">
+                        <i class="fas fa-lock" style="font-size:24px;flex-shrink:0;margin-top:2px;"></i>
+                        <div>
+                            <strong>Accès non autorisé</strong>
+                            <p style="margin:8px 0 0;color:#64748b;">Vous n'avez pas les droits pour générer des relevés. Seuls les professeurs et les administrateurs peuvent effectuer cette action.</p>
+                        </div>
+                    </div>
+                `;
+            } else {
+                helpHtml = `
+                    <div class="alert alert-danger" style="display:flex;gap:14px;align-items:flex-start;text-align:left;">
+                        <i class="fas fa-exclamation-circle" style="font-size:24px;flex-shrink:0;margin-top:2px;"></i>
+                        <div>
+                            <strong>Erreur lors de la génération</strong>
+                            <p style="margin:8px 0 10px;color:#64748b;">${errorMsg || 'Une erreur inattendue est survenue. Veuillez réessayer.'}</p>
+                            <button class="btn btn-sm btn-primary" onclick="document.getElementById('generate-transcript-form').dispatchEvent(new Event('submit'))">
+                                <i class="fas fa-redo"></i> Réessayer
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            if (formError) {
+                formError.style.display = 'block';
+                formError.innerHTML = helpHtml;
+                formError.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            } else {
+                showModal(helpHtml);
+            }
         }
     } catch (error) {
-        showAlert(humanError(error), 'error');
+        const formError = document.getElementById('transcript-form-error');
+        const errHtml = `
+            <div class="alert alert-danger" style="display:flex;gap:14px;align-items:flex-start;">
+                <i class="fas fa-wifi" style="font-size:24px;flex-shrink:0;margin-top:2px;"></i>
+                <div>
+                    <strong>Erreur de connexion</strong>
+                    <p style="margin:8px 0 10px;color:#64748b;">Impossible de contacter le serveur. Vérifiez votre connexion internet et réessayez.</p>
+                    <button class="btn btn-sm btn-primary" onclick="document.getElementById('generate-transcript-form').dispatchEvent(new Event('submit'))">
+                        <i class="fas fa-redo"></i> Réessayer
+                    </button>
+                </div>
+            </div>
+        `;
+        if (formError) {
+            formError.style.display = 'block';
+            formError.innerHTML = errHtml;
+        } else {
+            showAlert(humanError(error), 'error');
+        }
     } finally {
         showLoader(false);
     }
@@ -5421,7 +6706,7 @@ async function correctSingleAttempt(attemptId) {
             showAlert(`Correction terminée avec succès ! Note attribuée : ${data.attempt.score}/20.`, 'success');
             loadExamCorrections(); // Recharger
         } else {
-            showAlert(data.error || 'Une erreur est survenue. Veuillez réessayer.', 'error');
+            showAlert(data.error || 'Impossible de corriger cette copie en ligne. Vérifiez que le sujet a un barème valide.', 'error');
         }
     } catch (error) {
         showAlert(humanError(error), 'error');
@@ -5497,14 +6782,15 @@ async function viewAttemptDetails(attemptId) {
             return;
         }
         
-        // Parser les réponses
+        // Parser les réponses (supporte content, reponse, answer, text)
         let answers = '';
         try {
             const answersData = JSON.parse(attempt.answers);
-            answers = answersData.content || attempt.answers;
+            answers = answersData.content || answersData.reponse || answersData.answer || answersData.text || attempt.answers || '';
         } catch {
-            answers = attempt.answers || 'Aucune réponse';
+            answers = attempt.answers || '';
         }
+        answers = answers.trim() || 'Aucune réponse enregistrée';
         
         const modalContent = `
             <h2><i class="fas fa-file-alt"></i> Détails de la Tentative</h2>
@@ -5628,7 +6914,10 @@ async function viewExamIncidents(examId) {
                     'copy_attempt': '📋 Tentative de copie',
                     'paste_attempt': '📋 Tentative de collage',
                     'right_click': '🖱️ Clic droit',
-                    'devtools_attempt': '🔧 Console développeur'
+                    'devtools_attempt': '🔧 Console développeur',
+                    'face_absent': '👤 Visage absent',
+                    'no_face_detected': '👤 Visage absent',
+                    'multiple_faces': '👥 Plusieurs visages'
                 };
                 
                 const eventLabel = eventTypeLabels[incident.event_type] || incident.event_type;
@@ -5766,21 +7055,25 @@ ${exam.instructions}
             
             <div style="display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap;">
                 ${exam.attempts_count > 0 ? `
+                    <button class="btn btn-primary" onclick="closeModal(); viewExamSubmissions(${exam.id})">
+                        <i class="fas fa-file-alt"></i> Voir les Copies Soumises
+                    </button>
                     <button class="btn btn-warning" onclick="closeModal(); viewExamIncidents(${exam.id})">
-                        <i class="fas fa-exclamation-triangle"></i> Voir les Incidents
+                        <i class="fas fa-exclamation-triangle"></i> Incidents
+                    </button>
+                ` : ''}
+                ${exam.status === 'active' ? `
+                    <button class="btn btn-success" onclick="closeModal(); openProctoringDashboard(${exam.id})">
+                        <i class="fas fa-shield-alt"></i> Surveiller
+                    </button>
+                    <button class="btn btn-danger" onclick="closeModal(); closeExam(${exam.id})">
+                        <i class="fas fa-stop-circle"></i> Fermer l'Examen
                     </button>
                 ` : ''}
                 ${exam.status === 'scheduled' || exam.status === 'draft' ? `
                     <button class="btn btn-success" onclick="closeModal(); activateExam(${exam.id})">
                         <i class="fas fa-play-circle"></i> Activer l'Examen
                     </button>
-                ` : ''}
-                ${exam.status === 'active' ? `
-                    <button class="btn btn-danger" onclick="closeModal(); closeExam(${exam.id})">
-                        <i class="fas fa-stop-circle"></i> Fermer l'Examen
-                    </button>
-                ` : ''}
-                ${exam.status === 'draft' || exam.status === 'scheduled' ? `
                     <button class="btn btn-danger" onclick="closeModal(); deleteOnlineExam(${exam.id})">
                         <i class="fas fa-trash"></i> Supprimer
                     </button>
@@ -5799,6 +7092,72 @@ ${exam.instructions}
     }
 }
 
+async function viewExamSubmissions(examId) {
+    showLoader(true);
+    try {
+        const [examsResp, attemptsResp] = await Promise.all([
+            authenticatedFetch('/api/online_exams'),
+            authenticatedFetch(`/api/online_exams/${examId}/attempts`)
+        ]);
+        const exams    = await examsResp.json();
+        const attempts = await attemptsResp.json();
+        const exam     = exams.find(e => e.id === examId);
+
+        if (!exam) { showAlert('Examen introuvable.', 'error'); showLoader(false); return; }
+
+        const submitted = attempts.filter(a => a.status === 'submitted' || a.status === 'auto_submitted');
+        const statusLabel = { submitted: 'Soumis', auto_submitted: 'Auto-soumis', banned: 'Banni', in_progress: 'En cours' };
+
+        let rows = submitted.length === 0
+            ? `<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:32px;">Aucune copie soumise</td></tr>`
+            : submitted.map(a => `
+                <tr>
+                    <td><strong>${a.student_name || 'N/A'}</strong><br><small style="color:#64748b;">${a.student_email || ''}</small></td>
+                    <td>${a.submitted_at ? new Date(a.submitted_at).toLocaleString('fr-FR') : 'N/A'}</td>
+                    <td>${a.warnings_count > 0 ? `<span style="color:#ef4444;"><i class="fas fa-exclamation-circle"></i> ${a.warnings_count}</span>` : '<span style="color:#10b981;"><i class="fas fa-check"></i> Aucun</span>'}</td>
+                    <td>${a.score !== null ? `<strong style="color:${a.score>=10?'#10b981':'#ef4444'};font-size:16px;">${a.score}/20</strong>` : '<span style="color:#94a3b8;">Non corrigé</span>'}</td>
+                    <td>
+                        ${a.needs_correction
+                            ? `<button class="btn btn-sm btn-primary" onclick="closeModal();correctSingleAttempt(${a.id})"><i class="fas fa-magic"></i> Corriger</button>`
+                            : `<button class="btn btn-sm" onclick="closeModal();viewAttemptDetails(${a.id})" style="background:#f1f5f9;color:#475569;"><i class="fas fa-eye"></i> Voir</button>`}
+                    </td>
+                </tr>`).join('');
+
+        const modalContent = `
+            <h2 style="margin-bottom:8px;"><i class="fas fa-file-alt"></i> Copies soumises — ${exam.title}</h2>
+            <p style="color:#64748b;margin-bottom:20px;">${submitted.length} copie(s) sur ${attempts.length} participant(s)</p>
+            ${submitted.length > 0 && submitted.some(a => a.needs_correction) ? `
+                <div style="margin-bottom:16px;">
+                    <button class="btn btn-success" onclick="closeModal();correctAllExamAttempts(${examId})">
+                        <i class="fas fa-magic"></i> Tout corriger avec IA
+                    </button>
+                </div>` : ''}
+            <div style="overflow-x:auto;">
+                <table style="width:100%;border-collapse:collapse;">
+                    <thead>
+                        <tr style="background:#f8fafc;">
+                            <th style="padding:10px;text-align:left;border-bottom:2px solid #e2e8f0;">Étudiant</th>
+                            <th style="padding:10px;text-align:left;border-bottom:2px solid #e2e8f0;">Soumis le</th>
+                            <th style="padding:10px;text-align:left;border-bottom:2px solid #e2e8f0;">Incidents</th>
+                            <th style="padding:10px;text-align:left;border-bottom:2px solid #e2e8f0;">Note</th>
+                            <th style="padding:10px;text-align:left;border-bottom:2px solid #e2e8f0;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+            <div style="margin-top:20px;text-align:right;">
+                <button class="btn btn-secondary" onclick="closeModal()"><i class="fas fa-times"></i> Fermer</button>
+            </div>`;
+
+        showModal(modalContent, '900px');
+    } catch(e) {
+        showAlert(humanError(e), 'error');
+    } finally {
+        showLoader(false);
+    }
+}
+
 // ============================================================================
 // HISTORIQUE DES EXAMENS (ADMIN)
 // ============================================================================
@@ -5806,86 +7165,163 @@ ${exam.instructions}
 async function loadExamsHistory() {
     if (window.event && window.event.target) setActiveTab(window.event.target);
     showLoader(true);
-    
     try {
         const response = await authenticatedFetch('/api/admin/exams_history');
         const history = await response.json();
-        
-        let html = `
-            <div class="page-header">
-                <h2><i class="fas fa-history"></i> Historique des Examens Terminés</h2>
-                <p>Consultez les statistiques et logs des examens passés</p>
-            </div>
-        `;
-        
+
         if (history.length === 0) {
-            html += `
-                <div class="alert alert-info">
-                    <i class="fas fa-info-circle"></i>
-                    <div>Aucun examen terminé pour le moment</div>
+            document.getElementById('main-content').innerHTML = `
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:24px;">
+                    <div>
+                        <h2 style="margin:0;font-size:20px;color:#0f172a;display:flex;align-items:center;gap:10px;">
+                            <i class="fas fa-clock-rotate-left" style="color:#3b82f6;"></i> Historique des Examens
+                        </h2>
+                        <p style="margin:4px 0 0;color:#64748b;font-size:13px;">Statistiques et journaux des examens terminés</p>
+                    </div>
+                </div>
+                <div style="text-align:center;padding:64px 24px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;">
+                    <i class="fas fa-folder-open" style="font-size:52px;color:#94a3b8;margin-bottom:18px;display:block;"></i>
+                    <h3 style="color:#334155;margin:0 0 10px;">Aucun examen terminé</h3>
+                    <p style="color:#64748b;margin:0;max-width:360px;margin-left:auto;margin-right:auto;">
+                        L'historique s'alimentera automatiquement dès qu'un examen sera clôturé.
+                    </p>
                 </div>
             `;
-        } else {
-            html += `
-                <div class="card">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th><i class="fas fa-heading"></i> Titre</th>
-                                <th><i class="fas fa-user"></i> Créateur</th>
-                                <th><i class="fas fa-calendar"></i> Date</th>
-                                <th><i class="fas fa-users"></i> Participants</th>
-                                <th><i class="fas fa-star"></i> Moyenne</th>
-                                <th><i class="fas fa-exclamation-triangle"></i> Incidents</th>
-                                <th><i class="fas fa-cog"></i> Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-            `;
-            
-            history.forEach(exam => {
-                const averageColor = exam.average_score >= 10 ? '#10b981' : '#ef4444';
-                
-                html += `
-                    <tr>
-                        <td><strong>${exam.title}</strong><br><small style="color: #64748b;">${exam.subject_title || 'N/A'}</small></td>
-                        <td>${exam.creator_name}</td>
-                        <td>${fmtDakarDate(exam.end_time)}</td>
-                        <td>
-                            ${exam.total_attempts} tentative(s)<br>
-                            <small style="color: #64748b;">
-                                ${exam.submitted_count} soumis | 
-                                ${exam.corrected_count} corrigés
-                                ${exam.banned_count > 0 ? ` | <span style="color: #ef4444;">${exam.banned_count} bannis</span>` : ''}
-                            </small>
-                        </td>
-                        <td><strong style="color: ${averageColor}; font-size: 18px;">${exam.average_score}/20</strong></td>
-                        <td>
-                            ${exam.incidents_count > 0 ? 
-                                `<span style="color: #ef4444;"><i class="fas fa-exclamation-circle"></i> ${exam.incidents_count}</span>` : 
-                                '<span style="color: #10b981;"><i class="fas fa-check"></i> Aucun</span>'
-                            }
-                        </td>
-                        <td>
-                            <button class="btn btn-sm btn-primary" onclick="viewExamHistoryDetails(${exam.id})">
+            showLoader(false);
+            return;
+        }
+
+        const totalAttempts  = history.reduce((s, e) => s + (e.total_attempts || 0), 0);
+        const totalIncidents = history.reduce((s, e) => s + (e.incidents_count || 0), 0);
+        const avgScore       = history.filter(e => e.average_score != null).length > 0
+            ? (history.reduce((s, e) => s + (e.average_score || 0), 0) / history.length).toFixed(1)
+            : '—';
+
+        const rows = history.map(exam => {
+            const sc        = exam.average_score;
+            const scColor   = sc >= 10 ? '#10b981' : '#ef4444';
+            const scBg      = sc >= 10 ? '#dcfce7'  : '#fee2e2';
+            const dateStr   = fmtDakarDate(exam.end_time);
+            const initials  = (exam.creator_name || 'N').split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
+
+            return `
+                <tr style="transition:background .15s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+                    <td style="padding:14px 16px;border-bottom:1px solid #f1f5f9;max-width:260px;">
+                        <p style="margin:0;font-weight:600;color:#0f172a;font-size:13px;line-height:1.4;">${exam.title}</p>
+                        ${exam.subject_title ? `<p style="margin:3px 0 0;font-size:11px;color:#94a3b8;">${exam.subject_title}</p>` : ''}
+                    </td>
+                    <td style="padding:14px 16px;border-bottom:1px solid #f1f5f9;white-space:nowrap;">
+                        <div style="display:flex;align-items:center;gap:7px;">
+                            <div style="width:28px;height:28px;border-radius:50%;background:#dbeafe;color:#1d4ed8;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${initials}</div>
+                            <span style="font-size:13px;color:#334155;">${exam.creator_name}</span>
+                        </div>
+                    </td>
+                    <td style="padding:14px 16px;border-bottom:1px solid #f1f5f9;white-space:nowrap;">
+                        <div style="display:flex;align-items:center;gap:6px;font-size:13px;color:#64748b;">
+                            <i class="fas fa-calendar-day" style="color:#94a3b8;font-size:11px;"></i> ${dateStr}
+                        </div>
+                    </td>
+                    <td style="padding:14px 16px;border-bottom:1px solid #f1f5f9;">
+                        <p style="margin:0;font-size:13px;font-weight:600;color:#0f172a;">${exam.total_attempts} participant(s)</p>
+                        <p style="margin:2px 0 0;font-size:11px;color:#64748b;">
+                            ${exam.submitted_count} soumis · ${exam.corrected_count} corrigés
+                            ${exam.banned_count > 0 ? ` · <span style="color:#ef4444;font-weight:600;">${exam.banned_count} exclus</span>` : ''}
+                        </p>
+                    </td>
+                    <td style="padding:14px 16px;border-bottom:1px solid #f1f5f9;text-align:center;">
+                        <span style="display:inline-block;background:${scBg};color:${scColor};padding:4px 10px;border-radius:8px;font-weight:700;font-size:15px;">${sc}/20</span>
+                    </td>
+                    <td style="padding:14px 16px;border-bottom:1px solid #f1f5f9;text-align:center;">
+                        ${exam.incidents_count > 0
+                            ? `<span style="display:inline-flex;align-items:center;gap:5px;background:#fee2e2;color:#991b1b;padding:3px 9px;border-radius:99px;font-size:12px;font-weight:600;">
+                                   <i class="fas fa-triangle-exclamation" style="font-size:10px;"></i> ${exam.incidents_count}
+                               </span>`
+                            : `<span style="display:inline-flex;align-items:center;gap:5px;background:#dcfce7;color:#15803d;padding:3px 9px;border-radius:99px;font-size:12px;font-weight:600;">
+                                   <i class="fas fa-check" style="font-size:10px;"></i> Aucun
+                               </span>`}
+                    </td>
+                    <td style="padding:14px 16px;border-bottom:1px solid #f1f5f9;white-space:nowrap;">
+                        <div style="display:flex;gap:6px;">
+                            <button onclick="viewExamHistoryDetails(${exam.id})"
+                                style="display:inline-flex;align-items:center;gap:5px;padding:6px 11px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;"
+                                onmouseover="this.style.background='#dbeafe'" onmouseout="this.style.background='#eff6ff'">
                                 <i class="fas fa-eye"></i> Détails
                             </button>
-                            <button class="btn btn-sm btn-warning" onclick="viewExamIncidents(${exam.id})">
-                                <i class="fas fa-list"></i> Logs
+                            <button onclick="viewExamIncidents(${exam.id})"
+                                style="display:inline-flex;align-items:center;gap:5px;padding:6px 11px;background:#fffbeb;color:#92400e;border:1px solid #fde68a;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;"
+                                onmouseover="this.style.background='#fef3c7'" onmouseout="this.style.background='#fffbeb'">
+                                <i class="fas fa-list-ul"></i> Logs
                             </button>
-                        </td>
-                    </tr>
-                `;
-            });
-            
-            html += `
-                        </tbody>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        document.getElementById('main-content').innerHTML = `
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px;">
+                <div>
+                    <h2 style="margin:0;font-size:20px;color:#0f172a;display:flex;align-items:center;gap:10px;">
+                        <i class="fas fa-clock-rotate-left" style="color:#3b82f6;"></i> Historique des Examens
+                    </h2>
+                    <p style="margin:4px 0 0;color:#64748b;font-size:13px;">Statistiques et journaux des examens terminés</p>
+                </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px;">
+                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;display:flex;align-items:center;gap:14px;">
+                    <div style="width:40px;height:40px;border-radius:10px;background:#eff6ff;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class="fas fa-file-circle-check" style="color:#3b82f6;font-size:16px;"></i>
+                    </div>
+                    <div>
+                        <p style="margin:0;font-size:22px;font-weight:800;color:#0f172a;">${history.length}</p>
+                        <p style="margin:0;font-size:12px;color:#64748b;">Examens terminés</p>
+                    </div>
+                </div>
+                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;display:flex;align-items:center;gap:14px;">
+                    <div style="width:40px;height:40px;border-radius:10px;background:#dcfce7;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class="fas fa-users" style="color:#10b981;font-size:16px;"></i>
+                    </div>
+                    <div>
+                        <p style="margin:0;font-size:22px;font-weight:800;color:#0f172a;">${totalAttempts}</p>
+                        <p style="margin:0;font-size:12px;color:#64748b;">Participations totales</p>
+                    </div>
+                </div>
+                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;display:flex;align-items:center;gap:14px;">
+                    <div style="width:40px;height:40px;border-radius:10px;background:${totalIncidents > 0 ? '#fee2e2' : '#dcfce7'};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class="fas fa-triangle-exclamation" style="color:${totalIncidents > 0 ? '#ef4444' : '#10b981'};font-size:16px;"></i>
+                    </div>
+                    <div>
+                        <p style="margin:0;font-size:22px;font-weight:800;color:#0f172a;">${totalIncidents}</p>
+                        <p style="margin:0;font-size:12px;color:#64748b;">Incidents détectés</p>
+                    </div>
+                </div>
+            </div>
+
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
+                <div style="padding:14px 20px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:8px;">
+                    <i class="fas fa-list" style="color:#64748b;font-size:13px;"></i>
+                    <h3 style="margin:0;font-size:15px;color:#0f172a;font-weight:600;">Liste des examens</h3>
+                    <span style="background:#f1f5f9;color:#64748b;padding:1px 8px;border-radius:99px;font-size:12px;margin-left:4px;">${history.length}</span>
+                </div>
+                <div style="overflow-x:auto;">
+                    <table style="width:100%;border-collapse:collapse;">
+                        <thead>
+                            <tr style="background:#f8fafc;">
+                                <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e2e8f0;">Examen</th>
+                                <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e2e8f0;">Créateur</th>
+                                <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e2e8f0;">Date de clôture</th>
+                                <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e2e8f0;">Participants</th>
+                                <th style="padding:10px 16px;text-align:center;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e2e8f0;">Moyenne</th>
+                                <th style="padding:10px 16px;text-align:center;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e2e8f0;">Incidents</th>
+                                <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e2e8f0;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
                     </table>
                 </div>
-            `;
-        }
-        
-        document.getElementById('main-content').innerHTML = html;
+            </div>
+        `;
     } catch (error) {
         showAlert(humanError(error), 'error');
     } finally {
@@ -5959,7 +7395,10 @@ async function showProfessorNotifications() {
                     'copy_attempt': 'Tentative de copie',
                     'paste_attempt': 'Tentative de collage',
                     'right_click': 'Clic droit',
-                    'devtools_attempt': '🔧Console développeur'
+                    'devtools_attempt': 'Console développeur',
+                    'face_absent': 'Visage absent',
+                    'no_face_detected': 'Visage absent',
+                    'multiple_faces': 'Plusieurs visages'
                 };
                 
                 const eventLabel = eventTypeLabels[incident.event_type] || incident.event_type;
@@ -6028,12 +7467,12 @@ if (currentUser && currentUser.role === 'professor') {
 
 async function downloadTranscriptPDF(transcriptId) {
     showLoader(true);
-    
+
     try {
         const response = await fetch(`/api/transcripts/${transcriptId}/pdf`, {
             headers: { 'Authorization': `Bearer ${authToken}` }
         });
-        
+
         if (response.ok) {
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
@@ -6044,12 +7483,63 @@ async function downloadTranscriptPDF(transcriptId) {
             a.click();
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
-            showAlert('Relevé téléchargé avec succès!', 'success');
+            showAlert('Relevé téléchargé avec succès !', 'success');
+        } else if (response.status === 404) {
+            showModal(`
+                <div style="text-align:center;padding:10px 0;">
+                    <i class="fas fa-file-times" style="font-size:48px;color:#ef4444;margin-bottom:16px;display:block;"></i>
+                    <h3>Relevé introuvable</h3>
+                    <p style="color:#64748b;margin:12px 0 20px;">Ce relevé n'existe plus dans le système ou le fichier PDF n'a pas pu être généré.<br>
+                    Actualisez la liste et réessayez. Si le problème persiste, régénérez le relevé.</p>
+                    <div style="display:flex;gap:12px;justify-content:center;">
+                        <button class="btn btn-primary" onclick="closeModal(); loadAllTranscripts()">
+                            <i class="fas fa-redo"></i> Actualiser la liste
+                        </button>
+                        <button class="btn btn-secondary" onclick="closeModal()">Fermer</button>
+                    </div>
+                </div>
+            `);
+        } else if (response.status === 403) {
+            showModal(`
+                <div style="text-align:center;padding:10px 0;">
+                    <i class="fas fa-lock" style="font-size:48px;color:#f59e0b;margin-bottom:16px;display:block;"></i>
+                    <h3>Accès non autorisé</h3>
+                    <p style="color:#64748b;margin:12px 0 20px;">Vous n'avez pas les droits pour télécharger ce relevé.<br>
+                    Si vous êtes l'étudiant concerné, reconnectez-vous et réessayez.</p>
+                    <button class="btn btn-secondary" onclick="closeModal()">Fermer</button>
+                </div>
+            `);
         } else {
-            showAlert('Impossible de télécharger le fichier. Veuillez réessayer.', 'error');
+            showModal(`
+                <div style="text-align:center;padding:10px 0;">
+                    <i class="fas fa-exclamation-triangle" style="font-size:48px;color:#ef4444;margin-bottom:16px;display:block;"></i>
+                    <h3>Téléchargement impossible</h3>
+                    <p style="color:#64748b;margin:12px 0 20px;">Le serveur a retourné une erreur (${response.status}) lors de la génération du PDF.<br>
+                    Vérifiez votre connexion et réessayez dans quelques instants.</p>
+                    <div style="display:flex;gap:12px;justify-content:center;">
+                        <button class="btn btn-primary" onclick="closeModal(); downloadTranscriptPDF(${transcriptId})">
+                            <i class="fas fa-redo"></i> Réessayer
+                        </button>
+                        <button class="btn btn-secondary" onclick="closeModal()">Fermer</button>
+                    </div>
+                </div>
+            `);
         }
     } catch (error) {
-        showAlert(humanError(error), 'error');
+        showModal(`
+            <div style="text-align:center;padding:10px 0;">
+                <i class="fas fa-wifi" style="font-size:48px;color:#ef4444;margin-bottom:16px;display:block;"></i>
+                <h3>Erreur de connexion</h3>
+                <p style="color:#64748b;margin:12px 0 20px;">Impossible de contacter le serveur pour télécharger le PDF.<br>
+                Vérifiez votre connexion internet et réessayez.</p>
+                <div style="display:flex;gap:12px;justify-content:center;">
+                    <button class="btn btn-primary" onclick="closeModal(); downloadTranscriptPDF(${transcriptId})">
+                        <i class="fas fa-redo"></i> Réessayer
+                    </button>
+                    <button class="btn btn-secondary" onclick="closeModal()">Fermer</button>
+                </div>
+            </div>
+        `);
     } finally {
         showLoader(false);
     }
@@ -6065,8 +7555,23 @@ async function viewTranscriptDetails(transcriptId) {
         const transcript = transcripts.find(t => t.id === transcriptId);
         
         if (!transcript) {
-            showAlert('Relevé introuvable. Veuillez actualiser la liste.', 'error');
             showLoader(false);
+            showModal(`
+                <div style="text-align:center;padding:10px 0;">
+                    <i class="fas fa-search" style="font-size:48px;color:#94a3b8;margin-bottom:16px;display:block;"></i>
+                    <h3>Relevé introuvable</h3>
+                    <p style="color:#64748b;margin:12px 0 20px;">
+                        Ce relevé n'a pas pu être trouvé, il a peut-être été supprimé entre-temps.<br>
+                        Actualisez la liste pour voir les relevés disponibles.
+                    </p>
+                    <div style="display:flex;gap:12px;justify-content:center;">
+                        <button class="btn btn-primary" onclick="closeModal(); loadAllTranscripts()">
+                            <i class="fas fa-redo"></i> Actualiser la liste
+                        </button>
+                        <button class="btn btn-secondary" onclick="closeModal()">Fermer</button>
+                    </div>
+                </div>
+            `);
             return;
         }
         
@@ -6122,7 +7627,22 @@ async function viewTranscriptDetails(transcriptId) {
         
         showModal(modalContent, '700px');
     } catch (error) {
-        showAlert(humanError(error), 'error');
+        showModal(`
+            <div style="text-align:center;padding:10px 0;">
+                <i class="fas fa-exclamation-circle" style="font-size:48px;color:#ef4444;margin-bottom:16px;display:block;"></i>
+                <h3>Impossible d'afficher le relevé</h3>
+                <p style="color:#64748b;margin:12px 0 20px;">
+                    Une erreur est survenue lors de la récupération des données de ce relevé.<br>
+                    Actualisez la liste et réessayez.
+                </p>
+                <div style="display:flex;gap:12px;justify-content:center;">
+                    <button class="btn btn-primary" onclick="closeModal(); loadAllTranscripts()">
+                        <i class="fas fa-redo"></i> Actualiser la liste
+                    </button>
+                    <button class="btn btn-secondary" onclick="closeModal()">Fermer</button>
+                </div>
+            </div>
+        `);
     } finally {
         showLoader(false);
     }
@@ -6191,7 +7711,7 @@ function showCreateStudentNoEmailModal() {
                 closeModal();
                 loadUsers();
             } else {
-                showAlert(data.error || 'Une erreur est survenue. Veuillez réessayer.', 'error');
+                showAlert(data.error || 'Impossible de créer l\'étudiant. Le nom est peut-être déjà enregistré.', 'error');
             }
         } catch (error) {
             showAlert(humanError(error), 'error');
@@ -7042,7 +8562,7 @@ async function handleAIFormSubmit(e) {
         if (error.message.includes('Failed to fetch')) {
             showAlert('Problème de connexion au serveur. Vérifiez votre connexion internet et réessayez.', 'error');
         } else {
-            showAlert('Une erreur inattendue est survenue lors de la génération. Veuillez réessayer.', 'error');
+            showAlert('Impossible de générer les suggestions. Le fichier est peut-être illisible ou le service IA est temporairement indisponible.', 'error');
         }
     } finally {
         showLoader(false);
@@ -7234,4 +8754,437 @@ async function _confirmSaveGeneratedSubject(title, content, rubric, ecId) {
         showAlert('Erreur de connexion. Veuillez réessayer.', 'error');
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Enregistrer ce Sujet'; }
     }
+}
+
+// ============================================================================
+// SURVEILLANT — Dashboard et gestion examens
+// ============================================================================
+
+async function loadSurveillantDashboard() {
+    showLoader(true);
+    try {
+        const response = await authenticatedFetch('/api/surveillant/exams');
+        const data = await response.json();
+        const exams = data.exams || [];
+
+        const activeExams   = exams.filter(e => e.status === 'active');
+        const totalStudents = exams.reduce((s, e) => s + (e.my_student_count || 0), 0);
+
+        document.getElementById('main-content').innerHTML = `
+            <div style="margin-bottom:28px;">
+                <h2 style="font-size:22px;font-weight:700;color:#0f172a;margin:0 0 4px;display:flex;align-items:center;gap:12px;">
+                    <span style="background:#f59e0b;width:44px;height:44px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;">
+                        <i class="fas fa-eye" style="color:white;font-size:18px;"></i>
+                    </span>
+                    ${t('section.surveillant_dashboard')}
+                </h2>
+                <p style="color:#64748b;margin:0 0 0 56px;font-size:13px;">${t('section.welcome')}, ${currentUser.full_name}</p>
+            </div>
+
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:28px;">
+                <div style="background:white;border-radius:12px;padding:20px;border:1px solid #e2e8f0;display:flex;align-items:center;gap:14px;">
+                    <div style="background:rgba(16,185,129,.1);width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class="fas fa-play-circle" style="color:#10b981;font-size:18px;"></i>
+                    </div>
+                    <div><div style="font-size:28px;font-weight:800;color:#0f172a;">${activeExams.length}</div>
+                    <div style="font-size:12px;color:#64748b;font-weight:500;">${t('section.exams_in_progress')}</div></div>
+                </div>
+                <div style="background:white;border-radius:12px;padding:20px;border:1px solid #e2e8f0;display:flex;align-items:center;gap:14px;">
+                    <div style="background:rgba(59,130,246,.1);width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class="fas fa-laptop-code" style="color:#3b82f6;font-size:18px;"></i>
+                    </div>
+                    <div><div style="font-size:28px;font-weight:800;color:#0f172a;">${exams.length}</div>
+                    <div style="font-size:12px;color:#64748b;font-weight:500;">${t('section.exams_assigned')}</div></div>
+                </div>
+                <div style="background:white;border-radius:12px;padding:20px;border:1px solid #e2e8f0;display:flex;align-items:center;gap:14px;">
+                    <div style="background:rgba(124,58,237,.1);width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class="fas fa-user-graduate" style="color:#7c3aed;font-size:18px;"></i>
+                    </div>
+                    <div><div style="font-size:28px;font-weight:800;color:#0f172a;">${totalStudents}</div>
+                    <div style="font-size:12px;color:#64748b;font-weight:500;">${t('section.students_to_monitor')}</div></div>
+                </div>
+            </div>
+
+            ${activeExams.length > 0 ? `
+            <div style="background:white;border:1px solid #a7f3d0;border-left:4px solid #10b981;border-radius:12px;padding:20px;margin-bottom:24px;">
+                <h3 style="margin:0 0 14px;font-size:15px;color:#065f46;font-weight:700;display:flex;align-items:center;gap:8px;">
+                    <i class="fas fa-play-circle"></i> ${t('section.active_exams_action')}
+                </h3>
+                ${activeExams.map(e => `
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:12px 0;border-bottom:1px solid #f0fdf4;">
+                    <div>
+                        <div style="font-weight:600;color:#0f172a;font-size:14px;">${e.title}</div>
+                        <div style="font-size:12px;color:#64748b;margin-top:2px;">
+                            <i class="fas fa-user-graduate"></i> ${e.my_student_count || 0} ${t('section.my_students_group')}
+                        </div>
+                    </div>
+                    <button onclick="openSurveillantDashboard(${e.id})"
+                        style="display:inline-flex;align-items:center;gap:6px;padding:9px 18px;background:#7c3aed;color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
+                        <i class="fas fa-shield-alt"></i> ${t('btn.monitor_now')}
+                    </button>
+                </div>`).join('')}
+            </div>` : ''}
+
+            ${exams.length > 0 ? `
+            <div style="background:white;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;">
+                <div style="padding:16px 20px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:10px;">
+                    <i class="fas fa-list" style="color:#64748b;"></i>
+                    <h3 style="margin:0;font-size:14px;font-weight:700;color:#0f172a;">${t('section.all_my_exams')}</h3>
+                </div>
+                <div style="overflow-x:auto;">
+                    <table style="width:100%;border-collapse:collapse;">
+                        <thead><tr style="background:#f8fafc;">
+                            <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Examen</th>
+                            <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Statut</th>
+                            <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Mes étudiants</th>
+                            <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Action</th>
+                        </tr></thead>
+                        <tbody>
+                        ${exams.map(e => {
+                            const sc = {active:'#059669;background:#ecfdf5', scheduled:'#d97706;background:#fffbeb', closed:'#dc2626;background:#fff1f2', draft:'#64748b;background:#f1f5f9'};
+                            const [col, bg] = (sc[e.status]||'#64748b;background:#f1f5f9').split(';background:');
+                            const statusLabel = {active:'En cours', scheduled:'Planifié', closed:'Terminé', draft:'Brouillon'}[e.status] || e.status;
+                            return `<tr>
+                                <td style="padding:12px 16px;border-bottom:1px solid #f1f5f9;font-size:13px;font-weight:600;color:#0f172a;">${e.title}</td>
+                                <td style="padding:12px 16px;border-bottom:1px solid #f1f5f9;">
+                                    <span style="background:${bg};color:${col};padding:3px 9px;border-radius:99px;font-size:11px;font-weight:700;">${statusLabel}</span>
+                                </td>
+                                <td style="padding:12px 16px;border-bottom:1px solid #f1f5f9;font-size:13px;color:#64748b;">${e.my_student_count || 0}</td>
+                                <td style="padding:12px 16px;border-bottom:1px solid #f1f5f9;">
+                                    ${e.status === 'active' ? `
+                                    <button onclick="openSurveillantDashboard(${e.id})"
+                                        style="display:inline-flex;align-items:center;gap:5px;padding:6px 12px;background:#7c3aed;color:white;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">
+                                        <i class="fas fa-shield-alt"></i> Surveiller
+                                    </button>` : '<span style="color:#94a3b8;font-size:12px;">—</span>'}
+                                </td>
+                            </tr>`;
+                        }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>` : `
+            <div style="text-align:center;padding:64px 24px;background:white;border-radius:16px;border:1px solid #e2e8f0;">
+                <i class="fas fa-eye" style="font-size:48px;color:#cbd5e1;display:block;margin-bottom:16px;"></i>
+                <h3 style="color:#475569;font-size:18px;font-weight:600;margin:0 0 8px;">Aucun examen assigné</h3>
+                <p style="color:#94a3b8;font-size:14px;margin:0;">L'enseignant vous assignera des examens à surveiller.</p>
+            </div>`}
+        `;
+    } catch (error) {
+        showAlert(humanError(error), 'error');
+    } finally {
+        showLoader(false);
+    }
+}
+
+async function loadSurveillantExams() {
+    if (window.event && window.event.target) setActiveTab(window.event.target);
+    await loadSurveillantDashboard();
+}
+
+function openSurveillantDashboard(examId) {
+    window.open(`/proctor/monitor/${examId}`, `proctor-${examId}`,
+        'width=1400,height=900,menubar=no,toolbar=no,location=no,status=no');
+}
+
+// ============================================================================
+// ENSEIGNANT — Gestion du pool de surveillants par examen
+// ============================================================================
+
+async function showManageProctorsModal(examId) {
+    showLoader(true);
+    try {
+        const [proctorsResp, usersResp] = await Promise.all([
+            authenticatedFetch(`/api/online_exams/${examId}/proctors`),
+            authenticatedFetch('/api/users/proctors')
+        ]);
+        const proctorsData = await proctorsResp.json();
+        const allUsers = usersResp.ok ? await usersResp.json() : [];
+
+        const assignedIds = (proctorsData.proctors || []).map(p => p.proctor_id);
+        const available = allUsers.filter(u => !assignedIds.includes(u.id));
+
+        const renderProctorRow = (p) => `
+            <tr id="proctor-row-${p.proctor_id}">
+                <td style="padding:10px 14px;border-bottom:1px solid #f1f5f9;">
+                    <div style="font-weight:600;font-size:13px;color:#0f172a;">${p.proctor_name}</div>
+                    <div style="font-size:11px;color:#64748b;">${p.proctor_email || ''}</div>
+                </td>
+                <td style="padding:10px 14px;border-bottom:1px solid #f1f5f9;font-size:13px;color:#64748b;text-align:center;">${p.student_count || 0}</td>
+                <td style="padding:10px 14px;border-bottom:1px solid #f1f5f9;">
+                    <button onclick="removeProctor(${examId}, ${p.proctor_id})"
+                        style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;background:#fff1f2;color:#ef4444;border:1px solid #fecaca;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">
+                        <i class="fas fa-times"></i> Retirer
+                    </button>
+                </td>
+            </tr>`;
+
+        const content = `
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
+                <div style="width:40px;height:40px;background:#fef3c7;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <i class="fas fa-eye" style="color:#f59e0b;font-size:16px;"></i>
+                </div>
+                <div>
+                    <h2 style="margin:0;font-size:17px;font-weight:700;color:#0f172a;">Gestion des Surveillants</h2>
+                    <p style="margin:0;font-size:12px;color:#64748b;">${proctorsData.total_students || 0} étudiant(s) · ${proctorsData.unassigned_students || 0} non affecté(s)</p>
+                </div>
+            </div>
+
+            <!-- Ajouter un surveillant -->
+            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:16px;">
+                <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+                    <div style="flex:1;min-width:200px;">
+                        <label style="font-size:12px;font-weight:600;color:#64748b;display:block;margin-bottom:6px;">Sélectionner un surveillant</label>
+                        <select id="add-proctor-select" style="width:100%;padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;background:white;">
+                            <option value="">-- Sélectionner --</option>
+                            ${available.map(u => `<option value="${u.id}">${u.full_name}</option>`).join('')}
+                        </select>
+                    </div>
+                    <button onclick="addProctor(${examId})"
+                        style="display:inline-flex;align-items:center;gap:6px;padding:9px 16px;background:#f59e0b;color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;">
+                        <i class="fas fa-plus"></i> Ajouter
+                    </button>
+                </div>
+            </div>
+
+            <!-- Liste des surveillants affectés -->
+            <div id="proctors-table-wrap" style="margin-bottom:16px;">
+            ${(proctorsData.proctors || []).length === 0 ? `
+                <div style="text-align:center;padding:32px;color:#94a3b8;font-size:13px;">
+                    <i class="fas fa-eye-slash" style="display:block;font-size:28px;margin-bottom:8px;"></i>
+                    Aucun surveillant assigné à cet examen
+                </div>` : `
+                <table style="width:100%;border-collapse:collapse;background:white;border-radius:10px;overflow:hidden;border:1px solid #e2e8f0;">
+                    <thead><tr style="background:#f8fafc;">
+                        <th style="padding:10px 14px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Surveillant</th>
+                        <th style="padding:10px 14px;text-align:center;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Étudiants</th>
+                        <th style="padding:10px 14px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Action</th>
+                    </tr></thead>
+                    <tbody id="proctors-tbody">
+                        ${(proctorsData.proctors || []).map(renderProctorRow).join('')}
+                    </tbody>
+                </table>`}
+            </div>
+
+            <!-- Répartition automatique -->
+            ${(proctorsData.proctors || []).length > 0 ? `
+            <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;padding:14px;margin-bottom:16px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+                    <div>
+                        <div style="font-size:13px;font-weight:600;color:#065f46;margin-bottom:2px;"><i class="fas fa-random"></i> Répartition automatique</div>
+                        <div style="font-size:12px;color:#047857;">Distribue les étudiants équitablement entre les ${(proctorsData.proctors || []).length} surveillant(s) (ordre alphabétique)</div>
+                    </div>
+                    <button onclick="distributeProctors(${examId})"
+                        style="display:inline-flex;align-items:center;gap:6px;padding:9px 16px;background:#059669;color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;">
+                        <i class="fas fa-random"></i> Répartir maintenant
+                    </button>
+                </div>
+            </div>` : ''}
+        `;
+        showModal(content, '620px');
+    } catch (error) {
+        showAlert(humanError(error), 'error');
+    } finally {
+        showLoader(false);
+    }
+}
+
+async function addProctor(examId) {
+    const sel = document.getElementById('add-proctor-select');
+    const proctorId = sel ? parseInt(sel.value) : null;
+    if (!proctorId) { showAlert('Veuillez sélectionner un surveillant.', 'error'); return; }
+
+    try {
+        const r = await authenticatedFetch(`/api/online_exams/${examId}/proctors`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ proctor_id: proctorId })
+        });
+        const d = await r.json();
+        if (d.success) {
+            showAlert('Surveillant ajouté avec succès.', 'success');
+            closeModal();
+            showManageProctorsModal(examId);
+        } else {
+            showAlert(d.error || 'Erreur lors de l\'ajout.', 'error');
+        }
+    } catch (e) {
+        showAlert('Erreur de connexion.', 'error');
+    }
+}
+
+async function removeProctor(examId, proctorId) {
+    if (!confirm('Retirer ce surveillant ? Ses affectations d\'étudiants seront supprimées.')) return;
+    try {
+        const r = await authenticatedFetch(`/api/online_exams/${examId}/proctors/${proctorId}`, { method: 'DELETE' });
+        const d = await r.json();
+        if (d.success) {
+            showAlert('Surveillant retiré.', 'success');
+            closeModal();
+            showManageProctorsModal(examId);
+        } else {
+            showAlert(d.error || 'Erreur.', 'error');
+        }
+    } catch (e) {
+        showAlert('Erreur de connexion.', 'error');
+    }
+}
+
+async function distributeProctors(examId) {
+    if (!confirm('Répartir les étudiants entre les surveillants ? Les affectations existantes seront remplacées.')) return;
+    try {
+        const r = await authenticatedFetch(`/api/online_exams/${examId}/distribute_proctors`, { method: 'POST' });
+        const d = await r.json();
+        if (d.success) {
+            const summary = (d.distribution || []).map(p => `• ${p.proctor_name} : ${p.student_count} étudiant(s)`).join('\n');
+            const modeNote = d.mode === 'pre_assignment' ? '\n\n⏳ Pré-affectation enregistrée. Les groupes seront confirmés au démarrage de l\'examen.' : '';
+            showAlert(`✅ ${d.message}\n\n${summary}${modeNote}`, 'success');
+            closeModal();
+            showManageProctorsModal(examId);
+        } else {
+            let msg = d.error || 'Erreur lors de la répartition.';
+            if (msg.includes('Aucun surveillant')) msg = 'Ajoutez d\'abord au moins un surveillant à cet examen avant de lancer la répartition.';
+            if (msg.includes('Aucun étudiant')) msg = 'Aucun étudiant n\'a encore composé cet examen. La répartition se fait une fois l\'examen actif.';
+            showAlert(msg, 'error');
+        }
+    } catch (e) {
+        showAlert('Erreur de connexion.', 'error');
+    }
+}
+// ============================================================================
+// PROFIL UTILISATEUR — modale accessible depuis le header pour tous les rôles
+// ============================================================================
+
+function showProfileModal(initialTab) {
+    initialTab = initialTab || 'info';
+    const roleLabels = { admin: 'Administrateur', professor: 'Enseignant', student: 'Étudiant', surveillant: 'Surveillant' };
+    const role     = currentUser.role;
+    const color    = getRoleColor(role);
+    const initials = buildInitials(currentUser.full_name);
+    const since    = currentUser.created_at ? new Date(currentUser.created_at).toLocaleDateString('fr-FR') : '—';
+
+    document.getElementById('modal-body').innerHTML = `
+        <div style="padding:4px 0;">
+            <div style="display:flex;align-items:center;gap:16px;margin-bottom:24px;">
+                <div style="width:64px;height:64px;border-radius:50%;background:${color};color:white;font-size:22px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${initials}</div>
+                <div>
+                    <div style="font-size:17px;font-weight:700;color:#0f172a;" id="prof-display-name">${currentUser.full_name}</div>
+                    <span style="display:inline-block;background:${color}20;color:${color};padding:2px 10px;border-radius:99px;font-size:12px;font-weight:600;margin-top:4px;">${roleLabels[role] || role}</span>
+                    <div style="font-size:12px;color:#94a3b8;margin-top:4px;">Membre depuis ${since}</div>
+                </div>
+            </div>
+
+            <div style="display:flex;border-bottom:2px solid #e2e8f0;margin-bottom:20px;gap:0;">
+                <button id="tab-info-btn" onclick="switchProfileTab('info')"
+                    style="padding:10px 20px;border:none;background:none;border-bottom:2px solid ${color};margin-bottom:-2px;color:${color};font-weight:700;font-size:13px;cursor:pointer;">
+                    <i class="fas fa-user-edit"></i> Mes informations
+                </button>
+                <button id="tab-pw-btn" onclick="switchProfileTab('pw')"
+                    style="padding:10px 20px;border:none;background:none;border-bottom:2px solid transparent;margin-bottom:-2px;color:#64748b;font-weight:600;font-size:13px;cursor:pointer;">
+                    <i class="fas fa-lock"></i> Mot de passe
+                </button>
+            </div>
+
+            <div id="tab-info">
+                <div style="margin-bottom:14px;">
+                    <label style="display:block;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Nom complet</label>
+                    <input id="prof-fullname" type="text" value="${currentUser.full_name}"
+                        style="width:100%;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;outline:none;"
+                        onfocus="this.style.borderColor='${color}'" onblur="this.style.borderColor='#e2e8f0'">
+                </div>
+                <div style="margin-bottom:20px;">
+                    <label style="display:block;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Adresse email</label>
+                    <input id="prof-email" type="email" value="${currentUser.email}"
+                        style="width:100%;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;outline:none;"
+                        onfocus="this.style.borderColor='${color}'" onblur="this.style.borderColor='#e2e8f0'">
+                </div>
+                <div style="margin-bottom:20px;">
+                    <label style="display:block;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Rôle</label>
+                    <input type="text" value="${roleLabels[role] || role}" disabled
+                        style="width:100%;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;background:#f8fafc;color:#94a3b8;box-sizing:border-box;">
+                </div>
+                <button onclick="saveProfileInfo()" style="width:100%;padding:11px;background:${color};color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">
+                    <i class="fas fa-save"></i> Enregistrer les modifications
+                </button>
+            </div>
+
+            <div id="tab-pw" style="display:none;">
+                <div style="margin-bottom:14px;">
+                    <label style="display:block;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Mot de passe actuel</label>
+                    <input id="prof-pw-current" type="password" placeholder="••••••••"
+                        style="width:100%;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;outline:none;"
+                        onfocus="this.style.borderColor='${color}'" onblur="this.style.borderColor='#e2e8f0'">
+                </div>
+                <div style="margin-bottom:14px;">
+                    <label style="display:block;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Nouveau mot de passe</label>
+                    <input id="prof-pw-new" type="password" placeholder="Minimum 6 caractères"
+                        style="width:100%;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;outline:none;"
+                        onfocus="this.style.borderColor='${color}'" onblur="this.style.borderColor='#e2e8f0'">
+                </div>
+                <div style="margin-bottom:20px;">
+                    <label style="display:block;font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Confirmer le nouveau mot de passe</label>
+                    <input id="prof-pw-confirm" type="password" placeholder="••••••••"
+                        style="width:100%;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;outline:none;"
+                        onfocus="this.style.borderColor='${color}'" onblur="this.style.borderColor='#e2e8f0'">
+                </div>
+                <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:16px;">
+                    <i class="fas fa-info-circle"></i> Vous resterez connecté après le changement de mot de passe.
+                </div>
+                <button onclick="saveProfilePassword()" style="width:100%;padding:11px;background:${color};color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">
+                    <i class="fas fa-key"></i> Changer le mot de passe
+                </button>
+            </div>
+        </div>
+    `;
+    document.getElementById('modal').style.display = 'flex';
+    if (initialTab === 'pw') switchProfileTab('pw');
+}
+
+function switchProfileTab(tab) {
+    const color = getRoleColor(currentUser.role);
+    document.getElementById('tab-info').style.display = tab === 'info' ? 'block' : 'none';
+    document.getElementById('tab-pw').style.display   = tab === 'pw'   ? 'block' : 'none';
+    const ib = document.getElementById('tab-info-btn'), pb = document.getElementById('tab-pw-btn');
+    ib.style.borderBottomColor = tab === 'info' ? color : 'transparent';
+    ib.style.color             = tab === 'info' ? color : '#64748b';
+    pb.style.borderBottomColor = tab === 'pw'   ? color : 'transparent';
+    pb.style.color             = tab === 'pw'   ? color : '#64748b';
+}
+
+async function saveProfileInfo() {
+    const full_name = document.getElementById('prof-fullname').value.trim();
+    const email     = document.getElementById('prof-email').value.trim();
+    if (!full_name) { showAlert('Le nom complet est requis.', 'error'); return; }
+    if (!email)     { showAlert("L'adresse email est requise.", 'error'); return; }
+    try {
+        const r = await authenticatedFetch('/api/profile', { method: 'PUT', body: JSON.stringify({ full_name, email }) });
+        const d = await r.json();
+        if (d.success) {
+            currentUser.full_name = d.user.full_name;
+            currentUser.email     = d.user.email;
+            document.getElementById('prof-display-name').textContent  = d.user.full_name;
+            refreshNavbarAvatar();
+            showAlert('Profil mis à jour avec succès.', 'success');
+        } else {
+            showAlert(d.error || 'Erreur lors de la mise à jour.', 'error');
+        }
+    } catch (e) { showAlert('Erreur de connexion.', 'error'); }
+}
+
+async function saveProfilePassword() {
+    const current_password = document.getElementById('prof-pw-current').value;
+    const new_password     = document.getElementById('prof-pw-new').value;
+    const confirm_password = document.getElementById('prof-pw-confirm').value;
+    if (!current_password) { showAlert('Saisissez votre mot de passe actuel.', 'error'); return; }
+    if (!new_password)     { showAlert('Saisissez un nouveau mot de passe.', 'error'); return; }
+    if (new_password !== confirm_password) { showAlert('Les mots de passe ne correspondent pas.', 'error'); return; }
+    try {
+        const r = await authenticatedFetch('/api/profile/password', { method: 'PUT', body: JSON.stringify({ current_password, new_password, confirm_password }) });
+        const d = await r.json();
+        if (d.success) {
+            ['prof-pw-current','prof-pw-new','prof-pw-confirm'].forEach(id => document.getElementById(id).value = '');
+            showAlert('Mot de passe changé avec succès !', 'success');
+        } else {
+            showAlert(d.error || 'Erreur lors du changement.', 'error');
+        }
+    } catch (e) { showAlert('Erreur de connexion.', 'error'); }
 }

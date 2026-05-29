@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard Surveillance</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/fontawesome/css/all.min.css">
     <style>
         :root {
             --primary: #2563eb;
@@ -389,7 +389,7 @@
 <!-- ════════ HEADER ════════ -->
 <div class="dashboard-header" id="main-header" style="display:none">
     <div class="header-left">
-        <div class="header-logo"><i class="fas fa-shield-alt"></i></div>
+        <div class="header-logo"><i id="header-icon" class="fas fa-shield-alt"></i></div>
         <div class="header-title">
             <h1 id="exam-title">Surveillance Examen</h1>
             <p id="exam-subtitle">Dashboard de surveillance en temps réel</p>
@@ -400,6 +400,10 @@
         <div class="stat-pill">
             <span class="live-dot"></span>
             LIVE
+        </div>
+        <div class="stat-pill" id="stat-role-pill" style="background:rgba(99,102,241,.4)">
+            <i class="fas fa-user-shield"></i>
+            <span id="stat-role-label">–</span>
         </div>
         <div class="stat-pill">
             <i class="fas fa-users"></i>
@@ -419,15 +423,57 @@
         </div>
     </div>
 
+    <!-- ── Cloche alertes agent ── -->
+    <div id="agent-bell-wrap" style="position:relative;margin-right:4px;display:none;">
+        <button class="btn btn-light" onclick="toggleAgentPanel()" title="Alertes de l'agent de surveillance"
+                style="position:relative;padding:7px 14px;">
+            <i class="fas fa-bell"></i>
+            <span id="agent-bell-badge" style="display:none;position:absolute;top:-4px;right:-4px;
+                background:#ef4444;color:#fff;border-radius:50%;width:18px;height:18px;
+                font-size:10px;font-weight:700;line-height:18px;text-align:center;">0</span>
+        </button>
+        <!-- Panneau déroulant alertes -->
+        <div id="agent-panel" style="display:none;position:absolute;top:44px;right:0;width:420px;
+             background:#1e293b;border:1px solid #334155;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.5);
+             z-index:9999;overflow:hidden;">
+            <div style="padding:14px 16px;border-bottom:1px solid #334155;display:flex;align-items:center;justify-content:space-between;">
+                <span style="font-weight:700;font-size:14px;">🚨 Alertes Agent</span>
+                <button onclick="markAllAlertsRead()" style="background:none;border:1px solid #475569;color:#94a3b8;
+                    padding:3px 10px;border-radius:6px;font-size:11px;cursor:pointer;">
+                    Tout marquer lu
+                </button>
+            </div>
+            <div id="agent-alerts-list" style="max-height:400px;overflow-y:auto;padding:8px 0;">
+                <div style="padding:20px;text-align:center;color:#64748b;font-size:13px;">
+                    <i class="fas fa-shield-check" style="font-size:24px;display:block;margin-bottom:8px;"></i>
+                    Aucune alerte active
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="header-right">
-        <button class="btn btn-light" id="btn-teacher-video" onclick="toggleTeacherVideo()" title="Activer/désactiver ma caméra">
-            <i class="fas fa-video-slash" id="my-cam-icon"></i> Caméra
+        <!-- Bouton Caméra (tous rôles) — broadcast vers les étudiants -->
+        <button class="btn btn-light" id="btn-teacher-video" onclick="toggleTeacherVideo()" title="Activer ma caméra — les étudiants peuvent me voir">
+            <i class="fas fa-video-slash" id="my-cam-icon"></i> <span id="btn-cam-label">Caméra</span>
         </button>
-        <button class="btn btn-light" id="btn-teacher-mic" onclick="toggleTeacherMic()" title="Activer/désactiver mon micro">
-            <i class="fas fa-microphone-slash" id="my-mic-icon"></i> Micro
+        <!-- Bouton Micro (tous rôles) — broadcast groupe -->
+        <button class="btn btn-light" id="btn-teacher-mic" onclick="toggleTeacherMic()" title="Activer mon micro — les étudiants peuvent m'entendre">
+            <i class="fas fa-microphone-slash" id="my-mic-icon"></i> <span id="btn-mic-label">Micro</span>
         </button>
+        <!-- Enregistrements -->
         <button class="btn btn-light" onclick="openRecordingsModal()" title="Voir les enregistrements caméra">
             <i class="fas fa-film"></i> Enregistrements
+        </button>
+        <!-- REC Groupe (surveillant uniquement) -->
+        <button class="btn btn-sm" id="group-rec-btn" style="display:none;background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3);font-size:12px"
+            onclick="toggleGroupRecording()" title="Enregistrer tous les étudiants de mon groupe">
+            <i class="fas fa-circle"></i> REC Groupe
+        </button>
+        <!-- REC Salle (enseignant uniquement) -->
+        <button class="btn btn-sm" id="room-rec-btn" style="background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3);font-size:12px"
+            onclick="toggleRoomRecording()" title="Enregistrer toute la salle d'examen">
+            <i class="fas fa-circle"></i> REC Salle
         </button>
         <button class="btn btn-light" onclick="window.location.href='/app'">
             <i class="fas fa-arrow-left"></i> Retour
@@ -437,6 +483,14 @@
 
 <!-- ════════ CORPS PRINCIPAL ════════ -->
 <div class="dashboard-body" id="dashboard-body" style="display:none">
+
+    <!-- ── Panneau Surveillants (visible uniquement pour l'enseignant) ── -->
+    <div id="proctors-panel" style="display:none;padding:12px 20px;border-bottom:1px solid rgba(255,255,255,.08);">
+        <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.5);letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px;">
+            <i class="fas fa-user-tie"></i> Surveillants connectés
+        </div>
+        <div id="proctors-grid" style="display:flex;gap:12px;flex-wrap:wrap;"></div>
+    </div>
 
     <!-- Barre de filtre -->
     <div class="filter-bar">
@@ -530,8 +584,8 @@
                 <span id="screen-view-title">Écran de l'étudiant</span>
                 <span style="background:#ef4444;color:white;font-size:10px;padding:2px 6px;border-radius:4px;animation:pulse 1s infinite;">LIVE</span>
             </div>
-            <button onclick="closeScreenModal()" style="background:rgba(255,255,255,.15);border:none;color:white;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;">
-                <i class="fas fa-times"></i> Fermer
+            <button onclick="closeScreenModal()" style="background:rgba(255,255,255,.18);border:none;color:white;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;display:flex;align-items:center;gap:6px;">
+                <i class="fas fa-arrow-left"></i> Retour
             </button>
         </div>
         <div style="background:#000;border-radius:10px;overflow:hidden;border:2px solid rgba(99,102,241,.5);aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;">
@@ -573,11 +627,41 @@
     </div>
 </div>
 
+<!-- ════════ MODAL APPEL PRIVÉ ════════ -->
+<div id="modal-private-call" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9600;align-items:center;justify-content:center;">
+    <div style="background:#1e293b;border-radius:16px;overflow:hidden;width:520px;max-width:95vw;box-shadow:0 24px 60px rgba(0,0,0,.5);border:1px solid #334155;">
+        <div style="background:#3b82f6;padding:12px 16px;display:flex;align-items:center;gap:10px;">
+            <i class="fas fa-phone" style="color:white;"></i>
+            <span style="color:white;font-weight:700;font-size:15px;">Appel privé — <span id="private-call-student-name"></span></span>
+            <button onclick="endPrivateCall()" style="margin-left:auto;background:rgba(239,68,68,.85);color:white;border:none;border-radius:8px;padding:6px 14px;cursor:pointer;font-weight:700;font-size:13px;">
+                <i class="fas fa-phone-slash"></i> Terminer
+            </button>
+        </div>
+        <div style="display:flex;height:260px;">
+            <!-- Vidéo étudiant -->
+            <video id="private-student-video" autoplay playsinline style="flex:1;background:#0f172a;object-fit:cover;display:block;"></video>
+            <audio id="private-student-audio" autoplay style="display:none"></audio>
+            <!-- Contrôles prof -->
+            <div style="width:170px;background:#0f172a;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;border-left:1px solid #334155;padding:12px;">
+                <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Ma prévisualisation</div>
+                <video id="private-my-preview" autoplay muted playsinline style="width:140px;height:90px;border-radius:8px;background:#1e293b;object-fit:cover;border:1px solid #334155;"></video>
+                <button id="private-cam-btn" onclick="togglePrivateCam()" style="width:140px;background:rgba(37,99,235,.2);color:#93c5fd;border:1px solid rgba(37,99,235,.3);border-radius:8px;padding:7px;cursor:pointer;font-size:11px;font-weight:600;">
+                    <i class="fas fa-video-slash" id="private-cam-icon"></i> Caméra
+                </button>
+                <button id="private-mic-btn" onclick="togglePrivateMic()" style="width:140px;background:rgba(16,185,129,.2);color:#6ee7b7;border:1px solid rgba(16,185,129,.3);border-radius:8px;padding:7px;cursor:pointer;font-size:11px;font-weight:600;">
+                    <i class="fas fa-microphone" id="private-mic-icon"></i> Micro
+                </button>
+                <div id="private-call-status" style="font-size:10px;color:#64748b;text-align:center;margin-top:4px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- ════════ TOASTS ════════ -->
 <div class="toast-container" id="toast-container"></div>
 
 <!-- ════════ SCRIPTS ════════ -->
-<script src="https://cdn.jsdelivr.net/npm/livekit-client@2.5.7/dist/livekit-client.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/livekit-client@2.5.7/dist/livekit-client.umd.min.js" crossorigin="anonymous"></script>
 
 <script>
 // ═══════════════════════════════════════════════════════════
@@ -587,16 +671,26 @@ const EXAM_ID   = {{ exam_id }};
 const APP_BASE  = window.location.origin;
 let authToken   = localStorage.getItem('authToken');
 
-let studentsData = [];
+let studentsData  = [];
+let proctorsData  = [];        // liste des surveillants (pour vue enseignant)
+let myRole        = null;      // 'professor'|'admin'|'surveillant'
+let myIdentity    = null;      // ex. 'proctor-42' ou 'teacher-7'
 let currentFilter = 'all';
 let selectedAttemptId = null;
 let sendType = 'warning'; // 'warning' ou 'message'
 let banAttemptId = null;
 
-let room; // LiveKit room du prof
+let room; // LiveKit room
 let teacherVideoTracks = new Map();   // identity → camera track
 let teacherScreenTracks = new Map();  // identity → screen share track
+let proctorVideoTracks = new Map();   // identity proctor → camera VideoTrack
+let proctorAudioTracks = new Map();   // identity proctor → audio AudioTrack
+let proctorOnlineStatus = new Map();  // identity proctor → {online, camOn, micOn}
 let screenViewAttemptId = null;       // carte actuellement en vue écran
+
+// Enregistrement groupe (surveillant)
+let groupRecEgressIds = [];
+let groupRecActive = false;
 
 // ═══════════════════════════════════════════════════════════
 // UTILITAIRES
@@ -647,8 +741,8 @@ async function init() {
         // Connexion LiveKit pour voir les vidéos
         await initLiveKit();
 
-        // Polling toutes les 5 secondes
-        setInterval(refreshData, 5000);
+        // Polling toutes les 8 secondes
+        setInterval(refreshData, 8000);
 
     } catch(e) {
         console.error('Erreur init:', e);
@@ -660,18 +754,122 @@ async function loadData() {
     const resp = await api(`/api/online_exams/${EXAM_ID}/active_proctoring`);
     if (!resp.ok) {
         if (resp.status === 401) { window.location.href = APP_BASE + '/app'; return; }
-        if (resp.status === 403) { toast('Accès réservé aux enseignants', 'error'); return; }
+        if (resp.status === 403) { toast('Accès refusé', 'error'); return; }
         throw new Error('Impossible de charger les données');
     }
     const data = await resp.json();
     studentsData = data.attempts || [];
+    proctorsData = data.proctors || [];
+
+    // Stocker le rôle et l'identité au premier chargement
+    if (!myRole) {
+        myRole     = data.my_role || 'professor';
+        myIdentity = data.my_identity || null;
+        applyRoleUI();
+    }
+
+    // Restaurer l'état des enregistrements actifs
+    studentsData.forEach(s => {
+        if (s.current_egress_id) {
+            activeRecordings.set(s.attempt_id, s.current_egress_id);
+        } else {
+            activeRecordings.delete(s.attempt_id);
+        }
+    });
 
     document.getElementById('exam-title').textContent = data.exam_title || 'Examen';
+    const roleSuffix = myRole === 'surveillant' ? ' — Mon Groupe' : '';
     document.getElementById('exam-subtitle').textContent =
-        `Dashboard de surveillance • Statut: ${data.exam_status || '?'}`;
+        `Dashboard de surveillance${roleSuffix} • Statut: ${data.exam_status || '?'}`;
 
     updateStats();
     renderGrid();
+
+    // Panneau surveillants (enseignant seulement)
+    if (myRole !== 'surveillant') renderProctorsPanel();
+}
+
+function applyRoleUI() {
+    const isSurveillant = (myRole === 'surveillant');
+
+    // Label rôle dans la stat-pill
+    const roleEl = document.getElementById('stat-role-label');
+    if (roleEl) roleEl.textContent = isSurveillant ? 'Surveillant' : 'Enseignant';
+
+    // Icône header
+    const iconEl = document.getElementById('header-icon');
+    if (iconEl) iconEl.className = isSurveillant ? 'fas fa-user-shield' : 'fas fa-chalkboard-teacher';
+
+    // Boutons spécifiques au rôle
+    const groupRec = document.getElementById('group-rec-btn');
+    const roomRec  = document.getElementById('room-rec-btn');
+    if (groupRec) groupRec.style.display = isSurveillant ? 'inline-flex' : 'none';
+    if (roomRec)  roomRec.style.display  = isSurveillant ? 'none' : 'inline-flex';
+
+    // Label boutons cam/micro
+    const camLabel = document.getElementById('btn-cam-label');
+    const micLabel = document.getElementById('btn-mic-label');
+    if (camLabel) camLabel.textContent = isSurveillant ? 'Diffuser caméra' : 'Caméra';
+    if (micLabel) micLabel.textContent = isSurveillant ? 'Diffuser micro' : 'Micro';
+
+    // Panneau surveillants (visible seulement enseignant)
+    const pp = document.getElementById('proctors-panel');
+    if (pp) pp.style.display = isSurveillant ? 'none' : 'block';
+}
+
+function renderProctorsPanel() {
+    const grid = document.getElementById('proctors-grid');
+    if (!grid) return;
+    if (!proctorsData || proctorsData.length === 0) {
+        grid.innerHTML = `<span style="color:rgba(255,255,255,.3);font-size:12px;padding:8px;">Aucun surveillant affecté</span>`;
+        return;
+    }
+
+    grid.innerHTML = proctorsData.map(p => {
+        const status = proctorOnlineStatus.get(p.proctor_identity) || { online: false, camOn: false, micOn: false };
+
+        // Étudiants du groupe de ce surveillant
+        const groupStudents = studentsData.filter(s => s.proctor_id === p.proctor_id);
+        const studentNames = groupStudents.map(s => {
+            const parts = (s.student_name || '?').split(' ');
+            return parts.length > 1 ? parts[0] + ' ' + parts[parts.length - 1][0] + '.' : parts[0];
+        });
+        const studentsHtml = studentNames.length > 0
+            ? studentNames.map(n => `<span style="background:rgba(255,255,255,.08);border-radius:4px;padding:2px 6px;font-size:11px;">${n}</span>`).join(' ')
+            : `<span style="color:rgba(255,255,255,.3);font-size:11px;">aucun étudiant démarré</span>`;
+
+        const onlineDot = status.online
+            ? `<span style="display:inline-block;width:8px;height:8px;background:#10b981;border-radius:50%;margin-right:4px;"></span>`
+            : `<span style="display:inline-block;width:8px;height:8px;background:#64748b;border-radius:50%;margin-right:4px;"></span>`;
+
+        const camIcon = status.camOn
+            ? `<span title="Caméra active" style="color:#10b981;font-size:12px;"><i class="fas fa-video"></i></span>`
+            : `<span title="Caméra inactive" style="color:rgba(255,255,255,.25);font-size:12px;"><i class="fas fa-video-slash"></i></span>`;
+        const micIcon = status.micOn
+            ? `<span title="Micro actif" style="color:#10b981;font-size:12px;"><i class="fas fa-microphone"></i></span>`
+            : `<span title="Micro inactif" style="color:rgba(255,255,255,.25);font-size:12px;"><i class="fas fa-microphone-slash"></i></span>`;
+
+        const liveTag = (status.camOn || status.micOn)
+            ? `<span style="background:rgba(239,68,68,.8);color:white;font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;margin-left:6px;">DIFFUSE</span>`
+            : '';
+
+        return `
+        <div style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,${status.online ? '.2' : '.08'});
+                    border-radius:10px;padding:12px 14px;min-width:260px;flex:1;max-width:400px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                <div style="display:flex;align-items:center;gap:6px;">
+                    ${onlineDot}
+                    <span style="font-size:13px;font-weight:700;color:white;">${p.proctor_name}</span>
+                    ${liveTag}
+                </div>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    ${camIcon}${micIcon}
+                    <span style="font-size:11px;color:rgba(255,255,255,.4);">${groupStudents.length} étudiant(s)</span>
+                </div>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;">${studentsHtml}</div>
+        </div>`;
+    }).join('');
 }
 
 async function refreshData() {
@@ -682,7 +880,7 @@ async function refreshData() {
 }
 
 function updateStats() {
-    const active   = studentsData.filter(s => s.status === 'IN_PROGRESS').length;
+    const active   = studentsData.filter(s => s.status === 'in_progress').length;
     const highRisk = studentsData.filter(s => s.risk_score >= 70).length;
     const banned   = studentsData.filter(s => s.banned).length;
 
@@ -702,7 +900,7 @@ function renderGrid() {
     let filtered = studentsData.filter(s => {
         if (search && !s.student_name.toLowerCase().includes(search) &&
                       !s.student_email.toLowerCase().includes(search)) return false;
-        if (currentFilter === 'IN_PROGRESS') return s.status === 'IN_PROGRESS';
+        if (currentFilter === 'IN_PROGRESS') return s.status === 'in_progress';
         if (currentFilter === 'BANNED')      return s.banned;
         if (currentFilter === 'high_risk')   return s.risk_score >= 70;
         return true;
@@ -746,14 +944,14 @@ function getRiskClass(score) {
 }
 
 function getStatusLabel(status) {
-    const map = { IN_PROGRESS: 'En cours', SUBMITTED: 'Soumis',
-                  BANNED: 'Exclu', AUTO_SUBMITTED: 'Auto-soumis' };
+    const map = { in_progress: 'En cours', submitted: 'Soumis',
+                  banned: 'Exclu', auto_submitted: 'Auto-soumis' };
     return map[status] || status;
 }
 
 function getStatusClass(status) {
-    if (status === 'IN_PROGRESS') return 'active';
-    if (status === 'BANNED')      return 'banned';
+    if (status === 'in_progress') return 'active';
+    if (status === 'banned')      return 'banned';
     return 'submitted';
 }
 
@@ -800,6 +998,12 @@ function updateCard(card, student) {
         bannedOverlay.className = 'banned-overlay';
         bannedOverlay.innerHTML = '<i class="fas fa-ban"></i> EXCLU';
         videoDiv.appendChild(bannedOverlay);
+    }
+
+    // Ré-attacher la vidéo si le track est disponible mais pas encore affiché
+    const videoEl = card.querySelector(`#video-${student.attempt_id}`);
+    if (videoEl && videoEl.style.display === 'none') {
+        attachVideoToCard(student.livekit_identity, student.attempt_id);
     }
 }
 
@@ -850,15 +1054,20 @@ function buildCardHTML(student) {
                     <i class="fas fa-ban"></i>
                 </button>
                 <button class="btn btn-sm" id="rec-btn-${student.attempt_id}"
-                    style="background:rgba(239,68,68,.15);color:var(--danger);border:1px solid rgba(239,68,68,.3)"
-                    onclick="toggleRecording(${student.attempt_id})" title="Démarrer l'enregistrement">
-                    <i class="fas fa-circle"></i> REC
+                    style="background:${student.current_egress_id ? 'rgba(239,68,68,.5)' : 'rgba(239,68,68,.15)'};color:var(--danger);border:1px solid ${student.current_egress_id ? 'var(--danger)' : 'rgba(239,68,68,.3)'}"
+                    onclick="toggleRecording(${student.attempt_id})" title="${student.current_egress_id ? 'Arrêter l\'enregistrement' : 'Démarrer l\'enregistrement'}">
+                    ${student.current_egress_id ? '<i class="fas fa-stop-circle"></i> STOP' : '<i class="fas fa-circle"></i> REC'}
                 </button>
                 ` : `<span style="font-size:11px;color:var(--danger)">Exclu - ${student.ban_reason || ''}</span>`}
                 <button class="btn btn-sm" id="screen-btn-${student.attempt_id}"
                     style="display:none;background:rgba(99,102,241,.15);color:#6366f1;border:1px solid rgba(99,102,241,.3)"
                     onclick="openScreenModal(${student.attempt_id},'${student.livekit_identity}')" title="Voir l'écran partagé">
                     <i class="fas fa-desktop"></i>
+                </button>
+                <button class="btn btn-sm" id="call-btn-${student.attempt_id}"
+                    style="background:rgba(16,185,129,.15);color:#10b981;border:1px solid rgba(16,185,129,.3)"
+                    onclick="startPrivateCall(${student.attempt_id},'${student.student_name}')" title="Appel audio/vidéo privé avec cet étudiant">
+                    <i class="fas fa-phone"></i>
                 </button>
                 <button class="btn btn-light btn-sm" onclick="openSidePanel(${student.attempt_id})" style="margin-left:auto" title="Voir les logs">
                     <i class="fas fa-list"></i>
@@ -892,66 +1101,120 @@ async function initLiveKit() {
         room = new LivekitClient.Room({ adaptiveStream: true, dynacast: true });
 
         room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, pub, participant) => {
-            console.log('Track reçu de', participant.identity, track.kind, pub.source);
+            const identity = participant.identity;
+
+            // Track d'un surveillant → mettre à jour statut cam/micro UNIQUEMENT
+            if (identity.startsWith('proctor-')) {
+                const st = proctorOnlineStatus.get(identity) || { online: true, camOn: false, micOn: false };
+                st.online = true;
+                if (track.kind === 'video') { proctorVideoTracks.set(identity, track); st.camOn = true; }
+                if (track.kind === 'audio') { proctorAudioTracks.set(identity, track);  st.micOn = true; }
+                proctorOnlineStatus.set(identity, st);
+                if (myRole !== 'surveillant') renderProctorsPanel();
+                return;
+            }
+
             if (track.kind !== 'video') return;
-            const student = studentsData.find(s => s.livekit_identity === participant.identity);
+            const student = studentsData.find(s => s.livekit_identity === identity);
             const isScreen = pub.source === LivekitClient.Track.Source.ScreenShare || pub.trackName === 'screen';
             if (isScreen) {
-                teacherScreenTracks.set(participant.identity, track);
+                teacherScreenTracks.set(identity, track);
                 if (student) {
                     toast(`📺 ${student.student_name} partage son écran`, 'info');
                     updateScreenBtn(student.attempt_id, true);
                 }
             } else {
-                teacherVideoTracks.set(participant.identity, track);
-                if (student) attachVideoToCard(participant.identity, student.attempt_id);
+                teacherVideoTracks.set(identity, track);
+                if (student) attachVideoToCard(identity, student.attempt_id);
             }
         });
 
         room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track, pub, participant) => {
+            const identity = participant.identity;
+            if (identity.startsWith('proctor-')) {
+                const st = proctorOnlineStatus.get(identity) || { online: true, camOn: false, micOn: false };
+                if (track.kind === 'video') { proctorVideoTracks.delete(identity); st.camOn = false; }
+                if (track.kind === 'audio') { proctorAudioTracks.delete(identity);  st.micOn = false; }
+                proctorOnlineStatus.set(identity, st);
+                if (myRole !== 'surveillant') renderProctorsPanel();
+                return;
+            }
             if (track.kind !== 'video') return;
             const isScreen = pub.source === LivekitClient.Track.Source.ScreenShare || pub.trackName === 'screen';
             if (isScreen) {
-                teacherScreenTracks.delete(participant.identity);
-                const student = studentsData.find(s => s.livekit_identity === participant.identity);
+                teacherScreenTracks.delete(identity);
+                const student = studentsData.find(s => s.livekit_identity === identity);
                 if (student) updateScreenBtn(student.attempt_id, false);
-                // Fermer la vue écran si elle était ouverte pour cet étudiant
                 if (student && screenViewAttemptId === student.attempt_id) closeScreenModal();
             } else {
-                teacherVideoTracks.delete(participant.identity);
-                const videoEl = document.querySelector(`video[data-identity="${participant.identity}"]`);
+                teacherVideoTracks.delete(identity);
+                const videoEl = document.querySelector(`video[data-identity="${identity}"]`);
                 if (videoEl) videoEl.style.display = 'none';
             }
         });
 
         room.on(LivekitClient.RoomEvent.ParticipantConnected, (participant) => {
-            toast(`${participant.identity} connecté`, 'info');
+            const id = participant.identity;
+            if (id.startsWith('proctor-')) {
+                const st = proctorOnlineStatus.get(id) || { online: false, camOn: false, micOn: false };
+                st.online = true;
+                proctorOnlineStatus.set(id, st);
+                const p = proctorsData.find(p => p.proctor_identity === id);
+                toast(`👁 Surveillant ${p ? p.proctor_name : id} connecté`, 'info');
+                if (myRole !== 'surveillant') renderProctorsPanel();
+            } else if (id.startsWith('student-')) {
+                const s = studentsData.find(s => s.livekit_identity === id);
+                if (s) toast(`${s.student_name} connecté`, 'info');
+            }
         });
 
         room.on(LivekitClient.RoomEvent.ParticipantDisconnected, (participant) => {
-            const student = studentsData.find(s => s.livekit_identity === participant.identity);
-            const name = student ? student.student_name : participant.identity;
-            toast(`${name} déconnecté`, 'error');
+            const id = participant.identity;
+            if (id.startsWith('proctor-')) {
+                const st = proctorOnlineStatus.get(id) || {};
+                st.online = false; st.camOn = false; st.micOn = false;
+                proctorOnlineStatus.set(id, st);
+                proctorVideoTracks.delete(id);
+                proctorAudioTracks.delete(id);
+                const p = proctorsData.find(p => p.proctor_identity === id);
+                toast(`👁 Surveillant ${p ? p.proctor_name : id} déconnecté`, 'error');
+                if (myRole !== 'surveillant') renderProctorsPanel();
+            } else {
+                const student = studentsData.find(s => s.livekit_identity === id);
+                if (student) toast(`${student.student_name} déconnecté`, 'error');
+            }
         });
 
         await room.connect(tokenData.ws_url, tokenData.token);
-        console.log('✅ LiveKit prof connecté');
+        console.log('✅ LiveKit connecté, rôle:', myRole);
 
-        // Attacher les pistes déjà présentes
+        // Traiter les pistes déjà présentes au moment de la connexion
         room.remoteParticipants.forEach((participant) => {
+            const identity = participant.identity;
+            if (identity.startsWith('proctor-')) {
+                const st = { online: true, camOn: false, micOn: false };
+                participant.trackPublications.forEach((pub) => {
+                    if (!pub.track) return;
+                    if (pub.kind === LivekitClient.Track.Kind.Video) { proctorVideoTracks.set(identity, pub.track); st.camOn = true; }
+                    if (pub.kind === LivekitClient.Track.Kind.Audio) { proctorAudioTracks.set(identity, pub.track);  st.micOn = true; }
+                });
+                proctorOnlineStatus.set(identity, st);
+                return;
+            }
             participant.trackPublications.forEach((pub) => {
                 if (!pub.track || pub.kind !== LivekitClient.Track.Kind.Video) return;
                 const isScreen = pub.source === LivekitClient.Track.Source.ScreenShare || pub.trackName === 'screen';
-                const student = studentsData.find(s => s.livekit_identity === participant.identity);
+                const student = studentsData.find(s => s.livekit_identity === identity);
                 if (isScreen) {
-                    teacherScreenTracks.set(participant.identity, pub.track);
+                    teacherScreenTracks.set(identity, pub.track);
                     if (student) updateScreenBtn(student.attempt_id, true);
                 } else {
-                    teacherVideoTracks.set(participant.identity, pub.track);
-                    if (student) attachVideoToCard(participant.identity, student.attempt_id);
+                    teacherVideoTracks.set(identity, pub.track);
+                    if (student) attachVideoToCard(identity, student.attempt_id);
                 }
             });
         });
+        if (myRole !== 'surveillant') renderProctorsPanel();
 
     } catch(e) {
         console.error('Erreur LiveKit prof:', e);
@@ -974,9 +1237,124 @@ function attachVideoToCard(identity, attemptId) {
     }
 }
 
-// Caméra et micro du prof (indépendants)
+// Caméra et micro du prof (indépendants, diffusion à tous)
 let myVideoTrack = null, myAudioTrack = null;
 let myVideoEnabled = false, myAudioEnabled = false;
+
+// Appel privé 1-sur-1
+let _privateRoom = null, _privateVideoTrack = null, _privateAudioTrack = null;
+let _privateCallAttemptId = null, _privateCamOn = false, _privateMicOn = false;
+
+async function startPrivateCall(attemptId, studentName) {
+    _privateCallAttemptId = attemptId;
+    document.getElementById('private-call-student-name').textContent = studentName;
+    document.getElementById('private-call-status').textContent = 'Connexion en cours…';
+    document.getElementById('modal-private-call').style.display = 'flex';
+
+    // Envoyer l'invitation à l'étudiant via polling
+    await api(`/api/exam_attempts/${attemptId}/send_warning`, {
+        method: 'POST',
+        body: JSON.stringify({ message: 'Appel privé initié par le surveillant', type: 'private_call' })
+    });
+
+    const tokenResp = await api(`/api/exam_attempts/${attemptId}/private_token`);
+    if (!tokenResp.ok) { toast('Token appel privé non disponible', 'error'); return; }
+    const tokenData = await tokenResp.json();
+
+    _privateRoom = new LivekitClient.Room({ adaptiveStream: true, dynacast: true });
+
+    _privateRoom.on(LivekitClient.RoomEvent.TrackSubscribed, (track, pub, participant) => {
+        if (track.kind === 'video') {
+            const el = document.getElementById('private-student-video');
+            if (el) track.attach(el);
+        } else if (track.kind === 'audio') {
+            const el = document.getElementById('private-student-audio');
+            if (el) track.attach(el);
+        }
+    });
+
+    _privateRoom.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track) => {
+        if (track.kind === 'video') { const el = document.getElementById('private-student-video'); if (el) track.detach(el); }
+    });
+
+    _privateRoom.on(LivekitClient.RoomEvent.ParticipantConnected, (p) => {
+        document.getElementById('private-call-status').textContent = studentName + ' a rejoint l\'appel';
+        toast(`${studentName} a rejoint l\'appel privé`, 'success');
+    });
+
+    _privateRoom.on(LivekitClient.RoomEvent.Disconnected, () => {
+        document.getElementById('private-call-status').textContent = 'Déconnecté';
+    });
+
+    await _privateRoom.connect(tokenData.ws_url, tokenData.token);
+    document.getElementById('private-call-status').textContent = 'En attente de ' + studentName + '…';
+
+    // Activer le micro automatiquement
+    await togglePrivateMic();
+}
+
+async function endPrivateCall() {
+    if (_privateCallAttemptId) {
+        await api(`/api/exam_attempts/${_privateCallAttemptId}/send_warning`, {
+            method: 'POST',
+            body: JSON.stringify({ message: 'Appel privé terminé', type: 'end_call' })
+        }).catch(() => {});
+    }
+    if (_privateVideoTrack) { try { await _privateRoom?.localParticipant.unpublishTrack(_privateVideoTrack); } catch(e) {} _privateVideoTrack.stop(); _privateVideoTrack = null; }
+    if (_privateAudioTrack) { try { await _privateRoom?.localParticipant.unpublishTrack(_privateAudioTrack); } catch(e) {} _privateAudioTrack.stop(); _privateAudioTrack = null; }
+    if (_privateRoom) { await _privateRoom.disconnect(); _privateRoom = null; }
+    _privateCamOn = false; _privateMicOn = false;
+    _privateCallAttemptId = null;
+
+    document.getElementById('modal-private-call').style.display = 'none';
+    const sv = document.getElementById('private-student-video'); if (sv) sv.srcObject = null;
+    const mp = document.getElementById('private-my-preview');    if (mp) mp.srcObject = null;
+
+    // Réinitialiser les icônes
+    const ci = document.getElementById('private-cam-icon'); if (ci) ci.className = 'fas fa-video-slash';
+    const mi = document.getElementById('private-mic-icon'); if (mi) mi.className = 'fas fa-microphone';
+}
+
+async function togglePrivateCam() {
+    const icon = document.getElementById('private-cam-icon');
+    const btn  = document.getElementById('private-cam-btn');
+    const prev = document.getElementById('private-my-preview');
+    if (!_privateCamOn) {
+        try {
+            _privateVideoTrack = await LivekitClient.createLocalVideoTrack({ resolution: LivekitClient.VideoPresets.h360.resolution });
+            await _privateRoom?.localParticipant.publishTrack(_privateVideoTrack);
+            if (prev) _privateVideoTrack.attach(prev);
+            _privateCamOn = true;
+            if (icon) icon.className = 'fas fa-video';
+            if (btn)  { btn.style.background = 'rgba(37,99,235,.5)'; btn.style.color = '#bfdbfe'; }
+        } catch(e) { toast('Caméra non disponible', 'error'); }
+    } else {
+        if (prev && _privateVideoTrack) _privateVideoTrack.detach(prev);
+        if (_privateVideoTrack) { await _privateRoom?.localParticipant.unpublishTrack(_privateVideoTrack); _privateVideoTrack.stop(); _privateVideoTrack = null; }
+        _privateCamOn = false;
+        if (icon) icon.className = 'fas fa-video-slash';
+        if (btn)  { btn.style.background = 'rgba(37,99,235,.2)'; btn.style.color = '#93c5fd'; }
+    }
+}
+
+async function togglePrivateMic() {
+    const icon = document.getElementById('private-mic-icon');
+    const btn  = document.getElementById('private-mic-btn');
+    if (!_privateMicOn) {
+        try {
+            _privateAudioTrack = await LivekitClient.createLocalAudioTrack();
+            await _privateRoom?.localParticipant.publishTrack(_privateAudioTrack);
+            _privateMicOn = true;
+            if (icon) icon.className = 'fas fa-microphone';
+            if (btn)  { btn.style.background = 'rgba(16,185,129,.5)'; btn.style.color = '#a7f3d0'; }
+        } catch(e) { toast('Micro non disponible', 'error'); }
+    } else {
+        if (_privateAudioTrack) { await _privateRoom?.localParticipant.unpublishTrack(_privateAudioTrack); _privateAudioTrack.stop(); _privateAudioTrack = null; }
+        _privateMicOn = false;
+        if (icon) icon.className = 'fas fa-microphone-slash';
+        if (btn)  { btn.style.background = 'rgba(16,185,129,.2)'; btn.style.color = '#6ee7b7'; }
+    }
+}
 
 async function toggleTeacherVideo() {
     const icon = document.getElementById('my-cam-icon');
@@ -1099,6 +1477,133 @@ async function toggleRecording(attemptId) {
 }
 
 // ═══════════════════════════════════════════════════════════
+// ENREGISTREMENT DU GROUPE (Surveillant)
+// ═══════════════════════════════════════════════════════════
+
+async function toggleGroupRecording() {
+    const btn = document.getElementById('group-rec-btn');
+    if (!groupRecActive) {
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
+        try {
+            const resp = await api(`/api/online_exams/${EXAM_ID}/group_recording`, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'start' })
+            });
+            const data = await resp.json();
+            if (data.success) {
+                groupRecActive = true;
+                // all_egress_ids contient caméra + écran de chaque étudiant
+                groupRecEgressIds = (data.all_egress_ids || []).map(eid => [null, eid]);
+                if (btn) {
+                    btn.innerHTML = '<i class="fas fa-stop-circle"></i> STOP Groupe';
+                    btn.style.background = 'rgba(239,68,68,.5)';
+                    btn.style.borderColor = '#ef4444';
+                    btn.disabled = false;
+                }
+                const screens = data.screens_recorded || 0;
+                const msg = screens > 0
+                    ? `Groupe démarré : ${data.started} étudiant(s), ${screens} écran(s) capturé(s)`
+                    : `Groupe démarré : ${data.started} étudiant(s) — aucun partage d'écran actif`;
+                toast(msg, 'success');
+            } else {
+                toast(data.error || 'Impossible de démarrer le REC groupe', 'error');
+                if (btn) { btn.innerHTML = '<i class="fas fa-circle"></i> REC Groupe'; btn.disabled = false; }
+            }
+        } catch(e) {
+            toast('Erreur REC groupe: ' + e.message, 'error');
+            if (btn) { btn.innerHTML = '<i class="fas fa-circle"></i> REC Groupe'; btn.disabled = false; }
+        }
+    } else {
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
+        try {
+            const resp = await api(`/api/online_exams/${EXAM_ID}/group_recording`, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'stop', egress_ids: groupRecEgressIds })
+            });
+            const data = await resp.json();
+            if (data.success) {
+                groupRecActive = false;
+                groupRecEgressIds = [];
+                if (btn) {
+                    btn.innerHTML = '<i class="fas fa-circle"></i> REC Groupe';
+                    btn.style.background = 'rgba(239,68,68,.15)';
+                    btn.style.borderColor = 'rgba(239,68,68,.3)';
+                    btn.disabled = false;
+                }
+                toast(`Enregistrement groupe arrêté (${data.stopped} arrêté(s))`, 'success');
+            } else {
+                toast(data.error || 'Erreur arrêt', 'error');
+                if (btn) { btn.innerHTML = '<i class="fas fa-stop-circle"></i> STOP Groupe'; btn.disabled = false; }
+            }
+        } catch(e) {
+            toast('Erreur: ' + e.message, 'error');
+            if (btn) { btn.innerHTML = '<i class="fas fa-stop-circle"></i> STOP Groupe'; btn.disabled = false; }
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════
+// ENREGISTREMENT DE LA SALLE ENTIÈRE (RoomComposite)
+// ═══════════════════════════════════════════════════════════
+
+let roomEgressId = null;
+
+async function toggleRoomRecording() {
+    const btn = document.getElementById('room-rec-btn');
+    if (!roomEgressId) {
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
+        try {
+            const resp = await api(`/api/online_exams/${EXAM_ID}/room_recording`, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'start' })
+            });
+            const data = await resp.json();
+            if (data.success) {
+                roomEgressId = data.egress_id;
+                if (btn) {
+                    btn.innerHTML = '<i class="fas fa-stop-circle"></i> STOP Salle';
+                    btn.style.background = 'rgba(239,68,68,.5)';
+                    btn.style.borderColor = '#ef4444';
+                    btn.disabled = false;
+                }
+                toast('Enregistrement de la salle démarré', 'success');
+            } else {
+                toast((data.error || 'Impossible de démarrer'), 'error');
+                if (btn) { btn.innerHTML = '<i class="fas fa-circle"></i> REC Salle'; btn.disabled = false; }
+            }
+        } catch(e) {
+            toast('Erreur : ' + e.message, 'error');
+            if (btn) { btn.innerHTML = '<i class="fas fa-circle"></i> REC Salle'; btn.disabled = false; }
+        }
+    } else {
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
+        try {
+            const resp = await api(`/api/online_exams/${EXAM_ID}/room_recording`, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'stop', egress_id: roomEgressId })
+            });
+            const data = await resp.json();
+            if (data.success) {
+                roomEgressId = null;
+                if (btn) {
+                    btn.innerHTML = '<i class="fas fa-circle"></i> REC Salle';
+                    btn.style.background = 'rgba(239,68,68,.15)';
+                    btn.style.borderColor = 'rgba(239,68,68,.3)';
+                    btn.disabled = false;
+                }
+                toast('Enregistrement de la salle arrêté et sauvegardé', 'success');
+            } else {
+                toast((data.error || 'Erreur arrêt'), 'error');
+                if (btn) { btn.innerHTML = '<i class="fas fa-stop-circle"></i> STOP Salle'; btn.disabled = false; }
+            }
+        } catch(e) {
+            toast('Erreur : ' + e.message, 'error');
+            if (btn) { btn.innerHTML = '<i class="fas fa-stop-circle"></i> STOP Salle'; btn.disabled = false; }
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════
 // MESSAGES ÉTUDIANTS → ENSEIGNANT
 // ═══════════════════════════════════════════════════════════
 
@@ -1145,10 +1650,14 @@ function renderStudentMessagesList() {
                 <span style="font-size:11px;color:rgba(255,255,255,.5);">${ts}</span>
             </div>
             <div style="font-size:13px;color:white;">${m.message}</div>
-            <div style="margin-top:6px;">
+            <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">
                 <button class="btn btn-sm" style="background:rgba(37,99,235,.3);color:white;font-size:11px;" onclick='openSendModal(${m.attempt_id},"${m.student_name}","message")'>
                     <i class="fas fa-reply"></i> Répondre
                 </button>
+                ${m.message.includes('[DEMANDE_APPEL]') ? `
+                <button class="btn btn-sm" style="background:rgba(16,185,129,.4);color:#a7f3d0;font-size:11px;" onclick='startPrivateCall(${m.attempt_id},"${m.student_name}")'>
+                    <i class="fas fa-phone"></i> Rejoindre l'appel
+                </button>` : ''}
             </div>
         </div>`;
     }).join('');
@@ -1170,8 +1679,8 @@ function closeStudentMessages() {
     if (modal) modal.style.display = 'none';
 }
 
-// Polling student messages toutes les 15 secondes
-setInterval(loadStudentMessages, 15000);
+// Polling student messages toutes les 20 secondes
+setInterval(loadStudentMessages, 20000);
 
 // ═══════════════════════════════════════════════════════════
 // ACTIONS : AVERTISSEMENT / MESSAGE
@@ -1448,71 +1957,117 @@ function renderVideoRecordings() {
     const body = document.getElementById('recordings-body');
     if (!videoRecordingsData) return;
 
-    const videos = videoRecordingsData.videos || [];
-    const error  = videoRecordingsData.error;
+    const videos  = videoRecordingsData.videos || [];
+    const error   = videoRecordingsData.error;
+    const total   = videoRecordingsData.attempts_total || 0;
+    const recCount = videoRecordingsData.recorded_count || videos.length;
 
     if (error && videos.length === 0) {
-        body.innerHTML = `<div style="color:var(--warning);background:rgba(245,158,11,.1);border-radius:8px;padding:16px;margin-bottom:12px;">
-            <i class="fas fa-exclamation-triangle"></i> ${error}</div>
-            <div style="text-align:center;padding:20px;color:rgba(255,255,255,.4);">
-                Aucune vidéo disponible — les enregistrements apparaîtront ici après utilisation du bouton REC sur les cartes étudiants.
+        body.innerHTML = `
+            <div style="color:var(--warning);background:rgba(245,158,11,.1);border-radius:8px;padding:16px;margin-bottom:12px;">
+                <i class="fas fa-exclamation-triangle"></i> ${error}
             </div>`;
         return;
     }
 
     if (videos.length === 0) {
-        body.innerHTML = `<div style="text-align:center;padding:40px;color:rgba(255,255,255,.4);">
-            <i class="fas fa-video-slash" style="font-size:32px;display:block;margin-bottom:10px;"></i>
-            <div style="font-size:14px;margin-bottom:8px;">Aucune vidéo enregistrée pour cet examen</div>
-            <div style="font-size:12px;opacity:.7;">Utilisez le bouton <strong>REC</strong> sur les cartes étudiants pour démarrer un enregistrement.</div>
-        </div>`;
+        body.innerHTML = `
+            <div style="text-align:center;padding:40px 20px;color:rgba(255,255,255,.5);">
+                <i class="fas fa-video-slash" style="font-size:36px;display:block;margin-bottom:14px;opacity:.4;"></i>
+                <div style="font-size:15px;font-weight:600;margin-bottom:8px;color:rgba(255,255,255,.7);">
+                    Aucun enregistrement vidéo pour cet examen
+                </div>
+                <div style="font-size:12px;line-height:1.8;max-width:420px;margin:0 auto;color:rgba(255,255,255,.45);">
+                    L'enregistrement ne fonctionne que <strong style="color:rgba(255,255,255,.7)">pendant que l'examen est en cours</strong>
+                    et que les étudiants sont connectés à la salle LiveKit.
+                </div>
+                <div style="margin-top:20px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);
+                            border-radius:10px;padding:14px 16px;text-align:left;max-width:420px;margin:20px auto 0;">
+                    <div style="font-size:11px;font-weight:700;color:#f59e0b;margin-bottom:10px;letter-spacing:.5px;">
+                        <i class="fas fa-info-circle"></i> COMMENT ENREGISTRER
+                    </div>
+                    <div style="font-size:12px;color:rgba(255,255,255,.6);line-height:1.8;">
+                        1. Ouvrez ce tableau de bord <strong style="color:rgba(255,255,255,.8)">pendant l'examen</strong><br>
+                        2. Cliquez sur <span style="background:rgba(239,68,68,.3);color:#fca5a5;padding:1px 7px;border-radius:4px;font-weight:700;">REC Salle</span> (en-tête) pour enregistrer toute la salle<br>
+                        3. Cliquez sur <span style="background:rgba(239,68,68,.5);color:#fca5a5;padding:1px 7px;border-radius:4px;font-weight:700;">STOP Salle</span> avant la fin de l'examen<br>
+                        4. Revenez ici — la vidéo apparaîtra automatiquement
+                    </div>
+                </div>
+                <button onclick="closeRecordingsModal(); toggleRoomRecording();" class="btn"
+                        style="margin-top:20px;background:rgba(239,68,68,.2);color:#ef4444;
+                               border:1px solid rgba(239,68,68,.4);padding:10px 20px;font-size:13px;">
+                    <i class="fas fa-circle"></i> Démarrer l'enregistrement maintenant
+                </button>
+                ${total > 0 ? `<div style="margin-top:14px;font-size:11px;color:rgba(255,255,255,.25);">${total} étudiant(s) ont participé à cet examen.</div>` : ''}
+            </div>`;
         return;
     }
 
+    const statusColors = { in_progress:'#10b981', submitted:'#3b82f6', banned:'#ef4444', auto_submitted:'#f59e0b' };
+    const statusLabels = { in_progress:'En cours', submitted:'Soumis', banned:'Exclu', auto_submitted:'Auto-soumis' };
+
+    const recTypeConfig = {
+        'individuel':     { icon: 'fa-video',        color: '#60a5fa', label: 'REC individuel' },
+        'groupe-caméra':  { icon: 'fa-users',         color: '#f59e0b', label: 'REC groupe — caméra' },
+        'groupe-écran':   { icon: 'fa-desktop',       color: '#a78bfa', label: 'REC groupe — écran' },
+        'salle':          { icon: 'fa-building',      color: '#10b981', label: 'Enreg. salle' },
+    };
+
     const rows = videos.map(v => {
-        const ts = v.last_modified ? new Date(v.last_modified).toLocaleString('fr-FR') : '—';
-        const started = v.started_at ? new Date(v.started_at).toLocaleTimeString('fr-FR') : '—';
-        const statusColors = { IN_PROGRESS:'#10b981', SUBMITTED:'#3b82f6', BANNED:'#ef4444', AUTO_SUBMITTED:'#f59e0b' };
+        const ts       = v.last_modified ? new Date(v.last_modified).toLocaleString('fr-FR') : '—';
+        const started  = v.started_at   ? new Date(v.started_at).toLocaleString('fr-FR')   : null;
+        const submitted = v.submitted_at ? new Date(v.submitted_at).toLocaleString('fr-FR') : null;
         const sc = statusColors[v.student_status] || '#64748b';
+        const sl = statusLabels[v.student_status] || v.student_status || '';
+        const rtCfg = recTypeConfig[v.rec_type] || recTypeConfig['salle'];
         return `
-        <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
-            <div style="width:44px;height:44px;background:rgba(59,130,246,.15);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px;color:#3b82f6;flex-shrink:0;">
-                <i class="fas fa-film"></i>
+        <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+            <div style="width:44px;height:44px;background:${rtCfg.color}22;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;color:${rtCfg.color};flex-shrink:0;">
+                <i class="fas ${rtCfg.icon}"></i>
             </div>
-            <div style="flex:1;min-width:160px;">
-                <div style="font-size:14px;font-weight:700;color:white;">${v.student_name}</div>
-                <div style="font-size:11px;color:rgba(255,255,255,.45);margin-top:2px;">
-                    <i class="fas fa-file-video" style="margin-right:4px;"></i>${v.filename}
-                    &nbsp;·&nbsp;<i class="fas fa-weight-hanging" style="margin-right:2px;"></i>${v.size_mb} Mo
-                    &nbsp;·&nbsp;<i class="fas fa-calendar" style="margin-right:2px;"></i>${ts}
+            <div style="flex:1;min-width:180px;">
+                <div style="font-size:14px;font-weight:700;color:white;margin-bottom:4px;display:flex;align-items:center;gap:8px;">
+                    <i class="fas fa-user-graduate" style="color:#60a5fa;font-size:12px;"></i>${v.student_name}
+                    <span style="font-size:10px;padding:2px 8px;border-radius:99px;background:${rtCfg.color}22;color:${rtCfg.color};font-weight:700;">${rtCfg.label}</span>
+                </div>
+                <div style="font-size:11px;color:rgba(255,255,255,.4);line-height:1.8;">
+                    <i class="fas fa-file-video" style="margin-right:3px;"></i>${v.filename}
+                    &nbsp;·&nbsp;<i class="fas fa-weight-hanging" style="margin-right:3px;"></i>${v.size_mb} Mo
+                    &nbsp;·&nbsp;<i class="fas fa-save" style="margin-right:3px;"></i>${ts}
+                    ${started  ? `<br><i class="fas fa-play-circle" style="margin-right:3px;color:#10b981;"></i>Début examen : ${started}` : ''}
+                    ${submitted ? `&nbsp;·&nbsp;<i class="fas fa-flag-checkered" style="margin-right:3px;color:#3b82f6;"></i>Soumis : ${submitted}` : ''}
                 </div>
             </div>
-            <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
-                <span style="font-size:11px;padding:3px 8px;border-radius:99px;background:${sc}22;color:${sc};">${v.student_status||'—'}</span>
+            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;">
+                ${sl ? `<span style="font-size:11px;padding:3px 10px;border-radius:99px;background:${sc}22;color:${sc};font-weight:600;">${sl}</span>` : ''}
                 ${v.url ? `
-                <a href="${v.url}" target="_blank" download="${v.filename}"
-                   style="display:inline-flex;align-items:center;gap:5px;padding:7px 13px;background:rgba(16,185,129,.15);color:#10b981;border:1px solid rgba(16,185,129,.3);border-radius:7px;text-decoration:none;font-size:12px;font-weight:600;">
-                    <i class="fas fa-download"></i> Télécharger
-                </a>
                 <a href="${v.url}" target="_blank"
-                   style="display:inline-flex;align-items:center;gap:5px;padding:7px 13px;background:rgba(59,130,246,.15);color:#60a5fa;border:1px solid rgba(59,130,246,.3);border-radius:7px;text-decoration:none;font-size:12px;font-weight:600;">
+                   style="display:inline-flex;align-items:center;gap:5px;padding:8px 14px;background:rgba(59,130,246,.15);color:#60a5fa;border:1px solid rgba(59,130,246,.3);border-radius:7px;text-decoration:none;font-size:12px;font-weight:600;">
                     <i class="fas fa-play"></i> Lire
-                </a>` : `<span style="font-size:11px;color:rgba(255,255,255,.3);">URL expirée</span>`}
+                </a>
+                <a href="${v.url}" target="_blank" download="${v.filename}"
+                   style="display:inline-flex;align-items:center;gap:5px;padding:8px 14px;background:rgba(16,185,129,.15);color:#10b981;border:1px solid rgba(16,185,129,.3);border-radius:7px;text-decoration:none;font-size:12px;font-weight:600;">
+                    <i class="fas fa-download"></i> Télécharger
+                </a>` : `<span style="font-size:11px;color:rgba(255,255,255,.3);"><i class="fas fa-clock"></i> Lien expiré — Actualisez</span>`}
             </div>
         </div>`;
     }).join('');
 
     body.innerHTML = `
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
             <div style="font-size:13px;color:rgba(255,255,255,.5);">
-                <i class="fas fa-folder-open"></i> ${videoRecordingsData.prefix || ''} &nbsp;·&nbsp; ${videos.length} fichier(s)
+                <i class="fas fa-film" style="margin-right:5px;color:#60a5fa;"></i>
+                <strong style="color:rgba(255,255,255,.8);">${recCount}</strong> enregistrement(s) sur
+                <strong style="color:rgba(255,255,255,.8);">${total}</strong> étudiant(s)
             </div>
-            <button class="btn btn-light btn-sm" onclick="loadVideoRecordings()"><i class="fas fa-sync-alt"></i> Actualiser</button>
+            <button class="btn btn-light btn-sm" onclick="loadVideoRecordings()">
+                <i class="fas fa-sync-alt"></i> Actualiser
+            </button>
         </div>
         ${error ? `<div style="color:var(--warning);background:rgba(245,158,11,.1);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;"><i class="fas fa-exclamation-triangle"></i> ${error}</div>` : ''}
         ${rows}
-        <div style="font-size:11px;color:rgba(255,255,255,.3);margin-top:10px;text-align:center;">
-            Les liens de téléchargement sont valables 2 heures. Cliquez sur Actualiser pour les renouveler.
+        <div style="font-size:11px;color:rgba(255,255,255,.3);margin-top:12px;text-align:center;">
+            <i class="fas fa-info-circle"></i> Les liens sont valables 4h. Cliquez sur Actualiser pour les renouveler.
         </div>`;
 }
 
@@ -1546,8 +2101,8 @@ function renderRecordingsView() {
         return;
     }
 
-    const statusLabel = { IN_PROGRESS:'En cours', SUBMITTED:'Soumis', BANNED:'Exclu', AUTO_SUBMITTED:'Auto-soumis' };
-    const statusColor = { IN_PROGRESS:'#10b981', SUBMITTED:'#3b82f6', BANNED:'#ef4444', AUTO_SUBMITTED:'#f59e0b' };
+    const statusLabel = { in_progress:'En cours', submitted:'Soumis', banned:'Exclu', auto_submitted:'Auto-soumis' };
+    const statusColor = { in_progress:'#10b981', submitted:'#3b82f6', banned:'#ef4444', auto_submitted:'#f59e0b' };
 
     if (selectedRecStudentIdx >= students.length) selectedRecStudentIdx = 0;
     const cur = students[selectedRecStudentIdx];
@@ -1638,6 +2193,161 @@ function renderRecordingsView() {
 // DÉMARRAGE
 // ═══════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', init);
+
+
+// ═══════════════════════════════════════════════════════════
+// AGENT PROCTOR — Alertes temps réel (polling toutes les 15s)
+// ═══════════════════════════════════════════════════════════
+let _agentPanelOpen  = false;
+let _agentAlertSound = null;
+
+function toggleAgentPanel() {
+    _agentPanelOpen = !_agentPanelOpen;
+    document.getElementById('agent-panel').style.display = _agentPanelOpen ? 'block' : 'none';
+    if (_agentPanelOpen) fetchAgentAlerts();
+}
+
+// Fermer le panneau si clic hors du panel
+document.addEventListener('click', e => {
+    const wrap = document.getElementById('agent-bell-wrap');
+    if (wrap && !wrap.contains(e.target)) {
+        document.getElementById('agent-panel').style.display = 'none';
+        _agentPanelOpen = false;
+    }
+});
+
+function _levelColor(level) {
+    return level === 'URGENT' ? '#ef4444' : '#f59e0b';
+}
+
+function _renderAlerts(alerts) {
+    const list = document.getElementById('agent-alerts-list');
+    if (!alerts.length) {
+        list.innerHTML = `<div style="padding:20px;text-align:center;color:#64748b;font-size:13px;">
+            <i class="fas fa-shield-check" style="font-size:24px;display:block;margin-bottom:8px;"></i>
+            Aucune alerte active</div>`;
+        return;
+    }
+    list.innerHTML = alerts.map(a => {
+        const col  = _levelColor(a.level);
+        const time = a.timestamp ? new Date(a.timestamp).toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'}) : '';
+        return `
+        <div style="padding:12px 16px;border-bottom:1px solid #1e293b;" data-attempt="${a.attempt_id}">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <span style="background:${col};color:#fff;padding:2px 8px;border-radius:10px;
+                        font-size:11px;font-weight:700;">${a.level}</span>
+                    <strong style="font-size:13px;">${a.student_name}</strong>
+                </div>
+                <span style="color:#64748b;font-size:11px;">${time}</span>
+            </div>
+            <div style="font-size:12px;color:#94a3b8;margin-bottom:6px;">
+                📊 Risque <strong style="color:${col};">${a.risk_score}/100</strong>
+                &nbsp;·&nbsp; Sans visage ${a.no_face}×
+                &nbsp;·&nbsp; Multi-visage ${a.multi_face}×
+                &nbsp;·&nbsp; Tab switch ${a.tab_switches}×
+            </div>
+            ${a.ai_note ? `<div style="font-size:11px;color:#7dd3fc;background:#0c1929;
+                padding:6px 10px;border-radius:6px;margin-bottom:8px;border-left:3px solid #2563eb;">
+                🤖 ${a.ai_note}</div>` : ''}
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                <button onclick="sendWarn(${a.attempt_id},'Comportement suspect détecté par l\\'agent de surveillance.')"
+                    style="background:#f59e0b;color:#fff;border:none;padding:4px 10px;border-radius:6px;
+                    font-size:11px;cursor:pointer;font-weight:600;">
+                    ⚠️ Avertir
+                </button>
+                <button onclick="openPrivateCall && openPrivateCall(${a.attempt_id})"
+                    style="background:#2563eb;color:#fff;border:none;padding:4px 10px;border-radius:6px;
+                    font-size:11px;cursor:pointer;font-weight:600;">
+                    📹 Appel privé
+                </button>
+                <button onclick="markAlertRead(${a.attempt_id})"
+                    style="background:#334155;color:#94a3b8;border:none;padding:4px 10px;border-radius:6px;
+                    font-size:11px;cursor:pointer;">
+                    ✓ Lu
+                </button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+async function fetchAgentAlerts() {
+    try {
+        const r = await authenticatedFetch('/api/agent/alerts');
+        if (!r.ok) return;
+        const data = await r.json();
+        const alerts = data.alerts || [];
+        const count  = data.total_unread || 0;
+
+        // Badge
+        const badge = document.getElementById('agent-bell-badge');
+        const wrap  = document.getElementById('agent-bell-wrap');
+        wrap.style.display = 'block';
+        if (count > 0) {
+            badge.style.display = 'block';
+            badge.textContent   = count > 99 ? '99+' : count;
+            // Son d'alerte si nouveaux
+            if (!_agentAlertSound && count > 0) {
+                try {
+                    _agentAlertSound = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAA...');
+                } catch(e) {}
+            }
+        } else {
+            badge.style.display = 'none';
+        }
+
+        if (_agentPanelOpen) _renderAlerts(alerts);
+
+        // Notification navigateur pour les urgences
+        alerts.filter(a => a.level === 'URGENT').forEach(a => {
+            if (Notification.permission === 'granted') {
+                new Notification('🔴 URGENT — CEI Surveillance', {
+                    body: `${a.student_name} — Risque ${a.risk_score}/100`,
+                    icon: '/static/favicon.svg',
+                });
+            }
+        });
+
+    } catch(e) {
+        // Silencieux si endpoint indisponible
+    }
+}
+
+async function markAlertRead(attemptId) {
+    try {
+        await authenticatedFetch('/api/agent/alerts/read', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({attempt_ids: [attemptId]})
+        });
+        fetchAgentAlerts();
+    } catch(e) {}
+}
+
+async function markAllAlertsRead() {
+    const list = document.getElementById('agent-alerts-list');
+    const ids  = [...list.querySelectorAll('[data-attempt]')].map(el => +el.dataset.attempt);
+    if (!ids.length) return;
+    try {
+        await authenticatedFetch('/api/agent/alerts/read', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({attempt_ids: ids})
+        });
+        fetchAgentAlerts();
+    } catch(e) {}
+}
+
+// Demander permission notifications navigateur
+if (Notification.permission === 'default') {
+    Notification.requestPermission();
+}
+
+// Polling alertes toutes les 15 secondes
+setInterval(fetchAgentAlerts, 15000);
+// Premier appel au chargement
+setTimeout(fetchAgentAlerts, 2000);
 </script>
+<script src="{{ url_for('static', filename='js/site_translator.js') }}?v=7"></script>
 </body>
 </html>

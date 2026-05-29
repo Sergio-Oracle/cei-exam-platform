@@ -6,17 +6,12 @@
     <title>CEI — Centre d'Examen Intelligent | Plateforme d'Examens en Ligne</title>
     <meta name="description" content="CEI est la plateforme sénégalaise d'examens en ligne avec surveillance vidéo en temps réel, correction automatique par IA et détection de fraude avancée. Idéale pour les universités et écoles d'Afrique de l'Ouest.">
 
-    <!-- Preconnect to external CDN to reduce DNS/TLS latency -->
-    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-    <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
-
     <!-- Full CSS — loaded asynchronously (no render-blocking) -->
     <link rel="preload" href="{{ url_for('static', filename='css/landing.css') }}" as="style" onload="this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="{{ url_for('static', filename='css/landing.css') }}"></noscript>
 
-    <!-- Font Awesome — loaded asynchronously to avoid render-blocking -->
-    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" as="style" onload="this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"></noscript>
+    <!-- Font Awesome — local, no tracking, no CDN -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='fontawesome/css/all.min.css') }}">
 
     <!-- ══ Critical CSS (above-the-fold) inlined — zero render-blocking ══ -->
     <style>
@@ -45,16 +40,16 @@
             <div class="hero-icon">
                 <i class="fas fa-graduation-cap"></i>
             </div>
-            <h1>Centre d'Examen Intelligent</h1>
-            <p>La plateforme sénégalaise d'examens en ligne — surveillance vidéo en temps réel, correction automatique par IA, relevés officiels et détection de fraude avancée</p>
+            <h1 data-ld="hero_title">Centre d'Examen Intelligent</h1>
+            <p data-ld="hero_sub">La plateforme sénégalaise d'examens en ligne — surveillance vidéo en temps réel, correction automatique par IA, relevés officiels et détection de fraude avancée</p>
             <div class="cta-buttons">
                 <a href="/app" class="btn btn-primary">
                     <i class="fas fa-rocket"></i>
-                    Commencer Maintenant
+                    <span data-ld="cta_start">Commencer Maintenant</span>
                 </a>
                 <a href="#comment-ca-marche" class="btn btn-secondary">
                     <i class="fas fa-play-circle"></i>
-                    Comment ça marche ?
+                    <span data-ld="cta_how">Comment ça marche ?</span>
                 </a>
             </div>
         </div>
@@ -252,12 +247,12 @@
                         <i class="fas fa-users-gear"></i>
                     </div>
                     <h3>Gestion Multi-Rôles</h3>
-                    <p>Interfaces adaptées pour administrateurs, professeurs et étudiants avec permissions granulaires.</p>
+                    <p>Interfaces adaptées pour administrateurs, professeurs, surveillants et étudiants avec permissions granulaires.</p>
                     <ul class="feature-list">
                         <li><i class="fas fa-check"></i> Admin : Gestion globale</li>
                         <li><i class="fas fa-check"></i> Professeur : Correction & notes</li>
+                        <li><i class="fas fa-check"></i> Surveillant : Groupe assigné</li>
                         <li><i class="fas fa-check"></i> Étudiant : Examens & relevés</li>
-                        <li><i class="fas fa-check"></i> Permissions granulaires</li>
                     </ul>
                 </div>
 
@@ -783,22 +778,23 @@
             
             <div class="footer-section">
                 <h4>Documentation</h4>
-                <a href="/guide-enseignant"><i class="fas fa-chalkboard-teacher" style="width:16px;margin-right:6px;"></i> Guide Enseignant</a>
-                <a href="/guide-etudiant"><i class="fas fa-user-graduate" style="width:16px;margin-right:6px;"></i> Guide Étudiant</a>
+                <a href="/guide-enseignant"><i class="fas fa-chalkboard-teacher" style="width:16px;margin-right:6px;"></i> <span data-ld="guide_teacher">Guide Enseignant</span></a>
+                <a href="/guide-etudiant"><i class="fas fa-user-graduate" style="width:16px;margin-right:6px;"></i> <span data-ld="guide_student">Guide Étudiant</span></a>
+                <a href="/guide-surveillant"><i class="fas fa-eye" style="width:16px;margin-right:6px;"></i> Guide Surveillant</a>
                 <a href="/conditions"><i class="fas fa-file-contract" style="width:16px;margin-right:6px;"></i> Conditions d'Utilisation</a>
                 <a href="#comment-ca-marche"><i class="fas fa-question-circle" style="width:16px;margin-right:6px;"></i> Comment ça marche ?</a>
             </div>
             
             <div class="footer-section">
                 <h4>Contact</h4>
-                <p><i class="fas fa-envelope"></i> entreprisertn221@gmail.com</p>
-                <p><i class="fas fa-phone"></i> (+221) 77 662 76 94</p>
-                <p><i class="fas fa-map-marker-alt"></i> Liberté 2, derrière immeuble BICIS, Jet d'eau - Dakar - Sénégal</p>
+                <p><i class="fas fa-map-marker-alt"></i> Cité du savoir - Diamniadio, Castors, avenue Bourguiba, rue n°13</p>
+                <p><i class="fas fa-phone"></i> +221 30 108 41 53</p>
+                <p><i class="fas fa-envelope"></i> visioplus@unchk.edu.sn</p>
             </div>
         </div>
         
         <div class="footer-bottom">
-            <p>&copy; 2026 CEI — Centre d'Examen Intelligent. Tous droits réservés.</p>
+            <p>&copy; 2026 CEI — Université Numérique Cheikh Hamidou Kane</p>
         </div>
     </footer>
 <style>
@@ -1047,5 +1043,164 @@ const STATS = {
     observer.observe(statsSection);
 })();
 </script>
+
+<!-- ═══════════════════════════════════════════════
+     SÉLECTEUR DE LANGUE — LANDING PAGE
+     ═══════════════════════════════════════════════ -->
+<style>
+.landing-lang-switcher {
+    position: fixed;
+    top: 18px;
+    right: 20px;
+    z-index: 9999;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+.landing-lang-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 13px;
+    background: rgba(255,255,255,0.92);
+    border: 1px solid rgba(255,255,255,0.5);
+    border-radius: 9px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1e293b;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.12);
+    backdrop-filter: blur(6px);
+    transition: all 0.15s;
+}
+.landing-lang-btn:hover { background: white; box-shadow: 0 4px 16px rgba(0,0,0,0.18); }
+.landing-lang-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.14), 0 0 0 1px rgba(0,0,0,.06);
+    min-width: 148px;
+    overflow: hidden;
+}
+.landing-lang-option {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 10px 14px;
+    font-size: 13.5px;
+    font-weight: 500;
+    color: #334155;
+    cursor: pointer;
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+    font-family: inherit;
+    transition: background 0.12s;
+}
+.landing-lang-option:hover { background: #f1f5f9; }
+.landing-lang-option.active { background: #eff6ff; color: #2563eb; font-weight: 700; }
+</style>
+
+<div class="landing-lang-switcher" id="landing-lang-sw">
+    <button class="landing-lang-btn" id="landing-lang-btn" onclick="landingToggleLang(event)">
+        <i class="fas fa-globe"></i>
+        <span id="landing-lang-label">🇫🇷 FR</span>
+        <i class="fas fa-chevron-down" style="font-size:10px;"></i>
+    </button>
+    <div class="landing-lang-menu" id="landing-lang-menu" style="display:none;">
+        <button class="landing-lang-option" onclick="landingSetLang('fr')">
+            <span style="font-size:18px;">🇫🇷</span> Français
+        </button>
+        <button class="landing-lang-option" onclick="landingSetLang('en')">
+            <span style="font-size:18px;">🇬🇧</span> English
+        </button>
+        <button class="landing-lang-option" onclick="landingSetLang('wo')">
+            <span style="font-size:18px;">🇸🇳</span> Wolof
+        </button>
+    </div>
+</div>
+
+<script>
+/* ── Landing i18n ── */
+const _LD = {
+  fr: {
+    hero_title: "Centre d'Examen Intelligent",
+    hero_sub: "La plateforme sénégalaise d'examens en ligne — surveillance vidéo en temps réel, correction automatique par IA, relevés officiels et détection de fraude avancée",
+    cta_start: "Commencer Maintenant",
+    cta_how: "Comment ça marche ?",
+    login_btn: "Se Connecter",
+    conditions_link: "Conditions d'utilisation",
+    guide_teacher: "Guide Enseignant",
+    guide_student: "Guide Étudiant",
+  },
+  en: {
+    hero_title: "Intelligent Examination Centre",
+    hero_sub: "The Senegalese online exam platform — real-time video proctoring, AI automatic grading, official transcripts and advanced fraud detection",
+    cta_start: "Get Started",
+    cta_how: "How does it work?",
+    login_btn: "Sign In",
+    conditions_link: "Terms of use",
+    guide_teacher: "Teacher Guide",
+    guide_student: "Student Guide",
+  },
+  wo: {
+    hero_title: "Xëtu Jëfandikoo yu Xam-Xam",
+    hero_sub: "Plateforme bu Senegaal bu jëfandikoo online — xarekat video ci wakhtuwaan, soppi automatik ak IA, relevés yu dëkk ak seet-seetlu",
+    cta_start: "Tambali Léegi",
+    cta_how: "Ana nit nii?",
+    login_btn: "Duggu",
+    conditions_link: "Soxor yi",
+    guide_teacher: "Cëep Jàngalekat",
+    guide_student: "Cëep Jángkat",
+  }
+};
+
+function _landingLang() {
+    const s = localStorage.getItem('lang');
+    return ['fr','en','wo'].includes(s) ? s : 'fr';
+}
+
+function landingApply(code) {
+    const d = _LD[code] || _LD.fr;
+    const flags = { fr:'🇫🇷', en:'🇬🇧', wo:'🇸🇳' };
+    const names = { fr:'FR', en:'EN', wo:'WO' };
+    const lbl = document.getElementById('landing-lang-label');
+    if (lbl) lbl.textContent = (flags[code]||'🌐') + ' ' + (names[code]||code.toUpperCase());
+    document.querySelectorAll('[data-ld]').forEach(function(el) {
+        const key = el.getAttribute('data-ld');
+        if (d[key] !== undefined) el.textContent = d[key];
+    });
+    // Met à jour la langue HTML
+    document.documentElement.lang = code;
+    // Highlight actif
+    document.querySelectorAll('.landing-lang-option').forEach(function(btn, i) {
+        btn.classList.toggle('active', ['fr','en','wo'][i] === code);
+    });
+}
+
+function landingSetLang(code) {
+    localStorage.setItem('lang', code);
+    landingApply(code);
+    document.getElementById('landing-lang-menu').style.display = 'none';
+}
+
+function landingToggleLang(e) {
+    e.stopPropagation();
+    const m = document.getElementById('landing-lang-menu');
+    m.style.display = m.style.display === 'none' ? 'block' : 'none';
+}
+
+document.addEventListener('click', function(e) {
+    const sw = document.getElementById('landing-lang-sw');
+    if (sw && !sw.contains(e.target)) {
+        document.getElementById('landing-lang-menu').style.display = 'none';
+    }
+});
+
+// Init
+landingApply(_landingLang());
+</script>
+<script src="{{ url_for('static', filename='js/site_translator.js') }}?v=7"></script>
 </body>
 </html>

@@ -1,5 +1,8 @@
 annotated-types
+gunicorn
+flask-compress
 anthropic
+google-genai
 anyio
 bcrypt
 blinker
@@ -45,3 +48,4 @@ Werkzeug
 pandas
 openpyxl
 chardet
+pdfplumber>=0.11

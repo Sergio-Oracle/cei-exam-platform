@@ -4,6 +4,7 @@ Avec CRUD Maquette + Gestion erreurs
 """
 from flask import Flask, render_template, request, jsonify, send_file
 from flask_cors import CORS
+from flask_compress import Compress
 from datetime import datetime, timedelta, timezone
 from csv_import_routes import register_csv_routes
 from flask_jwt_extended import (
@@ -15,6 +16,8 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 from anthropic import Anthropic
+from google import genai as google_genai
+from google.genai import types as genai_types
 from werkzeug.utils import secure_filename
 import PyPDF2
 import docx
@@ -51,8 +54,8 @@ from models import (
     User, Subject, StudentPaper, Reclamation, CorrectionHistory,
     UserRole, ReclamationStatus,
     Formation, Semester, UE, EC, ECAssignment, StudentUEEnrollment,
-    OnlineExam, ExamAttempt, ExamActivityLog, GradeTranscript, 
-    ExamStatus, AttemptStatus,  
+    OnlineExam, ExamAttempt, ExamActivityLog, GradeTranscript,
+    ExamStatus, AttemptStatus, ExamProctor, ProctorAssignment,
     get_session, init_db
 )
 
@@ -84,9 +87,8 @@ def normalize_name(name):
     
     return name
 
-# Charger les variables d'environnement
-
-load_dotenv()
+# Charger les variables d'environnement — override=True pour toujours prendre le .env
+load_dotenv(override=True)
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
@@ -97,10 +99,54 @@ app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'dev-jwt-secret-key-c
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
 app.config['MAX_CONTENT_LENGTH'] = int(os.getenv('MAX_FILE_SIZE', 16 * 1024 * 1024))
 app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER', 'static/uploads')
+app.config['TEMPLATES_AUTO_RELOAD'] = True
+
+# Compression gzip/brotli des réponses JSON et HTML (réduit la bande passante de 60-80%)
+app.config['COMPRESS_REGISTER'] = True
+app.config['COMPRESS_LEVEL'] = 6
+app.config['COMPRESS_MIN_SIZE'] = 500
+Compress(app)
 
 jwt = JWTManager(app)
 bcrypt = Bcrypt(app)
-client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+# Initialisation des clients IA
+_anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+anthropic_client = Anthropic(api_key=_anthropic_key) if _anthropic_key else None
+
+# Rotation des clés Gemini — toutes les clés GEMINI_API_KEY, GEMINI_API_KEY_2, etc.
+GEMINI_MODEL = "models/gemini-2.5-flash"
+_gemini_keys = [v for k, v in sorted(os.environ.items())
+                if k == "GEMINI_API_KEY" or (k.startswith("GEMINI_API_KEY_") and v)]
+_gemini_clients = [google_genai.Client(api_key=k) for k in _gemini_keys]
+_gemini_index = 0  # index courant pour la rotation
+
+def _next_gemini_client():
+    """Retourne le prochain client Gemini disponible (round-robin)."""
+    global _gemini_index
+    if not _gemini_clients:
+        return None
+    client = _gemini_clients[_gemini_index % len(_gemini_clients)]
+    _gemini_index = (_gemini_index + 1) % len(_gemini_clients)
+    return client
+
+# DeepSeek — fallback si Anthropic et Gemini indisponibles
+_deepseek_key = os.getenv("DEEPSEEK_API_KEY")
+DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions"
+DEEPSEEK_MODEL = "deepseek-chat"
+
+# Ollama — fallback local si tous les autres fournisseurs sont indisponibles
+_ollama_url = os.getenv("OLLAMA_API_URL", "").rstrip("/")
+_ollama_key = os.getenv("OLLAMA_API_KEY")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3.6:latest")          # gros modèle — corrections précises
+OLLAMA_MODEL_FAST = os.getenv("OLLAMA_MODEL_FAST", "gemma3:12b")    # modèle rapide — suggestions/tâches simples
+
+if not anthropic_client and not _gemini_clients and not _deepseek_key and not _ollama_key:
+    print("⚠️  AVERTISSEMENT: Aucune clé IA configurée (ANTHROPIC_API_KEY, GEMINI_API_KEY, DEEPSEEK_API_KEY ou OLLAMA_API_KEY)")
+else:
+    if _deepseek_key:
+        print("✅ DeepSeek configuré comme fallback IA")
+    if _ollama_key and _ollama_url:
+        print(f"✅ Ollama configuré comme fallback IA ({OLLAMA_MODEL} @ {_ollama_url})")
 
 # Enregistrement du blueprint proctoring
 app.register_blueprint(proctoring_bp)
@@ -137,18 +183,203 @@ try:
 except Exception as e:
     print(f"⚠️ Attention lors de l'initialisation de la base: {e}")
 
+def _call_anthropic(system_prompt: str, user_message: str, temperature: float, max_tokens: int = 8192) -> str:
+    message = anthropic_client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=max_tokens,
+        temperature=temperature,
+        system=system_prompt,
+        messages=[{"role": "user", "content": user_message}]
+    )
+    return message.content[0].text
+
+def _call_gemini(system_prompt: str, user_message: str, temperature: float) -> str:
+    """Essaie toutes les clés Gemini en rotation jusqu'au premier succès."""
+    if not _gemini_clients:
+        raise Exception("Aucune clé Gemini configurée")
+    config = genai_types.GenerateContentConfig(
+        system_instruction=system_prompt if system_prompt else None,
+        temperature=temperature
+    )
+    last_error = None
+    for _ in range(len(_gemini_clients)):
+        gc = _next_gemini_client()
+        try:
+            response = gc.models.generate_content(
+                model=GEMINI_MODEL, contents=user_message, config=config)
+            return response.text
+        except Exception as e:
+            last_error = e
+            print(f"⚠️  Clé Gemini en rotation: {e}")
+    raise last_error
+
+def _call_deepseek(system_prompt: str, user_message: str, temperature: float, max_tokens: int = 8192) -> str:
+    """Appel DeepSeek via Tor SOCKS5 (proxy local 127.0.0.1:9050) pour contourner le blocage réseau."""
+    if not _deepseek_key:
+        raise Exception("Clé DeepSeek non configurée")
+    import requests
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": user_message})
+    # Route via Tor SOCKS5 — contourne le blocage géographique de l'université
+    proxies = {"https": "socks5h://127.0.0.1:9050", "http": "socks5h://127.0.0.1:9050"}
+    resp = requests.post(
+        DEEPSEEK_API_URL,
+        headers={"Authorization": f"Bearer {_deepseek_key}", "Content-Type": "application/json"},
+        json={"model": DEEPSEEK_MODEL, "messages": messages,
+              "temperature": temperature, "max_tokens": max_tokens, "stream": False},
+        proxies=proxies,
+        timeout=120
+    )
+    resp.raise_for_status()
+    return resp.json()["choices"][0]["message"]["content"]
+
+def _call_ollama(system_prompt: str, user_message: str, temperature: float, max_tokens: int = 8192, fast: bool = False) -> str:
+    """Appel Ollama (fromager.unchk.sn) — fallback final de la chaîne IA.
+    fast=True utilise OLLAMA_MODEL_FAST (gemma3:12b) pour les tâches simples/rapides.
+    fast=False utilise OLLAMA_MODEL (qwen3.6) pour les corrections précises.
+    """
+    if not _ollama_key or not _ollama_url:
+        raise Exception("Ollama non configuré")
+    import requests as _req
+    import re as _re
+    model = OLLAMA_MODEL_FAST if fast else OLLAMA_MODEL
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": user_message})
+    resp = _req.post(
+        f"{_ollama_url}/api/chat",
+        headers={"Authorization": f"Bearer {_ollama_key}", "Content-Type": "application/json"},
+        json={"model": model, "messages": messages, "stream": False,
+              "think": False,
+              "options": {"temperature": temperature, "num_predict": max_tokens}},
+        timeout=180
+    )
+    resp.raise_for_status()
+    content = resp.json()["message"]["content"]
+    # Supprimer les blocs <think>...</think> que Qwen3 peut générer en mode reasoning
+    content = _re.sub(r'<think>.*?</think>', '', content, flags=_re.DOTALL).strip()
+    return content
+
+def _build_correction_system_prompt(title: str = "", content_preview: str = "") -> str:
+    """Construit un system prompt de correction universel.
+    L'IA détecte elle-même le domaine à partir du titre et du contenu du sujet.
+    Fonctionne pour n'importe quelle discipline sans liste figée de mots-clés.
+    """
+    context = ""
+    if title:
+        context += f"Titre de l'examen : {title}\n"
+    if content_preview:
+        preview = content_preview[:500].strip()
+        context += f"Début du sujet : {preview}\n"
+
+    return f"""Tu es un correcteur d'examen universitaire EXTRÊMEMENT rigoureux et polyvalent.
+
+{f"CONTEXTE DE L'EXAMEN :{chr(10)}{context}" if context else ""}
+ÉTAPE 1 — IDENTIFICATION DU DOMAINE :
+Avant de corriger, identifie silencieusement la discipline de cet examen (ex: droit civil, médecine, mathématiques, informatique, histoire, philosophie, chimie, agronomie, architecture, littérature, langues, etc.) en lisant le sujet et le barème fournis.
+Adopte immédiatement le niveau d'expertise d'un professeur spécialiste de ce domaine :
+- Pour les sciences exactes : vérifie chaque calcul, formule, démonstration avec rigueur mathématique
+- Pour le droit : cite les articles, principes juridiques et jurisprudences pertinents
+- Pour la médecine/santé : applique les protocoles cliniques et la terminologie médicale exacte
+- Pour les sciences humaines : évalue la rigueur argumentative, les références théoriques, la cohérence
+- Pour les langues/littérature : évalue la syntaxe, le style, la richesse lexicale, l'analyse textuelle
+- Pour toute autre discipline : applique les standards académiques propres à ce domaine
+
+IMPORTANT : Tu DOIS terminer ta correction par une ligne contenant EXACTEMENT :
+Note totale: XX.XX/20
+
+Format de correction :
+=== CORRECTION DÉTAILLÉE ===
+[Évaluation question par question avec justification précise selon les critères du barème]
+
+=== RÉSUMÉ ===
+Points forts : [...]
+Points à améliorer : [...]
+
+Note totale: XX.XX/20
+"""
+
 def call_claude(system_prompt: str, user_message: str, temperature: float = 0.2) -> str:
-    try:
-        message = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=8192,
-            temperature=temperature,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_message}]
-        )
-        return message.content[0].text
-    except Exception as e:
-        raise Exception(f"Erreur API Claude: {str(e)}")
+    """Appel IA avec fallback automatique Anthropic → Gemini → DeepSeek → Ollama."""
+    anthropic_err = None
+    gemini_err = None
+    deepseek_err = None
+
+    if anthropic_client:
+        try:
+            return _call_anthropic(system_prompt, user_message, temperature)
+        except Exception as e:
+            anthropic_err = str(e)
+            if 'credit balance' in anthropic_err.lower() or 'too low' in anthropic_err.lower():
+                print("⚠️  Anthropic : crédits insuffisants — basculement sur Gemini")
+            else:
+                print(f"⚠️  Anthropic indisponible, basculement sur Gemini: {e}")
+
+    if _gemini_clients:
+        try:
+            return _call_gemini(system_prompt, user_message, temperature)
+        except Exception as e:
+            gemini_err = str(e)
+            if 'quota' in gemini_err.lower() or 'resource_exhausted' in gemini_err.lower():
+                print("⚠️  Gemini : quota épuisé — basculement sur DeepSeek")
+            else:
+                print(f"⚠️  Gemini indisponible — basculement sur DeepSeek: {e}")
+
+    if _deepseek_key:
+        try:
+            return _call_deepseek(system_prompt, user_message, temperature)
+        except Exception as e:
+            deepseek_err = str(e)
+            print(f"⚠️  DeepSeek indisponible — basculement sur Ollama: {e}")
+
+    if _ollama_key and _ollama_url:
+        try:
+            return _call_ollama(system_prompt, user_message, temperature)
+        except Exception as e:
+            print(f"⚠️  Ollama indisponible: {e}")
+
+    # Message d'erreur précis selon la cause
+    if 'credit balance' in (anthropic_err or '').lower():
+        raise Exception("Crédits Anthropic épuisés. Rechargez sur console.anthropic.com")
+    if 'quota' in (gemini_err or '').lower() or 'resource_exhausted' in (gemini_err or '').lower():
+        raise Exception("Quota Gemini épuisé (free tier). Rechargez sur aistudio.google.com")
+    raise Exception("Le service d'intelligence artificielle est temporairement indisponible. Veuillez réessayer.")
+
+def call_ai_simple(prompt: str) -> str:
+    """Appel IA simple (sans system prompt) avec fallback automatique Anthropic → Gemini → DeepSeek → Ollama."""
+    if anthropic_client:
+        try:
+            message = anthropic_client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=4000,
+                messages=[{"role": "user", "content": prompt}]
+            )
+            return message.content[0].text
+        except Exception as e:
+            print(f"⚠️  Anthropic indisponible, basculement sur Gemini: {e}")
+
+    if _gemini_clients:
+        try:
+            return _call_gemini("", prompt, 0.2)
+        except Exception as e:
+            print(f"⚠️  Gemini indisponible, basculement sur DeepSeek: {e}")
+
+    if _deepseek_key:
+        try:
+            return _call_deepseek("", prompt, 0.2)
+        except Exception as e:
+            print(f"⚠️  DeepSeek indisponible, basculement sur Ollama: {e}")
+
+    if _ollama_key and _ollama_url:
+        try:
+            return _call_ollama("", prompt, 0.2, fast=True)
+        except Exception as e:
+            print(f"⚠️  Ollama indisponible: {e}")
+
+    raise Exception("Le service d'intelligence artificielle est temporairement indisponible. Veuillez réessayer.")
 
 def extract_score_from_correction(correction_text: str) -> float:
     """Extraire la note de la correction avec de multiples patterns"""
@@ -200,17 +431,26 @@ def _strip_bareme_from_content(content):
     # Pas de barème trouvé → retourner le contenu intact
     return content
 
-# Anti-cache pour développement
 @app.after_request
-def add_no_cache_headers(response):
-    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-    response.headers['Pragma'] = 'no-cache'
-    response.headers['Expires'] = '-1'
+def add_cache_headers(response):
+    path = request.path
+    # Fichiers statiques : cache 7 jours (JS, CSS, images, fonts)
+    if path.startswith('/static/'):
+        response.headers['Cache-Control'] = 'public, max-age=604800, immutable'
+        return response
+    # Routes API et pages HTML : pas de cache
+    if path.startswith('/api/') or response.content_type.startswith('text/html'):
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
     return response
 
 @app.route('/')
 def landing():
     return render_template('landing.html')
+
+@app.route('/favicon.ico')
+def favicon():
+    return send_file('static/favicon.svg', mimetype='image/svg+xml')
 
 @app.route('/app')
 def app_page():
@@ -227,6 +467,10 @@ def guide_student():
 @app.route('/conditions')
 def terms():
     return render_template('terms.html')
+
+@app.route('/guide-surveillant')
+def guide_surveillant():
+    return render_template('guide_surveillant.html')
 
 
 # ============================================================================
@@ -316,6 +560,77 @@ def get_current_user():
         return jsonify(user_dict)
     except Exception as e:
         print(f"❌ Erreur get_current_user: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# ============================================================================
+# PROFIL UTILISATEUR — GET / PUT infos / PUT mot de passe
+# ============================================================================
+
+@app.route('/api/profile', methods=['PUT'])
+@jwt_required()
+def update_profile():
+    try:
+        user_id = int(get_jwt_identity())
+        session = get_session()
+        user = session.query(User).filter_by(id=user_id).first()
+        if not user:
+            session.close()
+            return jsonify({'error': 'Utilisateur non trouvé'}), 404
+
+        data = request.json or {}
+        full_name = data.get('full_name', '').strip()
+        email     = data.get('email', '').strip()
+
+        if full_name:
+            user.full_name = full_name
+        if email and email != user.email:
+            existing = session.query(User).filter_by(email=email).first()
+            if existing:
+                session.close()
+                return jsonify({'error': 'Cet email est déjà utilisé par un autre compte'}), 400
+            user.email = email
+
+        session.commit()
+        result = user.to_dict()
+        session.close()
+        return jsonify({'success': True, 'user': result})
+    except Exception as e:
+        print(f"❌ Erreur update_profile: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/profile/password', methods=['PUT'])
+@jwt_required()
+def change_password():
+    try:
+        user_id = int(get_jwt_identity())
+        session = get_session()
+        user = session.query(User).filter_by(id=user_id).first()
+        if not user:
+            session.close()
+            return jsonify({'error': 'Utilisateur non trouvé'}), 404
+
+        data = request.json or {}
+        current_pw = data.get('current_password', '')
+        new_pw     = data.get('new_password', '')
+        confirm_pw = data.get('confirm_password', '')
+
+        if not bcrypt.check_password_hash(user.password_hash, current_pw):
+            session.close()
+            return jsonify({'error': 'Mot de passe actuel incorrect'}), 400
+        if len(new_pw) < 6:
+            session.close()
+            return jsonify({'error': 'Le nouveau mot de passe doit comporter au moins 6 caractères'}), 400
+        if new_pw != confirm_pw:
+            session.close()
+            return jsonify({'error': 'Les mots de passe ne correspondent pas'}), 400
+
+        user.password_hash = bcrypt.generate_password_hash(new_pw).decode('utf-8')
+        session.commit()
+        session.close()
+        return jsonify({'success': True, 'message': 'Mot de passe modifié avec succès'})
+    except Exception as e:
+        print(f"❌ Erreur change_password: {e}")
         return jsonify({'error': str(e)}), 500
 
 # ============================================================================
@@ -1194,6 +1509,7 @@ def admin_dashboard():
         total_users = session.query(User).count()
         total_students = session.query(User).filter_by(role=UserRole.STUDENT).count()
         total_professors = session.query(User).filter_by(role=UserRole.PROFESSOR).count()
+        total_surveillants = session.query(User).filter_by(role=UserRole.SURVEILLANT).count()
         total_subjects = session.query(Subject).count()
         total_papers = session.query(StudentPaper).count()
         pending_reclamations = session.query(Reclamation).filter_by(status=ReclamationStatus.PENDING).count()
@@ -1203,6 +1519,7 @@ def admin_dashboard():
             'total_users': total_users,
             'total_students': total_students,
             'total_professors': total_professors,
+            'total_surveillants': total_surveillants,
             'total_subjects': total_subjects,
             'total_papers': total_papers,
             'pending_reclamations': pending_reclamations,
@@ -1253,6 +1570,28 @@ def admin_corrected_papers():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/users/proctors', methods=['GET'])
+@jwt_required()
+def get_proctor_users():
+    """Retourne les utilisateurs disponibles comme surveillants (professeurs + surveillants) - professor/admin"""
+    try:
+        claims = get_jwt()
+        role = claims.get('role')
+        if role not in ['professor', 'admin']:
+            return jsonify({'error': 'Accès non autorisé'}), 403
+        session = get_session()
+        users = session.query(User).filter(
+            User.role == UserRole.SURVEILLANT,
+            User.is_active == True
+        ).order_by(User.full_name).all()
+        result = [u.to_dict() for u in users]
+        session.close()
+        return jsonify(result)
+    except Exception as e:
+        print(f'Erreur get_proctor_users: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/admin/users', methods=['GET'])
 @jwt_required()
 def get_all_users():
@@ -1294,7 +1633,7 @@ def create_user():
             return jsonify({'error': 'Cet email est déjà utilisé'}), 400
 
         role_str = data.get('role', 'student').upper()
-        if role_str not in ['STUDENT', 'PROFESSOR', 'ADMIN']:
+        if role_str not in ['STUDENT', 'PROFESSOR', 'ADMIN', 'SURVEILLANT']:
             session.close()
             return jsonify({'error': 'Rôle invalide'}), 400
 
@@ -1364,7 +1703,7 @@ def update_user(target_user_id):
             user.password_hash = bcrypt.generate_password_hash(data['password']).decode('utf-8')
         if 'role' in data:
             role_str = data['role'].upper()
-            if role_str in ['STUDENT', 'PROFESSOR', 'ADMIN']:
+            if role_str in ['STUDENT', 'PROFESSOR', 'ADMIN', 'SURVEILLANT']:
                 user.role = UserRole[role_str]
         if 'is_active' in data:
             user.is_active = data['is_active']
@@ -1850,21 +2189,7 @@ def upload_paper():
                     'extracted_name': extracted_name
                 }), 404
 
-        system_prompt = """Tu es un correcteur d'examen EXTRÊMEMENT rigoureux.
-
-IMPORTANT: Tu DOIS terminer ta correction par une ligne contenant EXACTEMENT:
-Note totale: XX.XX/20
-
-Format de correction:
-=== CORRECTION DÉTAILLÉE ===
-[Évaluation détaillée de chaque question]
-
-=== RÉSUMÉ ===
-Points forts: [...]
-Points à améliorer: [...]
-
-Note totale: XX.XX/20
-"""
+        system_prompt = _build_correction_system_prompt(subject.title, subject.content)
 
         user_message = f"""SUJET D'EXAMEN:
 {subject.content}
@@ -1987,16 +2312,7 @@ def upload_papers_batch():
         results = []
         errors = []
 
-        system_prompt = """Tu es un correcteur d'examen EXTRÊMEMENT rigoureux.
-
-IMPORTANT: Tu DOIS terminer ta correction par:
-Note totale: XX.XX/20
-
-Format:
-=== CORRECTION DÉTAILLÉE ===
-[Évaluation]
-
-Note totale: XX.XX/20"""
+        system_prompt = _build_correction_system_prompt(subject.title, subject.content)
 
         for idx, file in enumerate(files):
             try:
@@ -2976,6 +3292,7 @@ def close_online_exam(exam_id):
 @jwt_required()
 def delete_online_exam(exam_id):
     """Supprimer un examen en ligne (admin/professeur propriétaire uniquement)"""
+    session = None
     try:
         user_id = int(get_jwt_identity())
         session = get_session()
@@ -2995,19 +3312,26 @@ def delete_online_exam(exam_id):
             session.close()
             return jsonify({'error': 'Vous ne pouvez supprimer que vos propres examens'}), 403
 
-        # Suppression explicite dans l'ordre pour éviter les erreurs SQLAlchemy de cascade
+        # Suppression explicite dans l'ordre pour éviter les violations de clés
+        # étrangères, notamment proctor_assignments -> exam_attempts/online_exams.
         attempt_ids = [a.id for a in session.query(ExamAttempt.id).filter_by(exam_id=exam_id).all()]
+        session.query(ProctorAssignment).filter_by(exam_id=exam_id).delete(synchronize_session=False)
+
         if attempt_ids:
             session.query(CameraLog).filter(CameraLog.attempt_id.in_(attempt_ids)).delete(synchronize_session=False)
             session.query(ExamActivityLog).filter(ExamActivityLog.attempt_id.in_(attempt_ids)).delete(synchronize_session=False)
             session.query(ExamAttempt).filter(ExamAttempt.id.in_(attempt_ids)).delete(synchronize_session=False)
 
+        session.query(ExamProctor).filter_by(exam_id=exam_id).delete(synchronize_session=False)
         session.delete(exam)
         session.commit()
         session.close()
 
         return jsonify({'success': True, 'message': 'Examen supprimé avec succès'})
     except Exception as e:
+        if session:
+            session.rollback()
+            session.close()
         print(f"❌ Erreur delete_online_exam: {e}")
         import traceback; traceback.print_exc()
         return jsonify({'error': str(e)}), 500
@@ -3094,17 +3418,13 @@ def start_exam_attempt(exam_id):
             session.close()
             return jsonify({'error': 'Examen non trouvé'}), 404
         
-        # ✅ CORRECTION: Gestion correcte des timezones
         now = utcnow()
-        
+
         # S'assurer que les datetime sont timezone-aware pour la comparaison
         start_time = exam.start_time if exam.start_time.tzinfo else exam.start_time.replace(tzinfo=timezone.utc)
         end_time = exam.end_time if exam.end_time.tzinfo else exam.end_time.replace(tzinfo=timezone.utc)
-        
-        # Vérifier si l'examen est actif ET dans la plage horaire
-        if exam.status != ExamStatus.ACTIVE:
-            session.close()
-            return jsonify({'error': 'Examen non disponible actuellement'}), 400
+
+        # Vérifier la plage horaire d'abord
         if now < start_time:
             start_str = start_time.strftime('%d/%m/%Y à %H:%M') + ' UTC'
             session.close()
@@ -3115,6 +3435,15 @@ def start_exam_attempt(exam_id):
         if now > end_time:
             session.close()
             return jsonify({'error': 'Cet examen est terminé'}), 400
+
+        # Un examen SCHEDULED dans sa plage horaire est considéré accessible :
+        # l'enseignant a défini les horaires, l'activation manuelle est optionnelle.
+        if exam.status == ExamStatus.SCHEDULED and start_time <= now <= end_time:
+            exam.status = ExamStatus.ACTIVE
+            session.flush()
+        elif exam.status not in [ExamStatus.ACTIVE, ExamStatus.SCHEDULED]:
+            session.close()
+            return jsonify({'error': 'Examen non disponible actuellement'}), 400
         
         # Vérifier tentative existante
         existing = session.query(ExamAttempt).filter_by(
@@ -3139,14 +3468,22 @@ def start_exam_attempt(exam_id):
             exam_id=exam_id,
             student_id=user_id,
             status=AttemptStatus.IN_PROGRESS,
-            answers='{}'  # JSON vide au départ
+            answers='{}'
         )
-        
         session.add(attempt)
+        session.flush()  # obtenir attempt.id avant commit
+
+        # Lier la pré-affectation surveillant si elle existe
+        pre = session.query(ProctorAssignment).filter_by(
+            exam_id=exam_id, student_id=user_id, attempt_id=None
+        ).first()
+        if pre:
+            pre.attempt_id = attempt.id
+
         session.commit()
         attempt_dict = attempt.to_dict()
         session.close()
-        
+
         return jsonify({'success': True, 'attempt': attempt_dict}), 201
     except Exception as e:
         print(f"❌ Erreur start_exam_attempt: {e}")
@@ -3229,14 +3566,20 @@ def log_exam_activity(attempt_id):
             if max_sw >= 0 and attempt.tab_switches > max_sw:
                 ban_reason = f"Trop de changements de contexte : {attempt.tab_switches} (seuil : {max_sw})"
 
-        # ── 3. Visage non détecté ─────────────────────────────────────────────
-        elif event_type == 'no_face_detected':
+        # ── 3. Visage non détecté (face_absent = alias FaceDetector.js) ──────
+        elif event_type in ('no_face_detected', 'face_absent'):
             no_face_count = (attempt.no_face_count or 0) + 1
             attempt.no_face_count = no_face_count
             attempt.warnings_count += 1
             max_nf = exam.max_no_face_count if exam.max_no_face_count is not None else 10
             if max_nf >= 0 and no_face_count >= max_nf:
                 ban_reason = f"Visage absent trop souvent : {no_face_count} fois (seuil : {max_nf})"
+
+        # ── 3b. Plusieurs visages détectés ────────────────────────────────────
+        elif event_type == 'multiple_faces':
+            attempt.warnings_count += 2
+            no_face_count = attempt.no_face_count or 0
+            attempt.tab_switches += 1  # compte comme violation grave
 
         # ── 4. Violations mineures ────────────────────────────────────────────
         elif event_type in severity_medium_events:
@@ -3266,7 +3609,7 @@ def log_exam_activity(attempt_id):
             'no_face_count': attempt.no_face_count or 0,
             'max_tab_switches': exam.max_tab_switches,
             'max_no_face_count': exam.max_no_face_count if exam.max_no_face_count is not None else 10,
-            'severity': 'high' if event_type in (severity_tab_events + ['devtools_attempt', 'no_face_detected']) else 'medium',
+            'severity': 'high' if event_type in (severity_tab_events + ['devtools_attempt', 'no_face_detected', 'face_absent', 'multiple_faces']) else 'medium',
             'banned': False
         }
 
@@ -3408,7 +3751,7 @@ def generate_transcript(student_id, semester_id):
         
         if not papers:
             session.close()
-            return jsonify({'error': 'Aucune note disponible pour ce semestre'}), 404
+            return jsonify({'success': False, 'error': 'Aucune note disponible pour ce semestre'}), 200
         
         # Calculer moyennes
         total_weighted_score = 0
@@ -3644,33 +3987,28 @@ def correct_exam_attempt(attempt_id):
         exam = attempt.exam
         subject = exam.subject
         
-        # Extraire les réponses de l'étudiant
+        # Extraire les réponses de l'étudiant (plusieurs formats possibles)
         try:
             answers_data = json.loads(attempt.answers) if attempt.answers else {}
-            student_answers = answers_data.get('content', '')
+            # Supporte les clés 'content', 'reponse', 'answer', ou le texte brut
+            student_answers = (
+                answers_data.get('content') or
+                answers_data.get('reponse') or
+                answers_data.get('answer') or
+                answers_data.get('text') or
+                ''
+            )
         except:
             student_answers = attempt.answers or ''
-        
+
         if not student_answers or student_answers.strip() == '':
             session.close()
-            return jsonify({'error': 'Aucune réponse à corriger'}), 400
+            return jsonify({'error': 'Aucune réponse à corriger pour cet étudiant'}), 400
         
-        # Préparer le prompt pour Claude
-        system_prompt = """Tu es un correcteur d'examen EXTRÊMEMENT rigoureux.
-
-IMPORTANT: Tu DOIS terminer ta correction par une ligne contenant EXACTEMENT:
-Note totale: XX.XX/20
-
-Format de correction:
-=== CORRECTION DÉTAILLÉE ===
-[Évaluation détaillée de chaque question]
-
-=== RÉSUMÉ ===
-Points forts: [...]
-Points à améliorer: [...]
-
-Note totale: XX.XX/20
-"""
+        system_prompt = _build_correction_system_prompt(
+            exam.title + (" — " + subject.title if subject.title else ""),
+            subject.content
+        )
 
         user_message = f"""SUJET D'EXAMEN:
 {subject.content}
@@ -3786,23 +4124,32 @@ def get_exam_incidents(exam_id):
         session = get_session()
         
         user = session.query(User).filter_by(id=user_id).first()
-        if user.role not in [UserRole.PROFESSOR, UserRole.ADMIN]:
+        if user.role not in [UserRole.PROFESSOR, UserRole.ADMIN, UserRole.SURVEILLANT]:
             session.close()
             return jsonify({'error': 'Accès non autorisé'}), 403
-        
+
         exam = session.query(OnlineExam).filter_by(id=exam_id).first()
         if not exam:
             session.close()
             return jsonify({'error': 'Examen non trouvé'}), 404
-        
+
         if user.role == UserRole.PROFESSOR and exam.created_by_id != user_id:
             session.close()
             return jsonify({'error': 'Accès non autorisé'}), 403
-        
-        # Récupérer tous les logs via les tentatives
-        logs = session.query(ExamActivityLog).join(ExamAttempt).filter(
-            ExamAttempt.exam_id == exam_id
-        ).order_by(ExamActivityLog.timestamp.desc()).all()
+
+        # Récupérer les logs — pour un surveillant, uniquement ses étudiants assignés
+        if user.role == UserRole.SURVEILLANT:
+            assigned_attempt_ids = [
+                pa.attempt_id for pa in session.query(ProctorAssignment).filter_by(proctor_id=user_id).all()
+            ]
+            logs = session.query(ExamActivityLog).join(ExamAttempt).filter(
+                ExamAttempt.exam_id == exam_id,
+                ExamActivityLog.attempt_id.in_(assigned_attempt_ids)
+            ).order_by(ExamActivityLog.timestamp.desc()).all()
+        else:
+            logs = session.query(ExamActivityLog).join(ExamAttempt).filter(
+                ExamAttempt.exam_id == exam_id
+            ).order_by(ExamActivityLog.timestamp.desc()).all()
         
         incidents_list = []
         for log in logs:
@@ -4118,40 +4465,36 @@ def generate_exam_suggestions():
         student_level = request.form.get('student_level', 'Licence')
         exam_type = request.form.get('exam_type', '')  # Type souhaité (optionnel)
         
-        # ✅ PROMPT AMÉLIORÉ : Basé sur le contenu réel du cours
-        prompt = f"""
-Tu es un expert en pédagogie et en création de sujets d'examen. 
+        prompt = f"""Tu es un expert en pédagogie universitaire francophone, spécialiste dans TOUS les domaines académiques (sciences exactes, droit, médecine, lettres, sciences humaines, ingénierie, arts, langues, économie, agronomie, architecture, etc.).
 
-CONTENU DU COURS UPLOADÉ:
-{course_content[:8000]}  
-{"[... contenu tronqué pour limites API ...]" if len(course_content) > 8000 else ""}
+CONTENU DU COURS UPLOADÉ :
+{course_content[:8000]}
+{"[... contenu tronqué ...]" if len(course_content) > 8000 else ""}
 
-PARAMÈTRES DE L'EXAMEN:
-- Niveau de difficulté souhaité: {difficulty}
-- Niveau des étudiants: {student_level}
-{f"- Type d'examen préféré: {exam_type}" if exam_type else ""}
+PARAMÈTRES :
+- Niveau de difficulté : {difficulty}
+- Niveau des étudiants : {student_level}
+{f"- Type d'examen souhaité : {exam_type}" if exam_type else ""}
 
-MISSION:
-Analyse le contenu du cours ci-dessus et génère 3 suggestions de sujets d'examen **directement basées sur les concepts, théories et exercices présents dans ce cours**.
+ÉTAPE 1 — IDENTIFICATION DU DOMAINE :
+Identifie d'abord silencieusement la discipline enseignée (ex: droit des obligations, biochimie, algèbre linéaire, histoire médiévale, architecture urbaine, littérature africaine, etc.) en lisant le contenu du cours. Adapte ensuite tes suggestions aux formats d'examens courants dans ce domaine spécifique.
 
-Pour chaque suggestion, fournis:
-1. Un titre accrocheur et pertinent au contenu du cours
-2. Une description détaillée (2-3 phrases) expliquant ce qui sera évalué
-3. Le type d'examen (QCM, Dissertation, Exercices pratiques, Étude de cas, Projet, Examen mixte)
+ÉTAPE 2 — GÉNÉRATION DES SUGGESTIONS :
+Génère 3 suggestions de sujets d'examen directement basées sur les concepts, théories et exercices présents dans ce cours.
+
+Pour chaque suggestion :
+1. Un titre précis et disciplinaire
+2. Une description détaillée (2-3 phrases) de ce qui sera évalué
+3. Le type d'examen adapté à la discipline (QCM, Dissertation, Exercices, Étude de cas, Problème, Commentaire de texte, Calcul, TP, Oral, etc.)
 4. La durée recommandée en minutes
-5. 4-6 points clés à évaluer **extraits du cours**
-6. 3-5 exemples de questions concrètes **basées sur le contenu du cours**
-7. Les critères d'évaluation principaux avec barème suggéré
+5. 4-6 points clés extraits du cours
+6. 3-5 exemples de questions concrètes issues du cours
+7. Critères d'évaluation avec barème sur 20 points
 
-IMPORTANT:
-- Base-toi UNIQUEMENT sur le contenu fourni
-- Cite des concepts/théories/exemples présents dans le cours
-- Adapte le niveau au paramètre "{student_level}"
-- Assure-toi que les questions testent la compréhension réelle du cours
-
-Réponds UNIQUEMENT avec un JSON valide dans ce format:
+Réponds UNIQUEMENT avec un JSON valide dans ce format exact :
 {{
-    "course_summary": "Résumé du cours en 2-3 phrases",
+    "course_summary": "Résumé de la discipline et du contenu en 2-3 phrases",
+    "detected_domain": "Domaine détecté (ex: Droit civil, Biochimie, Mathématiques...)",
     "main_topics": ["Thème 1", "Thème 2", "Thème 3"],
     "suggestions": [
         {{
@@ -4160,23 +4503,15 @@ Réponds UNIQUEMENT avec un JSON valide dans ce format:
             "exam_type": "...",
             "duration": 120,
             "difficulty": "{difficulty}",
-            "key_points": ["point1 du cours", "point2 du cours", ...],
-            "questions_examples": ["question basée sur concept X", "exercice sur théorème Y", ...],
-            "grading_criteria": "Barème: Q1 (5pts) - ..., Q2 (8pts) - ..., Q3 (7pts) - ..."
-        }},
-        ...
+            "key_points": ["point1 du cours", "point2 du cours"],
+            "questions_examples": ["question issue du cours", "exercice sur le concept Y"],
+            "grading_criteria": "Barème : Q1 (5pts) — ..., Q2 (8pts) — ..., Q3 (7pts) — ..."
+        }}
     ]
 }}
 """
         
-        # Appel à Claude API
-        response = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=4000,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        
-        response_text = response.content[0].text
+        response_text = call_ai_simple(prompt)
         
         # Parser la réponse JSON
         import json
@@ -4185,17 +4520,24 @@ Réponds UNIQUEMENT avec un JSON valide dans ce format:
         json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
         if json_match:
             suggestions_data = json.loads(json_match.group())
-            
-            # ✅ OPTIONNEL : Stocker le fichier cours pour référence future
-            # On peut l'associer aux suggestions ou le laisser temporaire
-            
+            detected_domain = suggestions_data.get('detected_domain', '')
+
+            # Injecter detected_domain et student_level dans chaque suggestion
+            # pour qu'ils soient disponibles lors de la génération du sujet complet
+            enriched_suggestions = []
+            for s in suggestions_data.get('suggestions', []):
+                s['detected_domain'] = detected_domain
+                s['student_level'] = student_level
+                enriched_suggestions.append(s)
+
             session.close()
             return jsonify({
                 'success': True,
                 'course_summary': suggestions_data.get('course_summary', ''),
+                'detected_domain': detected_domain,
                 'main_topics': suggestions_data.get('main_topics', []),
-                'suggestions': suggestions_data.get('suggestions', []),
-                'course_filename': filename  # Pour affichage dans le frontend
+                'suggestions': enriched_suggestions,
+                'course_filename': filename
             })
         else:
             os.remove(temp_filepath)
@@ -4209,7 +4551,14 @@ Réponds UNIQUEMENT avec un JSON valide dans ce format:
         if 'temp_filepath' in locals() and os.path.exists(temp_filepath):
             os.remove(temp_filepath)
         session.close()
-        return jsonify({'success': False, 'error': str(e)}), 500
+        err_str = str(e)
+        if 'credit balance' in err_str or 'too low' in err_str:
+            user_msg = "Le service d'intelligence artificielle est temporairement indisponible. Veuillez contacter l'administrateur."
+        elif 'rate_limit' in err_str or 'rate limit' in err_str.lower():
+            user_msg = "Trop de requêtes simultanées. Veuillez patienter quelques secondes et réessayer."
+        else:
+            user_msg = "Une erreur est survenue lors de la génération. Veuillez réessayer."
+        return jsonify({'success': False, 'error': user_msg}), 500
 
 @app.route('/api/subjects/generate-full-exam', methods=['POST'])
 @jwt_required()
@@ -4237,21 +4586,35 @@ def generate_full_exam_from_suggestion():
 
     key_points_str = '\n'.join(f'- {p}' for p in key_points)
     examples_str = '\n'.join(f'{i+1}. {q}' for i, q in enumerate(questions_examples)) if questions_examples else ''
+    examples_section = f'- Exemples de questions de base:\n{examples_str}' if examples_str else ''
 
-    prompt = f"""Tu es un expert en création d'examens universitaires francophones.
+    detected_domain = suggestion.get('detected_domain', '')
+    domain_line = f"- Domaine disciplinaire : {detected_domain}" if detected_domain else ""
 
-Crée un sujet d'examen COMPLET et DÉTAILLÉ avec ces informations:
-- Titre: {title}
-- Type: {exam_type}
-- Niveau: {student_level}
-- Difficulté: {difficulty}
-- Durée: {duration} minutes
-- Description: {description}
-- Thèmes à couvrir:
+    prompt = f"""Tu es un expert en création d'examens universitaires francophones, compétent dans TOUS les domaines académiques (sciences, droit, médecine, lettres, arts, ingénierie, langues, économie, histoire, philosophie, agronomie, architecture, etc.).
+
+Crée un sujet d'examen COMPLET et DÉTAILLÉ avec ces informations :
+- Titre : {title}
+- Type : {exam_type}
+- Niveau : {student_level}
+- Difficulté : {difficulty}
+- Durée : {duration} minutes
+- Description : {description}
+{domain_line}
+- Thèmes à couvrir :
 {key_points_str}
-{('- Exemples de questions de base:\\n' + examples_str) if examples_str else ''}
+{examples_section}
 
-GÉNÈRE le sujet en respectant EXACTEMENT ce format:
+Adapte le format des questions au type d'examen et à la discipline :
+- Sciences exactes → problèmes avec calculs, démonstrations, applications numériques
+- Droit → cas pratiques, commentaires d'articles, dissertations juridiques
+- Médecine/Santé → cas cliniques, diagnostics différentiels, protocoles
+- Lettres/Langues → commentaires de texte, dissertations, traductions, analyses stylistiques
+- Sciences humaines → dissertations argumentées, analyses de documents, études de cas
+- Informatique → algorithmes, code, modélisation, problèmes techniques
+- Toute autre discipline → format académique standard du domaine
+
+GÉNÈRE le sujet en respectant EXACTEMENT ce format :
 
 ══════════════════════════════════════
 {title.upper()}
@@ -4300,12 +4663,7 @@ Règles importantes:
 - Chaque question doit être suffisamment détaillée pour que l'étudiant comprenne exactement ce qui est attendu"""
 
     try:
-        response = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=4000,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        full_exam_text = response.content[0].text
+        full_exam_text = call_ai_simple(prompt)
 
         # Séparer contenu et barème
         bareme_markers = ['BARÈME DE NOTATION', 'BAREME DE NOTATION', 'BARÈME', 'Barème']
@@ -4336,7 +4694,14 @@ Règles importantes:
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        err_str = str(e)
+        if 'credit balance' in err_str or 'too low' in err_str:
+            user_msg = "Le service d'intelligence artificielle est temporairement indisponible. Veuillez contacter l'administrateur."
+        elif 'rate_limit' in err_str or 'rate limit' in err_str.lower():
+            user_msg = "Trop de requêtes simultanées. Veuillez patienter quelques secondes et réessayer."
+        else:
+            user_msg = "Une erreur est survenue lors de la génération. Veuillez réessayer."
+        return jsonify({'error': user_msg}), 500
 
 
 @app.route('/api/subjects/create-from-suggestion', methods=['POST'])
@@ -4367,12 +4732,7 @@ Génère un barème de notation détaillé pour ce sujet.
 Répartis les points sur 20 en fonction des différentes parties/questions.
 Sois précis sur ce qui est attendu pour chaque point.
 """
-            rubric_response = client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=2000,
-                messages=[{"role": "user", "content": rubric_prompt}]
-            )
-            rubric = rubric_response.content[0].text
+            rubric = call_ai_simple(rubric_prompt)
 
         # Créer le sujet
         new_subject = Subject(
@@ -4418,6 +4778,7 @@ if __name__ == '__main__':
     print(" Statistiques détaillées")
     print("\n Créer un admin: python create_admin.py\n")
 
-    app.run(debug=True, host='0.0.0.0', port=7000)
+    debug_mode = os.getenv('FLASK_DEBUG', 'False').lower() in ('true', '1')
+    app.run(debug=debug_mode, host='0.0.0.0', port=7000)
 
 # Note: export_paper_pdf route is registered from export_route.py via register_export_route(app)

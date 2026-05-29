@@ -25,6 +25,7 @@ class UserRole(enum.Enum):
     STUDENT = "student"
     PROFESSOR = "professor"
     ADMIN = "admin"
+    SURVEILLANT = "surveillant"
 
 class ReclamationStatus(enum.Enum):
     PENDING = "pending"
@@ -419,6 +420,7 @@ class OnlineExam(Base):
     subject = relationship('Subject', back_populates='online_exams')
     creator = relationship('User', foreign_keys=[created_by_id])
     attempts = relationship('ExamAttempt', back_populates='exam', cascade='all, delete-orphan')
+    proctors = relationship('ExamProctor', back_populates='exam', cascade='all, delete-orphan')
     
     def to_dict(self):
         return {
@@ -464,6 +466,7 @@ class ExamAttempt(Base):
 
     # Proctoring LiveKit
     risk_score = Column(Integer, default=0)  # Score de risque 0-100
+    current_egress_id = Column(String(255))  # LiveKit Egress ID actif (null si pas d'enregistrement)
 
     # Réponses (JSON ou texte selon format)
     answers = Column(Text)  # JSON stockant les réponses
@@ -479,6 +482,7 @@ class ExamAttempt(Base):
     corrector = relationship('User', foreign_keys=[corrected_by_id])
     activity_logs = relationship('ExamActivityLog', back_populates='attempt', cascade='all, delete-orphan')
     camera_logs = relationship('CameraLog', back_populates='attempt', cascade='all, delete-orphan')
+    proctor_assignment = relationship('ProctorAssignment', back_populates='attempt', uselist=False)
     
     def to_dict(self):
         return {
@@ -557,6 +561,64 @@ class GradeTranscript(Base):
             'generated_at': self.generated_at.isoformat() if self.generated_at else None
         }
 
+class ExamProctor(Base):
+    """Surveillant affecté à un examen par l'enseignant"""
+    __tablename__ = 'exam_proctors'
+
+    id = Column(Integer, primary_key=True)
+    exam_id = Column(Integer, ForeignKey('online_exams.id'), nullable=False)
+    proctor_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    assigned_by_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    assigned_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint('exam_id', 'proctor_id', name='unique_exam_proctor'),)
+
+    exam = relationship('OnlineExam', back_populates='proctors')
+    proctor = relationship('User', foreign_keys=[proctor_id])
+    assigned_by = relationship('User', foreign_keys=[assigned_by_id])
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'exam_id': self.exam_id,
+            'proctor_id': self.proctor_id,
+            'proctor_name': self.proctor.full_name if self.proctor else None,
+            'proctor_email': self.proctor.email if self.proctor else None,
+            'assigned_by': self.assigned_by.full_name if self.assigned_by else None,
+            'assigned_at': self.assigned_at.isoformat() if self.assigned_at else None,
+        }
+
+
+class ProctorAssignment(Base):
+    """Affectation d'un étudiant à un surveillant.
+    Pré-affectation (avant l'examen) : student_id défini, attempt_id NULL.
+    Liaison automatique quand l'étudiant démarre : attempt_id mis à jour."""
+    __tablename__ = 'proctor_assignments'
+
+    id = Column(Integer, primary_key=True)
+    exam_id = Column(Integer, ForeignKey('online_exams.id'), nullable=False)
+    proctor_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    student_id = Column(Integer, ForeignKey('users.id'), nullable=True)
+    attempt_id = Column(Integer, ForeignKey('exam_attempts.id'), nullable=True)
+    assigned_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint('exam_id', 'student_id', name='unique_exam_student_proctor'),)
+
+    exam = relationship('OnlineExam')
+    proctor = relationship('User', foreign_keys=[proctor_id])
+    student = relationship('User', foreign_keys=[student_id])
+    attempt = relationship('ExamAttempt', back_populates='proctor_assignment', foreign_keys=[attempt_id])
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'exam_id': self.exam_id,
+            'proctor_id': self.proctor_id,
+            'student_id': self.student_id,
+            'attempt_id': self.attempt_id,
+        }
+
+
 class CameraLog(Base):
     """Logs de surveillance caméra pendant les examens"""
     __tablename__ = 'camera_logs'
@@ -613,4 +675,19 @@ def get_session():
 
 def init_db():
     Base.metadata.create_all(engine)
+    # Migration : ajouter student_id et rendre attempt_id nullable si ancienne structure
+    _migrations = [
+        "ALTER TABLE proctor_assignments ADD COLUMN student_id INTEGER REFERENCES users(id)",
+        "ALTER TABLE proctor_assignments ALTER COLUMN attempt_id DROP NOT NULL",
+        "ALTER TABLE proctor_assignments DROP CONSTRAINT unique_attempt_proctor",
+        "ALTER TABLE proctor_assignments ADD CONSTRAINT unique_exam_student_proctor UNIQUE (exam_id, student_id)",
+    ]
+    from sqlalchemy import text as _text
+    with engine.connect() as _conn:
+        for _sql in _migrations:
+            try:
+                _conn.execute(_text(_sql))
+                _conn.commit()
+            except Exception:
+                _conn.rollback()
     print("✅ Base de données initialisée avec examens en ligne et relevés de notes")

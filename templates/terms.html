@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Conditions d'Utilisation — Système de Notation CEI</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/fontawesome/css/all.min.css">
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
         body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#f8fafc; color:#1e293b; line-height:1.7; }
@@ -41,7 +41,7 @@
 <body>
 
 <div class="topbar">
-    <div class="topbar-brand"><i class="fas fa-graduation-cap"></i> Système de Notation — CEI</div>
+    <div class="topbar-brand"><i class="fas fa-graduation-cap"></i> Centre d'Examen Intelligent</div>
     <a href="/" class="btn-back"><i class="fas fa-arrow-left"></i> Retour à l'accueil</a>
 </div>
 
@@ -60,7 +60,7 @@
         </div>
         <div class="article-body">
             <p>La plateforme <strong>CEI — Centre d'Examen Intelligent</strong> est un service numérique destiné à l'organisation, la surveillance et la correction d'examens en ligne pour l'<strong>UN-CHK</strong> de Dakar, Sénégal.</p>
-            <p>Elle est accessible à l'adresse <strong>cei.ec2lt.sn</strong> et réservée aux utilisateurs autorisés (administrateurs, enseignants, étudiants) disposant d'un compte créé par l'administration.</p>
+            <p>Elle est accessible à l'adresse <strong>cei.unchk.sn</strong> et réservée aux utilisateurs autorisés (administrateurs, enseignants, étudiants) disposant d'un compte créé par l'administration.</p>
         </div>
     </div>
 
@@ -88,10 +88,12 @@
             <p>Dans le cadre des <strong>examens en ligne surveillés</strong>, la plateforme utilise les technologies suivantes pour garantir l'intégrité académique :</p>
             <ul>
                 <li><strong>Caméra vidéo</strong> : votre flux vidéo est transmis en temps réel à l'enseignant. Des <em>snapshots</em> horodatés peuvent être sauvegardés automatiquement.</li>
+                <li><strong>Détection faciale IA</strong> : une analyse en temps réel de votre flux caméra détecte l'absence de visage, la présence de plusieurs personnes ou une non-correspondance d'identité. Ces événements sont enregistrés et peuvent déclencher des alertes.</li>
                 <li><strong>Microphone</strong> : flux audio transmis pour détection de comportements suspects.</li>
-                <li><strong>Partage d'écran</strong> : l'enseignant peut demander à voir votre écran en temps réel.</li>
-                <li><strong>Logs d'activité</strong> : tout événement (changement d'onglet, plein écran quitté, absence de visage) est horodaté et enregistré dans la base de données.</li>
+                <li><strong>Partage d'écran complet</strong> : le partage de votre écran entier (moniteur complet) est obligatoire. Le partage de fenêtre ou d'onglet est techniquement refusé par le système. L'enseignant visualise votre écran en temps réel.</li>
+                <li><strong>Logs d'activité</strong> : tout événement (changement d'onglet, plein écran quitté, absence de visage, tentative de partage non conforme) est horodaté et enregistré dans la base de données.</li>
                 <li><strong>Enregistrements vidéo</strong> : l'enseignant peut activer l'enregistrement de votre flux vidéo vers un stockage sécurisé.</li>
+                <li><strong>Appels privés</strong> : l'enseignant peut initier un appel audio/vidéo privé avec vous, ou vous pouvez en faire la demande via la messagerie interne. Ces appels sont isolés et ne sont pas partagés avec d'autres étudiants.</li>
             </ul>
             <div class="highlight"><i class="fas fa-exclamation-triangle"></i> <strong>En cliquant sur "J'accepte — Démarrer l'examen"</strong>, vous consentez explicitement à la collecte et au traitement de ces données aux fins de surveillance académique.</div>
             <p>Ces données sont conservées pendant la durée de l'année académique et accessibles uniquement aux enseignants responsables et à l'administration de l'établissement.</p>
@@ -108,7 +110,9 @@
             <ul>
                 <li>Ne pas changer d'onglet ou de fenêtre pendant l'examen (seuil configurable par l'enseignant)</li>
                 <li>Maintenir le mode plein écran durant toute la session</li>
+                <li>Partager uniquement l'<strong>écran complet (moniteur entier)</strong> — le partage de fenêtre ou d'onglet est interdit et techniquement bloqué</li>
                 <li>Rester seul et visible devant la caméra — aucune autre personne ne doit apparaître</li>
+                <li>Maintenir son visage bien visible et correctement éclairé face à la caméra pour la détection faciale</li>
                 <li>Ne pas utiliser de téléphone, de documents ou d'aide extérieure</li>
                 <li>Ne pas tenter d'ouvrir les outils développeur du navigateur</li>
                 <li>Ne pas copier/coller du contenu externe (désactivé automatiquement)</li>
@@ -194,11 +198,10 @@
             <h2>Contact</h2>
         </div>
         <div class="article-body">
-            <p>Pour toute question concernant ces conditions ou vos données personnelles :</p>
             <ul>
-                <li><strong>Email :</strong> entreprisertn221@gmail.com</li>
-                <li><strong>Téléphone :</strong> (+221) 77 662 76 94</li>
-                <li><strong>Adresse :</strong> Liberté 2, derrière immeuble BICIS, Jet d'eau - Dakar - Sénégal</li>
+                <li><i class="fas fa-map-marker-alt"></i> Cité du savoir - Diamniadio, Castors, avenue Bourguiba, rue n°13</li>
+                <li><i class="fas fa-phone"></i> +221 30 108 41 53</li>
+                <li><i class="fas fa-envelope"></i> visioplus@unchk.edu.sn</li>
             </ul>
         </div>
     </div>
@@ -211,8 +214,9 @@
         <a href="/guide-enseignant">Guide Enseignant</a> &nbsp;·&nbsp;
         <a href="/guide-etudiant">Guide Étudiant</a>
     </p>
-    <p style="margin-top:8px;opacity:.5;">© 2026 CEI — Centre d'Examen Intelligent. Tous droits réservés.</p>
+    <p style="margin-top:8px;opacity:.5;">© 2026 CEI — Université Numérique Cheikh Hamidou Kane</p>
 </footer>
 
+<script src="{{ url_for('static', filename='js/site_translator.js') }}?v=7"></script>
 </body>
 </html>

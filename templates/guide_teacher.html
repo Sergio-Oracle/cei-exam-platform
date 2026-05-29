@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Guide Enseignant — Système de Notation CEI</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <title>Guide Enseignant — Centre d'Examen Intelligent</title>
+    <link rel="stylesheet" href="/static/fontawesome/css/all.min.css">
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
         body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#f8fafc; color:#1e293b; line-height:1.7; }
@@ -69,7 +69,7 @@
 
 <div class="topbar">
     <div class="topbar-brand">
-        <i class="fas fa-graduation-cap"></i> Système de Notation — CEI
+        <i class="fas fa-graduation-cap"></i> Centre d'Examen Intelligent
     </div>
     <a href="/" class="btn-back"><i class="fas fa-arrow-left"></i> Retour à l'accueil</a>
 </div>
@@ -92,7 +92,9 @@
             <li><a href="#dashboard"><i class="fas fa-tachometer-alt"></i> 4. Dashboard de surveillance en temps réel</a></li>
             <li><a href="#corriger"><i class="fas fa-robot"></i> 5. Corriger les copies avec l'IA</a></li>
             <li><a href="#enregistrements"><i class="fas fa-film"></i> 6. Accéder aux enregistrements</a></li>
+            <li><a href="#appel-prive"><i class="fas fa-phone"></i> 6b. Appel privé étudiant</a></li>
             <li><a href="#notes"><i class="fas fa-star"></i> 7. Publier les notes</a></li>
+            <li><a href="#surveillants"><i class="fas fa-eye"></i> 8. Gérer les Surveillants</a></li>
         </ul>
     </div>
 
@@ -209,12 +211,14 @@
         <div class="section-body">
             <p style="color:#475569;margin-bottom:20px;">Le dashboard affiche une grille de toutes les tentatives actives avec vidéo en direct de chaque étudiant.</p>
             <div class="feature-grid">
-                <div class="feature-item"><i class="fas fa-video"></i><h5>Flux caméra HD</h5><p>Vidéo en direct de chaque étudiant (caméra + détection faciale)</p></div>
-                <div class="feature-item"><i class="fas fa-desktop"></i><h5>Partage d'écran</h5><p>Bouton <span style="color:#6366f1;font-weight:700;">Voir écran</span> quand l'étudiant partage son écran — vue plein format</p></div>
+                <div class="feature-item"><i class="fas fa-video"></i><h5>Flux caméra HD</h5><p>Vidéo en direct de chaque étudiant (caméra + détection faciale IA)</p></div>
+                <div class="feature-item"><i class="fas fa-desktop"></i><h5>Partage d'écran</h5><p>Bouton <span style="color:#6366f1;font-weight:700;">Voir écran</span> quand l'étudiant partage son écran — seul l'écran complet est accepté</p></div>
+                <div class="feature-item"><i class="fas fa-user-check"></i><h5>Détection faciale IA</h5><p>Alerte automatique en cas de visage absent, non reconnu ou de plusieurs visages devant la caméra</p></div>
+                <div class="feature-item"><i class="fas fa-phone" style="color:#7c3aed;"></i><h5>Appel privé étudiant</h5><p>Bouton <span style="color:#7c3aed;font-weight:700;">téléphone vert</span> sur chaque carte étudiant — lance un appel audio/vidéo privé isolé</p></div>
                 <div class="feature-item"><i class="fas fa-chart-line"></i><h5>Score de risque</h5><p>0–100% calculé en temps réel selon les incidents détectés</p></div>
                 <div class="feature-item"><i class="fas fa-exclamation-triangle"></i><h5>Envoyer un avertissement</h5><p>Message affiché immédiatement sur l'écran de l'étudiant avec popup orange</p></div>
                 <div class="feature-item"><i class="fas fa-comment"></i><h5>Envoyer un message</h5><p>Communication directe avec l'étudiant (popup bleue sur son écran)</p></div>
-                <div class="feature-item"><i class="fas fa-comment-dots"></i><h5>Messages des étudiants</h5><p>Les étudiants peuvent vous écrire depuis leur panneau "Contacter l'enseignant"</p></div>
+                <div class="feature-item"><i class="fas fa-comment-dots"></i><h5>Messages des étudiants</h5><p>Les étudiants peuvent vous écrire et demander un appel vocal via le bouton microphone violet</p></div>
                 <div class="feature-item"><i class="fas fa-ban"></i><h5>Exclure un étudiant</h5><p>Bannissement immédiat avec saisie de la raison — irréversible</p></div>
                 <div class="feature-item"><i class="fas fa-list"></i><h5>Logs d'activité</h5><p>Historique complet des événements pour chaque étudiant</p></div>
             </div>
@@ -282,6 +286,47 @@
         </div>
     </div>
 
+    <!-- 6b. Appel privé -->
+    <div class="section" id="appel-prive">
+        <div class="section-header">
+            <div class="section-icon" style="background:#7c3aed;"><i class="fas fa-phone"></i></div>
+            <h2>6b. Appel privé avec un étudiant</h2>
+        </div>
+        <div class="section-body">
+            <div class="steps">
+                <div class="step">
+                    <div class="step-num">1</div>
+                    <div class="step-content">
+                        <h4>Initier un appel depuis le dashboard</h4>
+                        <p>Sur la carte d'un étudiant dans le dashboard de surveillance, cliquez sur le <strong>bouton téléphone vert</strong> <i class="fas fa-phone" style="color:#059669;"></i>. Une fenêtre modale s'ouvre avec le flux vidéo de l'étudiant et votre aperçu caméra.</p>
+                        <div class="info"><i class="fas fa-info-circle"></i> L'étudiant reçoit une notification et peut accepter ou refuser l'appel. Un appel privé est totalement isolé des autres étudiants.</div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-num">2</div>
+                    <div class="step-content">
+                        <h4>Pendant l'appel</h4>
+                        <p>Vous pouvez activer/désactiver votre caméra et microphone via les boutons dans la fenêtre d'appel. L'étudiant peut également couper son micro. L'examen continue en arrière-plan pendant l'appel.</p>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-num">3</div>
+                    <div class="step-content">
+                        <h4>Répondre à une demande d'appel étudiant</h4>
+                        <p>Quand un étudiant clique sur le <strong>bouton microphone violet</strong>, le message <em>"[DEMANDE_APPEL]"</em> apparaît dans sa liste de messages avec un bouton <strong>"Rejoindre l'appel"</strong>. Cliquez dessus pour démarrer l'appel privé.</p>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-num">4</div>
+                    <div class="step-content">
+                        <h4>Terminer l'appel</h4>
+                        <p>Cliquez sur le bouton <strong>rouge "Terminer"</strong> dans la fenêtre d'appel. La connexion se ferme et l'étudiant retourne à son interface d'examen normale.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 7. Notes -->
     <div class="section" id="notes">
         <div class="section-header">
@@ -308,12 +353,69 @@
         </div>
     </div>
 
+    <!-- 8. Gérer les Surveillants -->
+    <div class="section" id="surveillants">
+        <div class="section-header">
+            <div class="section-icon" style="background:#d97706;"><i class="fas fa-eye"></i></div>
+            <h2>8. Gérer les Surveillants</h2>
+        </div>
+        <div class="section-body">
+            <p style="color:#475569;margin-bottom:20px;">Pour les examens avec de nombreux étudiants, vous pouvez déléguer la surveillance à des <strong>surveillants dédiés</strong>. Chacun reçoit un groupe d'étudiants à surveiller.</p>
+            <div class="steps">
+                <div class="step">
+                    <div class="step-num">1</div>
+                    <div class="step-content">
+                        <h4>Ouvrir la gestion des surveillants</h4>
+                        <p>Sur la carte d'un examen (statut planifié ou en cours), cliquez sur le bouton <strong style="color:#d97706;"><i class="fas fa-eye"></i> Surveillants</strong>. Une modale s'ouvre avec la liste des surveillants déjà assignés et le nombre d'étudiants de chacun.</p>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-num">2</div>
+                    <div class="step-content">
+                        <h4>Ajouter un surveillant</h4>
+                        <p>Dans le menu déroulant, sélectionnez un utilisateur de rôle <strong>Surveillant</strong> (ou un autre enseignant) puis cliquez sur <strong>Ajouter</strong>. Un surveillant déjà ajouté n'apparaît pas dans la liste de sélection.</p>
+                        <div class="tip"><i class="fas fa-lightbulb"></i> Vous pouvez vous ajouter vous-même comme surveillant d'un groupe si vous souhaitez superviser une partie des étudiants tout en gardant la vue globale de l'enseignant.</div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-num">3</div>
+                    <div class="step-content">
+                        <h4>Répartir automatiquement les étudiants</h4>
+                        <p>Une fois vos surveillants ajoutés, cliquez sur <strong>"Répartir automatiquement"</strong>. Le système distribue les étudiants en <strong>ordre alphabétique</strong> par groupe de taille égale (round-robin). Un résumé affiche combien d'étudiants chaque surveillant reçoit.</p>
+                        <div class="info"><i class="fas fa-info-circle"></i> La répartition peut être relancée à tout moment — les affectations existantes sont remplacées. Cela permet de rééquilibrer si des étudiants abandonnent l'examen.</div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-num">4</div>
+                    <div class="step-content">
+                        <h4>Retirer un surveillant</h4>
+                        <p>Cliquez sur le bouton <strong style="color:#ef4444;">Retirer</strong> à côté du nom du surveillant. Ses affectations d'étudiants sont automatiquement supprimées. Ces étudiants deviennent "non affectés" jusqu'à la prochaine répartition.</p>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-num">5</div>
+                    <div class="step-content">
+                        <h4>Recevoir les notifications de bannissement</h4>
+                        <p>Quand un surveillant banni un étudiant, vous recevez automatiquement une notification dans votre dashboard : le nom du surveillant, le nom de l'étudiant et le motif saisi. Vous restez informé de toutes les actions disciplinaires.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 <footer class="doc-footer">
-    <p>Système de Notation CEI — <a href="/">Retour à l'accueil</a> · <a href="/guide-etudiant">Guide Étudiant</a> · <a href="/conditions">Conditions d'Utilisation</a></p>
-    <p style="margin-top:8px;opacity:.6;">© 2025 CEI — École Centrale des Logiciels Libre et de Télécommunications, Dakar, Sénégal</p>
+    <p>Centre d'Examen Intelligent — <a href="/">Retour à l'accueil</a> · <a href="/guide-etudiant">Guide Étudiant</a> · <a href="/guide-surveillant">Guide Surveillant</a> · <a href="/conditions">Conditions d'Utilisation</a></p>
+    <p style="margin-top:16px;font-size:12px;opacity:.8;font-weight:600;">Contact</p>
+    <p style="margin-top:6px;font-size:12px;opacity:.6;">
+        <i class="fas fa-map-marker-alt"></i> Cité du savoir - Diamniadio, Castors, avenue Bourguiba, rue n°13<br>
+        <i class="fas fa-phone"></i> +221 30 108 41 53<br>
+        <i class="fas fa-envelope"></i> visioplus@unchk.edu.sn
+    </p>
+    <p style="margin-top:12px;opacity:.6;">© 2026 CEI — Université Numérique Cheikh Hamidou Kane</p>
 </footer>
 
+<script src="{{ url_for('static', filename='js/site_translator.js') }}?v=7"></script>
 </body>
 </html>

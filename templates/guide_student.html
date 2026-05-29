@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Guide Étudiant — Système de Notation CEI</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <title>Guide Étudiant — Centre d'Examen Intelligent</title>
+    <link rel="stylesheet" href="/static/fontawesome/css/all.min.css">
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
         body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#f8fafc; color:#1e293b; line-height:1.7; }
@@ -68,7 +68,7 @@
 
 <div class="topbar">
     <div class="topbar-brand">
-        <i class="fas fa-graduation-cap"></i> Système de Notation — CEI
+        <i class="fas fa-graduation-cap"></i> Centre d'Examen Intelligent
     </div>
     <a href="/" class="btn-back"><i class="fas fa-arrow-left"></i> Retour à l'accueil</a>
 </div>
@@ -91,6 +91,7 @@
             <li><a href="#regles"><i class="fas fa-shield-alt"></i> 5. Règles à respecter</a></li>
             <li><a href="#soumettre"><i class="fas fa-paper-plane"></i> 6. Soumettre votre copie</a></li>
             <li><a href="#resultats"><i class="fas fa-star"></i> 7. Consulter vos résultats</a></li>
+            <li><a href="#detection-faciale"><i class="fas fa-user-check"></i> 5b. Détection faciale — conseils</a></li>
             <li><a href="#reclamation"><i class="fas fa-comment-dots"></i> 8. Faire une réclamation</a></li>
         </ul>
     </div>
@@ -107,7 +108,7 @@
                     <div class="step-num">1</div>
                     <div class="step-content">
                         <h4>Accéder à l'application</h4>
-                        <p>Rendez-vous sur <strong>cei.ec2lt.sn</strong> et cliquez sur <strong>Commencer Maintenant</strong>, ou allez directement sur <strong>cei.ec2lt.sn/app</strong>.</p>
+                        <p>Rendez-vous sur <strong>cei.unchk.sn</strong> et cliquez sur <strong>Commencer Maintenant</strong>, ou allez directement sur <strong>cei.unchk.sn/app</strong>.</p>
                     </div>
                 </div>
                 <div class="step">
@@ -215,8 +216,9 @@
                 <div class="step">
                     <div class="step-num">3</div>
                     <div class="step-content">
-                        <h4>Partage d'écran obligatoire</h4>
-                        <p>Le partage de votre écran est <strong>obligatoire</strong> pour participer à l'examen. Il démarre automatiquement au lancement. Une boîte de dialogue du navigateur s'affiche — sélectionnez impérativement <strong>"Tout l'écran"</strong> et confirmez. Refuser le partage d'écran est considéré comme une infraction de surveillance.</p>
+                        <h4>Partage d'écran complet obligatoire</h4>
+                        <p>Le partage de votre écran est <strong>obligatoire</strong>. Une boîte de dialogue du navigateur s'affiche — vous <strong>devez</strong> sélectionner l'onglet <strong>"Tout l'écran"</strong> puis choisir votre moniteur entier et confirmer.</p>
+                        <div class="danger"><i class="fas fa-ban"></i> <div><strong>Interdit :</strong> Le partage d'une <strong>fenêtre</strong> ou d'un <strong>onglet</strong> est automatiquement refusé par le système. Seul l'<strong>écran complet (moniteur entier)</strong> est accepté. Si vous partagez une fenêtre, un message d'erreur s'affiche et vous devrez recommencer.</div></div>
                     </div>
                 </div>
                 <div class="step">
@@ -225,6 +227,7 @@
                         <h4>Contacter l'enseignant</h4>
                         <p>En cas de question ou problème technique, utilisez la zone <strong>"Contacter l'enseignant"</strong> en bas du panneau de surveillance. L'enseignant verra votre message sur son dashboard et pourra vous répondre.</p>
                         <div class="tip"><i class="fas fa-lightbulb"></i> Les réponses de l'enseignant apparaissent en bleu dans le panneau gauche (message) ou en orange (avertissement).</div>
+                        <div class="tip" style="margin-top:10px;"><i class="fas fa-phone" style="color:#7c3aed;"></i> <span style="color:#5b21b6;">Besoin d'une explication orale ? Cliquez sur le bouton <strong>microphone violet</strong> dans la zone de messagerie pour envoyer une demande d'appel vocal à l'enseignant. Si celui-ci accepte, une fenêtre d'appel audio/vidéo privé s'ouvrira automatiquement.</span></div>
                     </div>
                 </div>
             </div>
@@ -245,10 +248,60 @@
                 <div class="rule-card bad"><i class="fas fa-users"></i><p>Soyez seul devant la caméra</p></div>
                 <div class="rule-card bad"><i class="fas fa-terminal"></i><p>N'ouvrez PAS les outils développeur</p></div>
                 <div class="rule-card bad"><i class="fas fa-copy"></i><p>Le copier/coller est désactivé</p></div>
+                <div class="rule-card bad"><i class="fas fa-window-maximize"></i><p>Partage fenêtre/onglet interdit — écran complet uniquement</p></div>
                 <div class="rule-card good"><i class="fas fa-check-circle"></i><p>Répondez calmement dans la zone de texte</p></div>
                 <div class="rule-card good"><i class="fas fa-comment"></i><p>Posez vos questions via la messagerie</p></div>
+                <div class="rule-card good"><i class="fas fa-phone"></i><p>Demandez un appel vocal si besoin d'explications</p></div>
             </div>
             <div class="danger" style="margin-top:20px;"><i class="fas fa-ban"></i> <div><strong>Attention :</strong> Le dépassement des seuils configurés (changements de fenêtre, absence du visage, outils dev) entraîne un <strong>bannissement immédiat et irréversible</strong> de l'examen. Votre tentative sera notée 0.</div></div>
+        </div>
+    </div>
+
+    <!-- 5b. Détection faciale -->
+    <div class="section" id="detection-faciale">
+        <div class="section-header">
+            <div class="section-icon"><i class="fas fa-user-check"></i></div>
+            <h2>5b. Détection faciale — conseils pratiques</h2>
+        </div>
+        <div class="section-body">
+            <p style="color:#475569;margin-bottom:16px;">La plateforme utilise la reconnaissance faciale IA pour vérifier votre présence en continu. Voici comment éviter les alertes.</p>
+            <div class="steps">
+                <div class="step">
+                    <div class="step-num">1</div>
+                    <div class="step-content">
+                        <h4>Positionnement optimal</h4>
+                        <p>Placez-vous face à la caméra, à environ <strong>40–80 cm</strong>. Votre visage doit être entièrement visible, bien éclairé (lumière devant vous, non derrière). Évitez les contre-jours ou les casquettes masquant le visage.</p>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-num">2</div>
+                    <div class="step-content">
+                        <h4>Indicateurs de statut (bandeau couleur)</h4>
+                        <p>Un bandeau coloré sous la caméra vous informe en temps réel :</p>
+                        <ul>
+                            <li><span style="color:#059669;font-weight:700;">Vert</span> — Visage reconnu, tout va bien</li>
+                            <li><span style="color:#d97706;font-weight:700;">Jaune</span> — Repositionnez-vous : visage mal détecté</li>
+                            <li><span style="color:#dc2626;font-weight:700;">Rouge</span> — Alerte : visage absent ou plusieurs visages détectés</li>
+                            <li><span style="color:#2563eb;font-weight:700;">Bleu</span> — Capture de référence en cours, restez immobile</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-num">3</div>
+                    <div class="step-content">
+                        <h4>Si le système ne vous reconnaît plus</h4>
+                        <p>Le système tente automatiquement une <strong>recapture de référence</strong> après 5 détections consécutives incorrectes. Suivez les instructions du bandeau jaune (repositionnez-vous, regardez la caméra). Après recapture, la reconnaissance reprend normalement.</p>
+                        <div class="tip"><i class="fas fa-lightbulb"></i> 3 alertes consécutives sont nécessaires avant qu'un incident ne soit enregistré. Un bon repositionnement interrompt le compteur.</div>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-num">4</div>
+                    <div class="step-content">
+                        <h4>Visages multiples</h4>
+                        <p>Si une autre personne apparaît dans le champ de la caméra, une alerte <strong>"Plusieurs visages détectés"</strong> est envoyée immédiatement au surveillant. Assurez-vous d'être <strong>seul</strong> devant la caméra pendant toute la durée de l'examen.</p>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -334,9 +387,16 @@
 </div>
 
 <footer class="doc-footer">
-    <p>Système de Notation CEI — <a href="/">Retour à l'accueil</a> · <a href="/guide-enseignant">Guide Enseignant</a> · <a href="/conditions">Conditions d'Utilisation</a></p>
-    <p style="margin-top:8px;opacity:.6;">© 2025 CEI — École Centrale des Logiciels Libre et de Télécommunications, Dakar, Sénégal</p>
+    <p>Centre d'Examen Intelligent — <a href="/">Retour à l'accueil</a> · <a href="/guide-enseignant">Guide Enseignant</a> · <a href="/conditions">Conditions d'Utilisation</a></p>
+    <p style="margin-top:16px;font-size:12px;opacity:.8;font-weight:600;">Contact</p>
+    <p style="margin-top:6px;font-size:12px;opacity:.6;">
+        <i class="fas fa-map-marker-alt"></i> Cité du savoir - Diamniadio, Castors, avenue Bourguiba, rue n°13<br>
+        <i class="fas fa-phone"></i> +221 30 108 41 53<br>
+        <i class="fas fa-envelope"></i> visioplus@unchk.edu.sn
+    </p>
+    <p style="margin-top:12px;opacity:.6;">© 2026 CEI — Université Numérique Cheikh Hamidou Kane</p>
 </footer>
 
+<script src="{{ url_for('static', filename='js/site_translator.js') }}?v=7"></script>
 </body>
 </html>

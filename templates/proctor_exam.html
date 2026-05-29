@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Examen Surveillé</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/fontawesome/css/all.min.css">
     <style>
         :root {
             --primary: #2563eb;
@@ -643,6 +643,12 @@
             </div>
         </div>
 
+        <!-- Guide de positionnement facial (contextuel, affiché sous la caméra) -->
+        <div id="face-guide-overlay" style="display:none;margin:0 12px 8px;padding:8px 10px;border-radius:8px;align-items:flex-start;gap:8px;font-size:11px;font-weight:600;color:#fff;line-height:1.4;">
+            <i class="fas fa-info-circle" style="flex-shrink:0;margin-top:1px;"></i>
+            <span class="fgo-text"></span>
+        </div>
+
         <!-- Vidéo de l'enseignant (affichée quand le prof active sa caméra) -->
         <div id="teacher-video-section" style="display:none; margin: 0 12px 8px; border-radius:8px; overflow:hidden; background:#000; border:2px solid #f59e0b; position:relative;">
             <div style="position:absolute;top:4px;left:6px;z-index:10;font-size:9px;font-weight:700;color:#f59e0b;background:rgba(0,0,0,.7);padding:2px 6px;border-radius:4px;">
@@ -694,12 +700,34 @@
             </div>
         </div>
 
+        <!-- Panneau appel privé actif (caché par défaut) -->
+        <div id="private-call-panel" style="display:none;margin:0 12px 8px;border-radius:8px;overflow:hidden;border:2px solid #3b82f6;background:#0f172a;">
+            <div style="background:#3b82f6;padding:6px 10px;display:flex;align-items:center;gap:8px;">
+                <i class="fas fa-phone" style="color:white;font-size:10px;"></i>
+                <span style="color:white;font-size:11px;font-weight:700;">Appel privé avec le surveillant</span>
+                <button onclick="_leavePrivateCall()" style="margin-left:auto;background:rgba(239,68,68,.85);color:white;border:none;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:10px;font-weight:700;">
+                    <i class="fas fa-phone-slash"></i> Terminer
+                </button>
+            </div>
+            <video id="private-teacher-video" autoplay playsinline style="width:100%;display:block;aspect-ratio:4/3;object-fit:cover;background:#000;"></video>
+            <audio id="private-teacher-audio" autoplay style="display:none"></audio>
+            <div style="padding:6px 10px;display:flex;align-items:center;gap:6px;background:#1e293b;">
+                <button id="private-mic-btn" onclick="_togglePrivateMic()" style="background:rgba(16,185,129,.2);color:#10b981;border:1px solid rgba(16,185,129,.3);border-radius:4px;padding:4px 10px;cursor:pointer;font-size:10px;font-weight:600;">
+                    <i class="fas fa-microphone"></i> Micro
+                </button>
+                <span id="private-call-status" style="color:#64748b;font-size:9px;margin-left:auto;"></span>
+            </div>
+        </div>
+
         <!-- Messagerie étudiant → enseignant -->
         <div class="msg-section">
             <div class="msg-section-title"><i class="fas fa-comment-dots"></i> Contacter l'enseignant</div>
             <div class="msg-input-row">
                 <textarea id="student-msg-input" class="msg-input" rows="2" placeholder="Question ou réclamation…"></textarea>
-                <button class="msg-send-btn" onclick="sendStudentMessage()" title="Envoyer">
+                <button class="msg-send-btn" onclick="_requestVoiceCall()" title="Demander un appel vocal" style="background:#6366f1;margin-right:2px;">
+                    <i class="fas fa-microphone"></i>
+                </button>
+                <button class="msg-send-btn" onclick="sendStudentMessage()" title="Envoyer message texte">
                     <i class="fas fa-paper-plane"></i>
                 </button>
             </div>
@@ -786,6 +814,47 @@
     </div>
 </div>
 
+<!-- ── Overlay : Surveillant en train de diffuser ── -->
+<div id="proctor-broadcast-overlay" style="
+    display:none;
+    position:fixed;
+    bottom:24px;
+    left:24px;
+    z-index:9000;
+    background:rgba(10,16,32,.92);
+    border:2px solid #3b82f6;
+    border-radius:12px;
+    overflow:hidden;
+    width:220px;
+    box-shadow:0 8px 32px rgba(0,0,0,.6);
+">
+    <video id="proctor-broadcast-video" autoplay playsinline
+           style="width:100%;display:block;max-height:124px;object-fit:cover;background:#0a1020;">
+    </video>
+    <audio id="proctor-broadcast-audio" autoplay></audio>
+    <div style="padding:6px 10px;display:flex;align-items:center;gap:6px;background:rgba(37,99,235,.25);">
+        <span style="display:inline-block;width:7px;height:7px;background:#ef4444;border-radius:50%;animation:blink 1s infinite;"></span>
+        <span style="color:#bfdbfe;font-size:12px;font-weight:600;">
+            <i class="fas fa-user-shield" style="margin-right:4px;"></i>Votre surveillant
+        </span>
+        <button onclick="document.getElementById('proctor-broadcast-overlay').style.display='none'"
+                style="margin-left:auto;background:none;border:none;color:rgba(255,255,255,.5);font-size:14px;cursor:pointer;">✕</button>
+    </div>
+</div>
+
+<!-- Appel privé entrant (surveillant → étudiant) -->
+<div id="modal-private-call" class="modal">
+    <div class="modal-box" style="border-top:4px solid #3b82f6;">
+        <div class="modal-icon info" style="background:rgba(37,99,235,.12);"><i class="fas fa-phone"></i></div>
+        <h2 class="modal-title" style="color:#1e40af;">Appel du Surveillant</h2>
+        <p class="modal-message">Le surveillant souhaite vous parler en privé.<br>Votre micro sera activé automatiquement.</p>
+        <div style="display:flex;gap:12px;justify-content:center;">
+            <button class="btn btn-success" onclick="_acceptPrivateCall()"><i class="fas fa-phone"></i> Accepter</button>
+            <button class="btn btn-danger" onclick="closeModal('modal-private-call')"><i class="fas fa-phone-slash"></i> Refuser</button>
+        </div>
+    </div>
+</div>
+
 <div id="modal-confirm-submit" class="modal">
     <div class="modal-box">
         <div class="modal-icon warn"><i class="fas fa-question-circle"></i></div>
@@ -799,10 +868,10 @@
 </div>
 
 <!-- ── Scripts ── -->
-<script src="https://cdn.jsdelivr.net/npm/livekit-client@2.5.7/dist/livekit-client.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.11.0"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7"></script>
-<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/livekit-client@2.5.7/dist/livekit-client.umd.min.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.11.0/dist/tf.min.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/dist/face-api.js" crossorigin="anonymous"></script>
 
 <script>
 // ═══════════════════════════════════════════════════════════
@@ -815,9 +884,13 @@ let authToken    = localStorage.getItem('authToken');
 // État global
 let room, examData, attemptData, subjectData;
 let riskScore = 0, warnings = [], isBanned = false, sessionEnded = false;
-let faceModel = null, faceReady = false, faceInterval = null;  // BlazeFace (fallback)
-let faceApiReady = false, referenceDescriptor = null;           // face-api.js
+let faceModel = null, faceReady = false, faceInterval = null;
+let faceApiReady = false, referenceDescriptor = null;
 let lastFaceCount = null;
+// Anti-faux-positifs
+let _consNoFace = 0, _consMismatch = 0, _consMultiFace = 0, _consGood = 0;
+const _lastAlert = { no_face: 0, mismatch: 0, multiple: 0 };
+let _refCapturing = false, _refCaptured = [];
 
 // Tracks pré-acquis lors de l'écran pré-lancement
 let preflightCameraTrack = null;
@@ -914,14 +987,28 @@ async function requestAllPermissions() {
         return;
     }
 
-    // ── Étape 2 : Écran entier (getDisplayMedia) — nécessite le clic ci-dessus ──
-    setPermStatus('screen', 'loading', 'Sélectionnez "Écran entier" dans la boîte système…');
+    // ── Étape 2 : Écran entier OBLIGATOIRE (fenêtre ou onglet interdit) ──────
+    setPermStatus('screen', 'loading', 'Sélectionnez impérativement "Écran entier" dans la boîte système…');
     try {
         const screenStream = await navigator.mediaDevices.getDisplayMedia({
-            video: { cursor: 'always' },
+            video: { cursor: 'always', displaySurface: 'monitor' },
+            preferCurrentTab: false,
             audio: false
         });
-        preflightScreenTrack = screenStream.getVideoTracks()[0];
+        const track    = screenStream.getVideoTracks()[0];
+        const surface  = track.getSettings().displaySurface;
+
+        // Vérifier que l'écran complet a été sélectionné (pas une fenêtre ni un onglet)
+        if (surface !== undefined && surface !== 'monitor') {
+            track.stop();
+            setPermStatus('screen', 'error', 'Partage de fenêtre refusé — écran complet obligatoire');
+            errEl.innerHTML = '<strong>Vous avez partagé une fenêtre ou un onglet — ce n\'est pas autorisé.</strong><br>Cliquez à nouveau et choisissez l\'onglet <em>"Écran entier"</em> (toute la surface du moniteur).';
+            errEl.style.display = 'block';
+            btn.disabled = false;
+            return;
+        }
+
+        preflightScreenTrack = track;
 
         // Si l'étudiant arrête le partage via le bouton navigateur
         preflightScreenTrack.addEventListener('ended', () => {
@@ -930,16 +1017,30 @@ async function requestAllPermissions() {
             screenSharing = false;
         });
 
-        setPermStatus('screen', 'ok', 'Accès accordé — partage d\'écran actif');
+        setPermStatus('screen', 'ok', 'Écran complet partagé — accès accordé');
     } catch(e) {
         setPermStatus('screen', 'error', 'Partage d\'écran refusé ou annulé');
-        errEl.textContent = 'Le partage d\'écran entier est obligatoire pour composer l\'examen. Cliquez à nouveau et sélectionnez "Écran entier".';
+        errEl.textContent = 'Le partage de l\'écran complet est obligatoire. Cliquez à nouveau et sélectionnez "Écran entier" (pas une fenêtre, pas un onglet).';
         errEl.style.display = 'block';
         btn.disabled = false;
         return;
     }
 
     // ── Toutes les autorisations accordées → lancer l'examen ──
+    // Afficher immédiatement le flux local (indépendamment de LiveKit)
+    if (preflightCameraTrack) {
+        const localVid = document.getElementById('local-video');
+        if (localVid) {
+            localVid.srcObject = new MediaStream([preflightCameraTrack]);
+            localVid.play().catch(() => {});
+            localVid.addEventListener('loadedmetadata', () => { initFaceDetection(); }, { once: true });
+        }
+        setDevice('camera', true);
+    }
+    if (preflightAudioTrack) {
+        setDevice('mic', true);
+    }
+
     document.getElementById('preflight-screen').style.display = 'none';
     document.getElementById('loading-screen').style.display = 'flex';
     await init();
@@ -980,6 +1081,7 @@ async function init() {
         await initLiveKit();
 
         startSaveInterval();
+        startSnapshotInterval();
         startPendingMessagesPolling();
         startMonitoring();
 
@@ -1117,9 +1219,31 @@ async function initLiveKit() {
         });
 
         room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, pub, participant) => {
-            if (participant.identity === tokenData.identity) return; // ignorer ses propres pistes
+            if (participant.identity === tokenData.identity) return;
+            const id = participant.identity;
+
+            // ── Flux d'un surveillant → overlay en bas à gauche ──
+            if (id.startsWith('proctor-')) {
+                if (track.kind === 'video') {
+                    const overlay = document.getElementById('proctor-broadcast-overlay');
+                    const videoEl = document.getElementById('proctor-broadcast-video');
+                    if (overlay && videoEl) {
+                        track.attach(videoEl);
+                        overlay.style.display = 'block';
+                    }
+                } else if (track.kind === 'audio') {
+                    const audioEl = document.getElementById('proctor-broadcast-audio');
+                    if (audioEl) track.attach(audioEl);
+                    // Montrer l'overlay même si pas de vidéo (micro seulement)
+                    const overlay = document.getElementById('proctor-broadcast-overlay');
+                    if (overlay) overlay.style.display = 'block';
+                }
+                return;
+            }
+
+            // ── Flux de l'enseignant → section dédiée ──
+            if (!id.startsWith('teacher-')) return;
             if (track.kind === 'video') {
-                // Vidéo de l'enseignant → afficher dans le panneau
                 const section = document.getElementById('teacher-video-section');
                 const videoEl = document.getElementById('teacher-video');
                 if (section && videoEl) {
@@ -1127,7 +1251,6 @@ async function initLiveKit() {
                     section.style.display = 'block';
                 }
             } else if (track.kind === 'audio') {
-                // Audio de l'enseignant
                 const audioEl = document.getElementById('teacher-audio');
                 if (audioEl) track.attach(audioEl);
             }
@@ -1135,6 +1258,32 @@ async function initLiveKit() {
 
         room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track, pub, participant) => {
             if (participant.identity === tokenData.identity) return;
+            const id = participant.identity;
+
+            // ── Fin diffusion surveillant ──
+            if (id.startsWith('proctor-')) {
+                if (track.kind === 'video') {
+                    const videoEl = document.getElementById('proctor-broadcast-video');
+                    if (videoEl) { track.detach(videoEl); videoEl.srcObject = null; }
+                    // Cacher l'overlay seulement si plus d'audio non plus
+                    const audioEl = document.getElementById('proctor-broadcast-audio');
+                    if (!audioEl || !audioEl.srcObject) {
+                        const overlay = document.getElementById('proctor-broadcast-overlay');
+                        if (overlay) overlay.style.display = 'none';
+                    }
+                } else if (track.kind === 'audio') {
+                    const audioEl = document.getElementById('proctor-broadcast-audio');
+                    if (audioEl) { track.detach(audioEl); audioEl.srcObject = null; }
+                    const videoEl = document.getElementById('proctor-broadcast-video');
+                    if (!videoEl || !videoEl.srcObject) {
+                        const overlay = document.getElementById('proctor-broadcast-overlay');
+                        if (overlay) overlay.style.display = 'none';
+                    }
+                }
+                return;
+            }
+
+            if (!id.startsWith('teacher-')) return;
             if (track.kind === 'video') {
                 const section = document.getElementById('teacher-video-section');
                 const videoEl = document.getElementById('teacher-video');
@@ -1149,26 +1298,42 @@ async function initLiveKit() {
         await room.connect(tokenData.ws_url, tokenData.token);
         console.log('✅ LiveKit connecté, room:', tokenData.room);
 
+        // Rattacher les tracks d'un surveillant déjà connecté avant l'étudiant
+        room.remoteParticipants.forEach((participant) => {
+            if (!participant.identity.startsWith('proctor-')) return;
+            participant.trackPublications.forEach((pub) => {
+                if (!pub.track || !pub.isSubscribed) return;
+                const overlay = document.getElementById('proctor-broadcast-overlay');
+                if (pub.track.kind === 'video') {
+                    const videoEl = document.getElementById('proctor-broadcast-video');
+                    if (overlay && videoEl) { pub.track.attach(videoEl); overlay.style.display = 'block'; }
+                } else if (pub.track.kind === 'audio') {
+                    const audioEl = document.getElementById('proctor-broadcast-audio');
+                    if (audioEl) pub.track.attach(audioEl);
+                    if (overlay) overlay.style.display = 'block';
+                }
+            });
+        });
+
         // Publier la caméra — réutilise le track pré-acquis (aucune nouvelle demande)
         try {
             const videoTrack = preflightCameraTrack
-                ? new LivekitClient.LocalVideoTrack(preflightCameraTrack)
-                : await LivekitClient.createLocalVideoTrack({ resolution: LivekitClient.VideoPresets.h360.resolution });
-            await room.localParticipant.publishTrack(videoTrack);
-            videoTrack.attach(document.getElementById('local-video'));
+                ? new LivekitClient.LocalVideoTrack(preflightCameraTrack, undefined, true)
+                : await LivekitClient.createLocalVideoTrack({ resolution: LivekitClient.VideoPresets.h240.resolution });
+            await room.localParticipant.publishTrack(videoTrack, {
+                simulcast: true,
+                videoEncoding: { maxBitrate: 300_000, maxFramerate: 15 }
+            });
             setDevice('camera', true);
-            document.getElementById('local-video').addEventListener('loadedmetadata', () => {
-                initFaceDetection();
-            }, { once: true });
         } catch(e) {
-            console.error('Caméra non accessible:', e);
+            console.error('Caméra non accessible (LiveKit):', e);
             logProctoringEvent('camera_blocked', 'Accès caméra refusé');
         }
 
         // Publier le micro — réutilise le track pré-acquis
         try {
             const audioTrack = preflightAudioTrack
-                ? new LivekitClient.LocalAudioTrack(preflightAudioTrack)
+                ? new LivekitClient.LocalAudioTrack(preflightAudioTrack, undefined, true)
                 : await LivekitClient.createLocalAudioTrack();
             await room.localParticipant.publishTrack(audioTrack);
             setDevice('mic', true);
@@ -1181,10 +1346,11 @@ async function initLiveKit() {
             if (!preflightScreenTrack || preflightScreenTrack.readyState === 'ended') {
                 throw new Error('Track écran non disponible');
             }
-            screenTrack = new LivekitClient.LocalVideoTrack(preflightScreenTrack);
+            screenTrack = new LivekitClient.LocalVideoTrack(preflightScreenTrack, undefined, true);
             await room.localParticipant.publishTrack(screenTrack, {
                 source: LivekitClient.Track.Source.ScreenShare,
-                name: 'screen'
+                name: 'screen',
+                screenShareEncoding: { maxBitrate: 500_000, maxFramerate: 5 }
             });
             screenSharing = true;
             setDevice('screen', true);
@@ -1207,18 +1373,40 @@ let screenSharing = false;
 
 // ═══════════════════════════════════════════════════════════
 // DÉTECTION + RECONNAISSANCE FACIALE
-// Primaire : face-api.js (TinyFaceDetector + FaceRecognitionNet)
-// Fallback  : BlazeFace (détection seule si face-api échoue)
+// Primaire  : @vladmandic/face-api (TinyFaceDetector + FaceRecognitionNet)
+// Fallback  : BlazeFace (détection seule)
+// Anti-FP   : seuil consécutif × 3, cooldown 60s, référence multi-frames,
+//             recapture automatique, guidage actif pour l'étudiant
 // ═══════════════════════════════════════════════════════════
 
-const FACEAPI_MODEL_URL   = '/static/models/faceapi';
-const RECOGNITION_THRESHOLD = 0.52; // distance euclidienne < 0.52 → même personne
+const FACEAPI_MODEL_URL     = '/static/models/faceapi';
+const RECOGNITION_THRESHOLD = 0.65;  // tolérant aux repositionnements (était 0.52)
+const UPDATE_THRESHOLD      = 0.42;  // seuil pour mise à jour douce de la référence
+const CONSECUTIVE_TO_ALERT  = 3;     // N frames anormales consécutives avant alerte
+const ALERT_COOLDOWN_MS     = 60000; // 60 s entre deux alertes du même type
+const RECAPTURE_AFTER       = 5;     // recapturer la référence après N mismatches conséc.
 
+// ── Guidage étudiant ─────────────────────────────────────────────────────────
+function _showFaceGuide(message, type) {
+    const el = document.getElementById('face-guide-overlay');
+    if (!el) return;
+    const colors = { warn:'#f59e0b', bad:'#ef4444', ok:'#10b981', info:'#3b82f6' };
+    el.style.background = colors[type] || colors.warn;
+    el.style.display = 'flex';
+    el.querySelector('.fgo-text').textContent = message;
+    clearTimeout(el._hide);
+    if (type === 'ok') el._hide = setTimeout(() => { el.style.display = 'none'; }, 5000);
+}
+function _hideFaceGuide() {
+    const el = document.getElementById('face-guide-overlay');
+    if (el) el.style.display = 'none';
+}
+
+// ── Initialisation ────────────────────────────────────────────────────────────
 async function initFaceDetection() {
     const el = document.getElementById('face-overlay');
     if (el) { el.className = 'face-overlay'; el.innerHTML = '<i class="fas fa-sync fa-spin"></i> Chargement…'; }
 
-    // ── Tentative face-api.js (précis + reconnaissance) ──
     if (typeof faceapi !== 'undefined') {
         try {
             await Promise.all([
@@ -1227,17 +1415,16 @@ async function initFaceDetection() {
                 faceapi.nets.faceRecognitionNet.loadFromUri(FACEAPI_MODEL_URL)
             ]);
             faceApiReady = true;
-            if (el) { el.className = 'face-overlay warn'; el.innerHTML = '<i class="fas fa-camera"></i> Capture réf…'; }
-            // Capturer le visage de référence 3s après init (vidéo stabilisée)
+            if (el) { el.className = 'face-overlay warn'; el.innerHTML = '<i class="fas fa-camera"></i> Positionnez-vous…'; }
+            _showFaceGuide('Regardez la caméra et restez immobile — enregistrement de votre visage en cours', 'info');
             setTimeout(captureReferenceDescriptor, 3000);
             startFaceDetection();
             return;
         } catch(e) {
-            console.warn('face-api.js chargement échoué, bascule BlazeFace:', e);
+            console.warn('face-api chargement échoué, bascule BlazeFace:', e);
         }
     }
 
-    // ── Fallback BlazeFace (détection seule) ──
     if (typeof blazeface !== 'undefined') {
         try {
             faceModel = await blazeface.load();
@@ -1245,42 +1432,56 @@ async function initFaceDetection() {
             if (el) { el.className = 'face-overlay ok'; el.innerHTML = '<i class="fas fa-check"></i> OK'; }
             setTimeout(startFaceDetection, 2000);
         } catch(e) {
-            console.error('BlazeFace erreur:', e);
             if (el) { el.className = 'face-overlay bad'; el.innerHTML = '<i class="fas fa-times"></i> Erreur'; }
         }
     }
 }
 
-// Capture un descripteur facial de référence (portrait initial de l'étudiant)
+// ── Capture multi-frames de la référence ──────────────────────────────────────
 async function captureReferenceDescriptor() {
     const video = document.getElementById('local-video');
     const el    = document.getElementById('face-overlay');
-    if (!video || !faceApiReady) return;
+    if (!video || !faceApiReady || _refCapturing) return;
 
-    try {
-        const detection = await faceapi
-            .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 }))
-            .withFaceLandmarks()
-            .withFaceDescriptor();
+    _refCapturing = true;
+    _refCaptured  = [];
+    const TARGET  = 3; // 3 frames pour moyenner
 
-        if (detection) {
-            referenceDescriptor = detection.descriptor;
-            logProctoringEvent('face_reference_captured', 'Référence faciale capturée avec succès');
-            if (el) { el.className = 'face-overlay ok'; el.innerHTML = '<i class="fas fa-user-check"></i> Référence OK'; }
-            setTimeout(() => {
-                if (el && el.className.includes('ok')) {
-                    el.innerHTML = '<i class="fas fa-check"></i> OK';
-                }
-            }, 3000);
-        } else {
-            // Aucun visage clair — réessayer dans 5s
-            if (el) { el.className = 'face-overlay warn'; el.innerHTML = '<i class="fas fa-camera"></i> Repositionnez-vous…'; }
-            setTimeout(captureReferenceDescriptor, 5000);
-        }
-    } catch(e) {
-        console.error('captureReferenceDescriptor erreur:', e);
-        setTimeout(captureReferenceDescriptor, 5000);
+    if (el) { el.className = 'face-overlay warn'; el.innerHTML = `<i class="fas fa-camera"></i> Capture 0/${TARGET}…`; }
+    _showFaceGuide('Restez face à la caméra, bien éclairé — enregistrement de votre référence…', 'info');
+
+    for (let i = 0; i < TARGET; i++) {
+        if (i > 0) await new Promise(r => setTimeout(r, 1500));
+        try {
+            const opts = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.55 });
+            const det  = await faceapi.detectSingleFace(video, opts).withFaceLandmarks().withFaceDescriptor();
+            if (det) {
+                _refCaptured.push(det.descriptor);
+                if (el) el.innerHTML = `<i class="fas fa-camera"></i> Capture ${_refCaptured.length}/${TARGET}…`;
+            } else {
+                if (el) { el.className = 'face-overlay warn'; el.innerHTML = '<i class="fas fa-camera"></i> Positionnez-vous…'; }
+                _showFaceGuide('Visage non détecté — placez-vous face à la caméra dans un endroit bien éclairé et réessayez', 'warn');
+                _refCapturing = false;
+                setTimeout(captureReferenceDescriptor, 4000);
+                return;
+            }
+        } catch(e) { _refCapturing = false; setTimeout(captureReferenceDescriptor, 4000); return; }
     }
+
+    // Moyenne des descripteurs capturés
+    const size = _refCaptured[0].length;
+    const avg  = new Float32Array(size);
+    for (const d of _refCaptured) for (let i = 0; i < size; i++) avg[i] += d[i] / TARGET;
+    referenceDescriptor = avg;
+
+    _refCapturing = false;
+    _consMismatch = 0;
+    _consNoFace   = 0;
+
+    logProctoringEvent('face_reference_captured', `Référence capturée (${TARGET} frames)`);
+    if (el) { el.className = 'face-overlay ok'; el.innerHTML = '<i class="fas fa-user-check"></i> Identifié'; }
+    _showFaceGuide('Votre visage a été enregistré — vous êtes identifié !', 'ok');
+    setTimeout(() => { if (el && el.className.includes('ok')) el.innerHTML = '<i class="fas fa-check"></i> OK'; }, 4000);
 }
 
 function startFaceDetection() {
@@ -1288,79 +1489,160 @@ function startFaceDetection() {
     faceInterval = setInterval(faceDetectionTick, 5000);
 }
 
+// ── Tick de surveillance (toutes les 3 s) ─────────────────────────────────────
 async function faceDetectionTick() {
     const video = document.getElementById('local-video');
     if (!video || video.readyState < 2 || video.videoWidth === 0) return;
-    const el = document.getElementById('face-overlay');
+    if (_refCapturing) return;
+    const el  = document.getElementById('face-overlay');
+    const now = Date.now();
 
-    // ── Mode face-api.js : détection + reconnaissance ──
+    // ══ Mode face-api : détection + reconnaissance ══════════════════════════
     if (faceApiReady) {
         try {
-            const opts = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 });
-            let detections;
-
-            if (referenceDescriptor) {
-                // Besoin des descripteurs pour comparer
-                detections = await faceapi.detectAllFaces(video, opts)
-                    .withFaceLandmarks()
-                    .withFaceDescriptors();
-            } else {
-                detections = await faceapi.detectAllFaces(video, opts);
-            }
-
+            const opts = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.45 });
+            const detections = referenceDescriptor
+                ? await faceapi.detectAllFaces(video, opts).withFaceLandmarks().withFaceDescriptors()
+                : await faceapi.detectAllFaces(video, opts);
             const count = detections.length;
 
+            // ── Aucun visage ──────────────────────────────────────────────
             if (count === 0) {
-                if (el) { el.className = 'face-overlay bad'; el.innerHTML = '<i class="fas fa-times"></i> Aucun visage'; }
-                addWarning('Aucun visage détecté');
-                logProctoringEvent('no_face_detected', 'Aucun visage détecté');
+                _consNoFace++; _consMismatch = 0; _consMultiFace = 0; _consGood = 0;
+                if (_consNoFace < CONSECUTIVE_TO_ALERT) {
+                    if (el) { el.className = 'face-overlay warn'; el.innerHTML = '<i class="fas fa-eye-slash"></i> Repositionnez…'; }
+                    _showFaceGuide('Visage non visible — repositionnez-vous face à la caméra', 'warn');
+                } else {
+                    if (el) { el.className = 'face-overlay bad'; el.innerHTML = '<i class="fas fa-times"></i> Visage absent'; }
+                    _showFaceGuide('Votre visage n\'est pas visible — placez-vous face à la caméra dans un endroit bien éclairé', 'bad');
+                    if (now - _lastAlert.no_face > ALERT_COOLDOWN_MS) {
+                        _lastAlert.no_face = now;
+                        addWarning('Aucun visage détecté');
+                        logProctoringEvent('no_face_detected', `Absent ${_consNoFace} vérifications consécutives`);
+                        logActivity('no_face_detected', `Absent ${_consNoFace} vérifications consécutives`);
+                        captureSnapshot('no_face_detected', false, 0, null);
+                    }
+                }
 
+            // ── Plusieurs visages ─────────────────────────────────────────
             } else if (count > 1) {
-                if (el) { el.className = 'face-overlay bad'; el.innerHTML = `<i class="fas fa-users"></i> ${count} visages`; }
-                addWarning(`${count} visages détectés`);
-                logProctoringEvent('multiple_faces', `${count} visages détectés`);
+                _consMultiFace++; _consNoFace = 0; _consMismatch = 0; _consGood = 0;
+                if (_consMultiFace < CONSECUTIVE_TO_ALERT) {
+                    if (el) { el.className = 'face-overlay warn'; el.innerHTML = `<i class="fas fa-users"></i> Vérification…`; }
+                } else {
+                    if (el) { el.className = 'face-overlay bad'; el.innerHTML = `<i class="fas fa-users"></i> ${count} visages`; }
+                    _showFaceGuide('Plusieurs visages détectés — éloignez toute autre personne du champ de la caméra', 'bad');
+                    if (now - _lastAlert.multiple > ALERT_COOLDOWN_MS) {
+                        _lastAlert.multiple = now;
+                        addWarning(`${count} visages détectés`);
+                        logProctoringEvent('multiple_faces', `${count} visages`);
+                        logActivity('multiple_faces', `${count} visages`);
+                        captureSnapshot('multiple_faces', true, count, null);
+                    }
+                }
 
+            // ── Exactement 1 visage ───────────────────────────────────────
             } else {
-                // Exactement 1 visage — vérifier l'identité si référence disponible
+                _consNoFace = 0; _consMultiFace = 0;
+
                 if (referenceDescriptor && detections[0].descriptor) {
                     const dist = faceapi.euclideanDistance(detections[0].descriptor, referenceDescriptor);
-                    if (dist > RECOGNITION_THRESHOLD) {
-                        if (el) { el.className = 'face-overlay bad'; el.innerHTML = '<i class="fas fa-user-times"></i> Inconnu'; }
-                        addWarning('Visage non reconnu — imposteur possible');
-                        logProctoringEvent('face_mismatch', `Visage non reconnu (distance: ${dist.toFixed(3)})`);
-                    } else {
+
+                    if (dist <= RECOGNITION_THRESHOLD) {
+                        // ✅ Reconnu
+                        _consMismatch = 0; _consGood++;
                         if (el) { el.className = 'face-overlay ok'; el.innerHTML = '<i class="fas fa-user-check"></i> OK'; }
+                        _hideFaceGuide();
+                        // Mise à jour douce de la référence (adaptation éclairage/angle)
+                        if (_consGood % 10 === 0 && dist < UPDATE_THRESHOLD) {
+                            const alpha = 0.1;
+                            const upd   = new Float32Array(referenceDescriptor.length);
+                            for (let i = 0; i < upd.length; i++)
+                                upd[i] = (1 - alpha) * referenceDescriptor[i] + alpha * detections[0].descriptor[i];
+                            referenceDescriptor = upd;
+                        }
+                    } else {
+                        // ⚠ Non reconnu
+                        _consMismatch++; _consGood = 0;
+
+                        if (_consMismatch < CONSECUTIVE_TO_ALERT) {
+                            // Phase de tolérance — guider sans alerter
+                            if (el) { el.className = 'face-overlay warn'; el.innerHTML = '<i class="fas fa-user"></i> Ajustez…'; }
+                            _showFaceGuide('Repositionnez-vous — regardez directement la caméra sans vous pencher ni vous tourner', 'warn');
+
+                        } else if (_consMismatch === RECAPTURE_AFTER) {
+                            // Auto-recapture après N mismatches consécutifs
+                            if (el) { el.className = 'face-overlay warn'; el.innerHTML = '<i class="fas fa-camera"></i> Recapture…'; }
+                            _showFaceGuide('Recapture automatique — restez face à la caméra, immobile, bien éclairé', 'info');
+                            captureReferenceDescriptor();
+
+                        } else if (_consMismatch > RECAPTURE_AFTER) {
+                            // Toujours inconnu après recapture → alerte réelle
+                            if (el) { el.className = 'face-overlay bad'; el.innerHTML = '<i class="fas fa-user-times"></i> Non reconnu'; }
+                            _showFaceGuide('Visage non reconnu — si c\'est vous, regardez directement la caméra dans un bon éclairage', 'bad');
+                            if (now - _lastAlert.mismatch > ALERT_COOLDOWN_MS) {
+                                _lastAlert.mismatch = now;
+                                addWarning(`Visage non reconnu (distance: ${dist.toFixed(2)})`);
+                                logProctoringEvent('face_mismatch', `Distance: ${dist.toFixed(3)}`);
+                                captureSnapshot('face_mismatch', true, 1, 1 - dist);
+                            }
+                        }
                     }
                 } else {
-                    // Référence pas encore capturée
-                    if (el) { el.className = 'face-overlay ok'; el.innerHTML = '<i class="fas fa-check"></i> OK'; }
+                    // Référence pas encore prête
+                    _consGood++;
+                    if (el) { el.className = 'face-overlay warn'; el.innerHTML = '<i class="fas fa-camera"></i> Attente réf…'; }
                 }
             }
-        } catch(e) {
-            console.error('faceDetectionTick erreur:', e);
-        }
+        } catch(e) { console.error('faceDetectionTick:', e); }
         return;
     }
 
-    // ── Mode BlazeFace (fallback, détection seule) ──
+    // ══ Mode BlazeFace : détection seule ════════════════════════════════════
     if (!faceReady || !faceModel) return;
     try {
         const predictions = await faceModel.estimateFaces(video, false);
         const count = predictions.length;
-        if (count === lastFaceCount) return;
-        lastFaceCount = count;
 
         if (count === 0) {
-            if (el) { el.className = 'face-overlay bad'; el.innerHTML = '<i class="fas fa-times"></i> Aucun visage'; }
-            addWarning('Aucun visage détecté');
-            logProctoringEvent('no_face_detected', 'Aucun visage détecté');
+            _consNoFace++; _consMultiFace = 0;
+            if (_consNoFace < CONSECUTIVE_TO_ALERT) {
+                if (el) { el.className = 'face-overlay warn'; el.innerHTML = '<i class="fas fa-eye-slash"></i> Repositionnez…'; }
+                _showFaceGuide('Visage non visible — repositionnez-vous face à la caméra', 'warn');
+            } else if (count !== lastFaceCount) {
+                if (el) { el.className = 'face-overlay bad'; el.innerHTML = '<i class="fas fa-times"></i> Visage absent'; }
+                _showFaceGuide('Votre visage n\'est pas visible — placez-vous face à la caméra dans un endroit bien éclairé', 'bad');
+                if (now - _lastAlert.no_face > ALERT_COOLDOWN_MS) {
+                    _lastAlert.no_face = now;
+                    addWarning('Aucun visage détecté');
+                    logProctoringEvent('no_face_detected', 'Aucun visage');
+                    logActivity('no_face_detected', 'Aucun visage');
+                    captureSnapshot('no_face_detected', false, 0, null);
+                }
+            }
         } else if (count === 1) {
-            if (el) { el.className = 'face-overlay ok'; el.innerHTML = '<i class="fas fa-check"></i> OK'; }
+            _consNoFace = 0; _consMultiFace = 0;
+            if (count !== lastFaceCount) {
+                if (el) { el.className = 'face-overlay ok'; el.innerHTML = '<i class="fas fa-check"></i> OK'; }
+                _hideFaceGuide();
+            }
         } else {
-            if (el) { el.className = 'face-overlay bad'; el.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${count} visages`; }
-            addWarning(`${count} visages détectés`);
-            logProctoringEvent('multiple_faces', `${count} visages détectés`);
+            _consNoFace = 0; _consMultiFace++;
+            if (_consMultiFace < CONSECUTIVE_TO_ALERT) {
+                if (el) { el.className = 'face-overlay warn'; el.innerHTML = `<i class="fas fa-users"></i> Vérification…`; }
+            } else if (count !== lastFaceCount) {
+                if (el) { el.className = 'face-overlay bad'; el.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${count} visages`; }
+                _showFaceGuide('Plusieurs visages détectés — éloignez toute autre personne du champ de la caméra', 'bad');
+                if (now - _lastAlert.multiple > ALERT_COOLDOWN_MS) {
+                    _lastAlert.multiple = now;
+                    addWarning(`${count} visages détectés`);
+                    logProctoringEvent('multiple_faces', `${count} visages`);
+                    logActivity('multiple_faces', `${count} visages`);
+                    captureSnapshot('multiple_faces', true, count, null);
+                }
+            }
         }
+        lastFaceCount = count;
     } catch(e) {}
 }
 
@@ -1445,6 +1727,40 @@ async function logProctoringEvent(eventType, eventData) {
 }
 
 // ═══════════════════════════════════════════════════════════
+// SNAPSHOTS CAMÉRA (violations + périodique toutes les 2 min)
+// ═══════════════════════════════════════════════════════════
+
+let _lastSnapshotTime = 0;
+const SNAPSHOT_COOLDOWN_MS = 30_000; // min 30s entre deux snapshots du même type
+
+async function captureSnapshot(eventType, faceDetected, facesCount, confidenceScore) {
+    if (sessionEnded) return;
+    const now = Date.now();
+    if (now - _lastSnapshotTime < SNAPSHOT_COOLDOWN_MS) return;
+    const video = document.getElementById('local-video');
+    if (!video || video.readyState < 2 || video.videoWidth === 0) return;
+    try {
+        _lastSnapshotTime = now;
+        const canvas = document.createElement('canvas');
+        canvas.width  = 320;
+        canvas.height = 240;
+        canvas.getContext('2d').drawImage(video, 0, 0, 320, 240);
+        const imageData = canvas.toDataURL('image/jpeg', 0.55);
+        await api(`/api/exam_attempts/${ATTEMPT_ID}/camera_snapshot`, {
+            method: 'POST',
+            body: JSON.stringify({ event_type: eventType, image_data: imageData,
+                                   face_detected: faceDetected, faces_count: facesCount,
+                                   confidence_score: confidenceScore || null })
+        });
+    } catch(e) {}
+}
+
+let _snapshotInterval = null;
+function startSnapshotInterval() {
+    _snapshotInterval = setInterval(() => captureSnapshot('periodic', true, 1, null), 120_000);
+}
+
+// ═══════════════════════════════════════════════════════════
 // SAUVEGARDE AUTOMATIQUE
 // ═══════════════════════════════════════════════════════════
 
@@ -1511,7 +1827,7 @@ function startPendingMessagesPolling() {
                 handleTeacherMessage(msg);
             }
         } catch(e) {}
-    }, 5000);
+    }, 8000);
 }
 
 function handleTeacherMessage(msg) {
@@ -1533,7 +1849,101 @@ function handleTeacherMessage(msg) {
         document.getElementById('rec-badge').classList.add('active');
     } else if (msg.type === 'stop_recording') {
         document.getElementById('rec-badge').classList.remove('active');
+    } else if (msg.type === 'private_call') {
+        showModal('modal-private-call');
+    } else if (msg.type === 'end_call') {
+        if (_privateRoom) _leavePrivateCall();
+        closeModal('modal-private-call');
     }
+}
+
+// ═══════════════════════════════════════════════════════════
+// APPEL PRIVÉ ÉTUDIANT ↔ SURVEILLANT
+// ═══════════════════════════════════════════════════════════
+
+let _privateRoom = null, _privateAudioTrack = null, _privateMicEnabled = false;
+
+async function _acceptPrivateCall() {
+    closeModal('modal-private-call');
+    const statusEl = document.getElementById('private-call-status');
+    if (statusEl) statusEl.textContent = 'Connexion...';
+
+    const tokenResp = await api(`/api/exam_attempts/${ATTEMPT_ID}/private_token`);
+    if (!tokenResp.ok) { addWarning('Impossible de rejoindre l\'appel privé'); return; }
+    const tokenData = await tokenResp.json();
+
+    _privateRoom = new LivekitClient.Room({ adaptiveStream: true, dynacast: true });
+
+    _privateRoom.on(LivekitClient.RoomEvent.TrackSubscribed, (track, pub, participant) => {
+        if (participant.identity === tokenData.identity) return;
+        if (track.kind === 'video') {
+            const el = document.getElementById('private-teacher-video');
+            if (el) track.attach(el);
+        } else if (track.kind === 'audio') {
+            const el = document.getElementById('private-teacher-audio');
+            if (el) track.attach(el);
+        }
+    });
+
+    _privateRoom.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track) => {
+        if (track.kind === 'video') { const el = document.getElementById('private-teacher-video'); if (el) track.detach(el); }
+        if (track.kind === 'audio') { const el = document.getElementById('private-teacher-audio'); if (el) track.detach(el); }
+    });
+
+    _privateRoom.on(LivekitClient.RoomEvent.Disconnected, () => { _endPrivateCallUI(); });
+
+    await _privateRoom.connect(tokenData.ws_url, tokenData.token);
+
+    // Activer le micro automatiquement
+    try {
+        _privateAudioTrack = await LivekitClient.createLocalAudioTrack();
+        await _privateRoom.localParticipant.publishTrack(_privateAudioTrack);
+        _privateMicEnabled = true;
+    } catch(e) {}
+
+    document.getElementById('private-call-panel').style.display = 'block';
+    if (statusEl) statusEl.textContent = 'Connecté';
+    addWarning('Appel privé avec le surveillant en cours', true);
+}
+
+async function _leavePrivateCall() {
+    if (_privateAudioTrack) { _privateAudioTrack.stop(); _privateAudioTrack = null; }
+    if (_privateRoom) { await _privateRoom.disconnect(); _privateRoom = null; }
+    _privateMicEnabled = false;
+    _endPrivateCallUI();
+}
+
+function _endPrivateCallUI() {
+    document.getElementById('private-call-panel').style.display = 'none';
+    const el = document.getElementById('private-teacher-video');
+    if (el) el.srcObject = null;
+}
+
+async function _togglePrivateMic() {
+    const btn = document.getElementById('private-mic-btn');
+    if (_privateMicEnabled) {
+        if (_privateAudioTrack) { await _privateRoom?.localParticipant.unpublishTrack(_privateAudioTrack); _privateAudioTrack.stop(); _privateAudioTrack = null; }
+        _privateMicEnabled = false;
+        if (btn) { btn.style.background = 'rgba(100,116,139,.2)'; btn.style.color = '#64748b'; btn.style.borderColor = 'rgba(100,116,139,.3)'; btn.innerHTML = '<i class="fas fa-microphone-slash"></i> Micro coupé'; }
+    } else {
+        try {
+            _privateAudioTrack = await LivekitClient.createLocalAudioTrack();
+            await _privateRoom?.localParticipant.publishTrack(_privateAudioTrack);
+            _privateMicEnabled = true;
+            if (btn) { btn.style.background = 'rgba(16,185,129,.2)'; btn.style.color = '#10b981'; btn.style.borderColor = 'rgba(16,185,129,.3)'; btn.innerHTML = '<i class="fas fa-microphone"></i> Micro'; }
+        } catch(e) {}
+    }
+}
+
+async function _requestVoiceCall() {
+    try {
+        await api(`/api/exam_attempts/${ATTEMPT_ID}/student_message`, {
+            method: 'POST',
+            body: JSON.stringify({ message: '🎙️ [DEMANDE_APPEL] Je souhaite poser une question verbalement au surveillant.' })
+        });
+        const input = document.getElementById('student-msg-input');
+        addWarning('Demande d\'appel vocal envoyée au surveillant', true);
+    } catch(e) {}
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1674,9 +2084,10 @@ async function doSubmit() {
 
 async function endSession(redirect = true) {
     sessionEnded = true;
-    if (faceInterval) clearInterval(faceInterval);
-    if (timerInterval) clearInterval(timerInterval);
-    if (saveInterval)  clearInterval(saveInterval);
+    if (faceInterval)     clearInterval(faceInterval);
+    if (timerInterval)    clearInterval(timerInterval);
+    if (saveInterval)     clearInterval(saveInterval);
+    if (_snapshotInterval) clearInterval(_snapshotInterval);
     await logProctoringEvent('session_end', 'Student left');
     if (room) { try { room.disconnect(); } catch(e) {} }
     if (redirect) setTimeout(exitToApp, 1000);
@@ -1718,5 +2129,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Le plein écran est demandé après l'init (dans requestAllPermissions → init)
 });
 </script>
+<script src="{{ url_for('static', filename='js/site_translator.js') }}?v=7"></script>
 </body>
 </html>

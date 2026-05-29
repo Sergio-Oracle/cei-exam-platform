@@ -72,3 +72,20 @@ Thumbs.db
 tmp/
 temp/
 *.tmp
+
+# Backup files auto-générés par les scripts
+*.bak-*
+*-backup-*
+
+# Agent Proctor — fichier d'alertes runtime (généré automatiquement)
+agent_alerts.json
+
+# Fichiers de test
+test_deepseek.py
+
+# Doublon proctor_dashboard.html à la racine
+/proctor_dashboard.html
+
+# Fichiers de déploiement spécifiques à l'instance
+egress.yaml
+backups/

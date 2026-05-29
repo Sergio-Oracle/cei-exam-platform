@@ -23,13 +23,29 @@ from datetime import datetime
 import re
 import unicodedata
 
-# Configuration SMTP (à mettre dans .env)
-SMTP_SERVER = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
-SMTP_PORT = int(os.getenv('SMTP_PORT', 587))
-SMTP_USERNAME = os.getenv('SMTP_USERNAME', '')
-SMTP_PASSWORD = os.getenv('SMTP_PASSWORD', '')
-SMTP_FROM_EMAIL = os.getenv('SMTP_FROM_EMAIL', 'noreply@examgrading.com')
-SMTP_FROM_NAME = os.getenv('SMTP_FROM_NAME', 'Système de Notation')
+# Configuration SMTP — chemin absolu vers .env pour éviter tout problème de répertoire courant
+_ENV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+
+def _smtp_config():
+    from dotenv import dotenv_values
+    env = dotenv_values(_ENV_PATH)
+    return {
+        'server':     env.get('SMTP_SERVER', os.getenv('SMTP_SERVER', 'smtp.gmail.com')),
+        'port':       int(env.get('SMTP_PORT', os.getenv('SMTP_PORT', 587))),
+        'username':   env.get('SMTP_USERNAME', os.getenv('SMTP_USERNAME', '')),
+        'password':   env.get('SMTP_PASSWORD', os.getenv('SMTP_PASSWORD', '')),
+        'from_email': env.get('SMTP_FROM_EMAIL', os.getenv('SMTP_FROM_EMAIL', 'noreply@examgrading.com')),
+        'from_name':  env.get('SMTP_FROM_NAME', os.getenv('SMTP_FROM_NAME', "CEI — Centre d'Examen Intelligent")),
+        'app_url':    env.get('APP_URL', os.getenv('APP_URL', 'https://cei.ec2lt.sn')).rstrip('/'),
+    }
+
+# Compatibilité ascendante (utilisé dans send_email)
+SMTP_SERVER   = 'smtp.gmail.com'
+SMTP_PORT     = 587
+SMTP_USERNAME = ''
+SMTP_PASSWORD = ''
+SMTP_FROM_EMAIL = 'noreply@examgrading.com'
+SMTP_FROM_NAME  = 'CEI — Centre d\'Examen Intelligent'
 
 # ============================================================================
 # DÉTECTION DE DOUBLONS (SHA256)
@@ -69,20 +85,114 @@ def extract_text_from_file(filepath):
         print(f"⚠️ Erreur extraction texte: {e}")
         return None
 
-def extract_text_from_pdf(filepath):
-    """Extraire le texte d'un PDF"""
-    text = ""
+def _is_garbled(text):
+    """Détecter si le texte extrait est du charabia CIDFont."""
+    if not text or len(text) < 20:
+        return True
+
+    # Format PyPDF2 : /0 /1 /i255 /3/4 ...
+    tokens = text.split()
+    if tokens:
+        garbled_tokens = sum(1 for t in tokens if re.match(r'^(/[i]?\d+)+$', t))
+        if garbled_tokens / len(tokens) > 0.15:
+            return True
+
+    # Format pdfplumber : (cid:3) séquences intégrées
+    cid_count = len(re.findall(r'\(cid:\d+\)', text))
+    if cid_count > 5:
+        return True
+
+    # Texte lisible : au moins 50 caractères de vraies lettres latines
+    real_chars = re.findall(r'[a-zA-ZÀ-ÿ]', text)
+    if len(real_chars) < 50:
+        return True
+
+    return False
+
+
+def _ocr_pdf(filepath):
+    """OCR via pdftoppm + tesseract (fallback ultime pour PDFs non décodables)."""
+    import subprocess, tempfile, glob
     try:
+        res = subprocess.run(['which', 'tesseract'], capture_output=True)
+        if res.returncode != 0:
+            print("⚠️ tesseract absent — lance en root : apt install -y tesseract-ocr tesseract-ocr-fra")
+            return None
+        with tempfile.TemporaryDirectory() as tmpdir:
+            img_prefix = os.path.join(tmpdir, 'page')
+            r = subprocess.run(
+                ['pdftoppm', '-r', '200', '-png', filepath, img_prefix],
+                capture_output=True, timeout=120
+            )
+            if r.returncode != 0:
+                print(f"⚠️ pdftoppm erreur : {r.stderr.decode()[:200]}")
+                return None
+            images = sorted(glob.glob(os.path.join(tmpdir, '*.png')))
+            if not images:
+                return None
+            pages_text = []
+            for img_path in images:
+                out_prefix = img_path.replace('.png', '_ocr')
+                subprocess.run(
+                    ['tesseract', img_path, out_prefix, '-l', 'fra+eng', '--psm', '6'],
+                    capture_output=True, timeout=60
+                )
+                out_txt = out_prefix + '.txt'
+                if os.path.exists(out_txt):
+                    with open(out_txt, 'r', encoding='utf-8', errors='replace') as f:
+                        pages_text.append(f.read())
+            result = '\n'.join(pages_text).strip()
+            return result if result else None
+    except Exception as e:
+        print(f"⚠️ OCR erreur : {e}")
+        return None
+
+
+def extract_text_from_pdf(filepath):
+    """Extraire le texte d'un PDF : pdfplumber → PyPDF2 → OCR tesseract."""
+    # 1. pdfplumber (meilleur support CMap/CIDFont)
+    try:
+        import pdfplumber
+        pages_text = []
+        with pdfplumber.open(filepath) as pdf:
+            for page in pdf.pages:
+                t = page.extract_text()
+                if t:
+                    pages_text.append(t)
+        text = "\n".join(pages_text).strip()
+        if text and not _is_garbled(text):
+            print(f"✅ pdfplumber OK — {len(text)} caractères")
+            return text
+        print("⚠️ pdfplumber : texte garbled, bascule PyPDF2")
+    except Exception as e:
+        print(f"⚠️ pdfplumber erreur : {e}")
+
+    # 2. PyPDF2
+    try:
+        text = ""
         with open(filepath, 'rb') as file:
             pdf_reader = PyPDF2.PdfReader(file)
             for page in pdf_reader.pages:
                 page_text = page.extract_text()
                 if page_text:
                     text += page_text + "\n"
-        return text.strip()
+        text = text.strip()
+        if text and not _is_garbled(text):
+            print(f"✅ PyPDF2 OK — {len(text)} caractères")
+            return text
+        print("⚠️ PyPDF2 : texte garbled, bascule OCR")
     except Exception as e:
-        print(f"⚠️ Erreur PDF: {e}")
-        return None
+        print(f"⚠️ Erreur PDF PyPDF2: {e}")
+
+    # 3. OCR tesseract (pour PDFs avec polices non-Unicode)
+    print("🔍 Tentative OCR tesseract...")
+    text = _ocr_pdf(filepath)
+    if text and not _is_garbled(text):
+        print(f"✅ OCR OK — {len(text)} caractères")
+        return text
+
+    print("❌ Impossible d'extraire le texte de ce PDF (police non-Unicode, tesseract requis)")
+    return None
 
 def extract_text_from_docx(filepath):
     """Extraire le texte d'un DOCX"""
@@ -255,87 +365,236 @@ def generate_corrected_paper_pdf(paper_data, output_path):
     return output_path
 
 # ============================================================================
-# ENVOI D'EMAILS - VERSION CORRIGÉE (SANS TIMEOUT SUR STARTTLS)
+# ENVOI D'EMAILS — SMTP université (smx7.unchk.sn) → fallback MX direct
 # ============================================================================
 
-def send_email(to_email, subject, html_body, attachments=None):
-    """Envoyer un email - VERSION CORRIGÉE
-    attachments = [{'filename': 'file.pdf', 'path': '/path/to/file.pdf'}]
-    
-    ⚠️ IMPORTANT: timeout n'est PAS supporté sur starttls() en Python < 3.9
-    """
-    if not SMTP_USERNAME or not SMTP_PASSWORD:
-        print("⚠️ SMTP non configuré - email non envoyé")
-        return False
-
+def _get_mx_host(domain):
+    """Résoudre le serveur MX d'un domaine via DNS."""
+    import subprocess
     try:
-        msg = MIMEMultipart('alternative')
-        msg['From'] = f"{SMTP_FROM_NAME} <{SMTP_FROM_EMAIL}>"
-        msg['To'] = to_email
-        msg['Subject'] = subject
+        result = subprocess.run(
+            ['python3', '-c',
+             f"import dns.resolver; answers=dns.resolver.resolve('{domain}','MX'); "
+             f"print(sorted(answers, key=lambda r: r.preference)[0].exchange.to_text().rstrip('.'))"],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except Exception:
+        pass
+    fallbacks = {
+        'gmail.com': 'gmail-smtp-in.l.google.com',
+        'googlemail.com': 'gmail-smtp-in.l.google.com',
+        'yahoo.fr': 'mta5.am0.yahoodns.net',
+        'yahoo.com': 'mta5.am0.yahoodns.net',
+        'outlook.com': 'outlook-com.olc.protection.outlook.com',
+        'hotmail.com': 'outlook-com.olc.protection.outlook.com',
+    }
+    return fallbacks.get(domain.lower())
 
-        # Corps HTML
-        html_part = MIMEText(html_body, 'html', 'utf-8')
-        msg.attach(html_part)
 
-        # Pièces jointes
-        if attachments:
-            for attachment in attachments:
-                try:
-                    with open(attachment['path'], 'rb') as f:
-                        part = MIMEBase('application', 'octet-stream')
-                        part.set_payload(f.read())
-                        encoders.encode_base64(part)
-                        part.add_header('Content-Disposition',
-                                       f"attachment; filename= {attachment['filename']}")
-                        msg.attach(part)
-                except Exception as attach_error:
-                    print(f"⚠️ Erreur pièce jointe {attachment['filename']}: {attach_error}")
-
-        # ✅ CORRECTION: timeout SEULEMENT sur SMTP(), PAS sur starttls()
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=3) as server:
-            server.starttls()  # ← PAS DE TIMEOUT ICI !
-            server.login(SMTP_USERNAME, SMTP_PASSWORD)
-            server.send_message(msg)
-
-        print(f"✅ Email envoyé à {to_email}")
-        return True
-
-    except smtplib.SMTPException as smtp_error:
-        print(f"❌ Erreur SMTP envoi email à {to_email}: {smtp_error}")
+def _send_direct_mx(to_email, msg_obj, from_email):
+    """Livraison directe au serveur MX du destinataire sur port 25."""
+    domain = to_email.split('@')[-1]
+    mx_host = _get_mx_host(domain)
+    if not mx_host:
+        print(f"⚠️ MX introuvable pour {domain}")
         return False
+    print(f"📡 Livraison directe → {mx_host}:25")
+    try:
+        with smtplib.SMTP(mx_host, 25, timeout=15) as s:
+            s.ehlo('unchk.sn')
+            try:
+                s.starttls()
+                s.ehlo('unchk.sn')
+            except Exception:
+                pass
+            result = s.sendmail(from_email, [to_email], msg_obj.as_string())
+            print(f"✅ Livraison directe OK à {to_email} (résultat: {result})")
+            return True
     except Exception as e:
-        print(f"❌ Erreur envoi email à {to_email}: {e}")
+        print(f"❌ Livraison directe échouée pour {to_email}: {e}")
         return False
+
+
+def send_email(to_email, subject, html_body, attachments=None):
+    """Envoyer un email via SMTP université (smx7.unchk.sn), fallback livraison MX directe."""
+    cfg = _smtp_config()
+
+    from email.utils import formatdate, make_msgid
+    from email.header import Header
+    msg = MIMEMultipart('alternative')
+    try:
+        cfg['from_name'].encode('ascii')
+        from_header = f"{cfg['from_name']} <{cfg['from_email']}>"
+    except UnicodeEncodeError:
+        from_header = f"{Header(cfg['from_name'], 'utf-8').encode()} <{cfg['from_email']}>"
+    msg['From'] = from_header
+    msg['To'] = to_email
+    msg['Subject'] = subject
+    msg['Date'] = formatdate(localtime=True)
+    msg['Message-ID'] = make_msgid(domain='unchk.sn')
+    msg.attach(MIMEText(html_body, 'html', 'utf-8'))
+
+    if attachments:
+        for attachment in attachments:
+            try:
+                with open(attachment['path'], 'rb') as f:
+                    part = MIMEBase('application', 'octet-stream')
+                    part.set_payload(f.read())
+                    encoders.encode_base64(part)
+                    part.add_header('Content-Disposition',
+                                   f"attachment; filename= {attachment['filename']}")
+                    msg.attach(part)
+            except Exception as attach_error:
+                print(f"⚠️ Erreur pièce jointe {attachment['filename']}: {attach_error}")
+
+    # Tentative 1 : SMTP université (smx7.unchk.sn port 587 STARTTLS)
+    if cfg['username'] and cfg['password']:
+        try:
+            with smtplib.SMTP(cfg['server'], cfg['port'], timeout=15) as server:
+                server.ehlo()
+                server.starttls()
+                server.ehlo()
+                server.login(cfg['username'], cfg['password'])
+                server.send_message(msg)
+            print(f"✅ Email envoyé à {to_email} (via {cfg['server']})")
+            return True
+        except (ConnectionResetError, OSError, smtplib.SMTPServerDisconnected) as conn_err:
+            print(f"⚠️ SMTP {cfg['server']} inaccessible ({conn_err}) → basculement livraison directe")
+        except smtplib.SMTPException as smtp_error:
+            print(f"❌ Erreur SMTP envoi email à {to_email}: {smtp_error}")
+            return False
+        except Exception as e:
+            print(f"⚠️ Erreur SMTP ({e}) → basculement livraison directe")
+
+    # Tentative 2 : livraison directe au serveur MX du destinataire (port 25)
+    # Utilise @unchk.sn comme expéditeur — son SPF couvre l'IP du serveur (102.36.138.0/23)
+    # Un from @gmail.com serait rejeté car notre IP n'est pas dans le SPF de gmail.com
+    direct_from = 'noreply@unchk.sn'
+    # Reconstruire le message avec le bon expéditeur pour SPF
+    from email.utils import formatdate, make_msgid
+    from email.header import Header
+    msg2 = MIMEMultipart('alternative')
+    try:
+        cfg['from_name'].encode('ascii')
+        msg2['From'] = f"{cfg['from_name']} <{direct_from}>"
+    except UnicodeEncodeError:
+        msg2['From'] = f"{Header(cfg['from_name'], 'utf-8').encode()} <{direct_from}>"
+    msg2['To'] = to_email
+    msg2['Subject'] = subject
+    msg2['Date'] = formatdate(localtime=True)
+    msg2['Message-ID'] = make_msgid(domain='unchk.sn')
+    msg2.attach(MIMEText(html_body, 'html', 'utf-8'))
+    return _send_direct_mx(to_email, msg2, direct_from)
 
 def send_account_created_email(user_email, user_name, role, temp_password=None):
     """Email de création de compte"""
-    subject = "🎓 Votre compte a été créé"
+    subject = "🎓 Votre compte CEI a été créé — Identifiants de connexion"
 
-    role_labels = {
-        'student': 'Étudiant',
-        'professor': 'Professeur',
-        'admin': 'Administrateur'
+    smtp_cfg = _smtp_config()
+    app_url = smtp_cfg['app_url']
+
+    role_config = {
+        'student': {
+            'label': 'Étudiant',
+            'color': '#059669',
+            'bg': '#ecfdf5',
+            'border': '#a7f3d0',
+            'icon': '🎓',
+            'guide_url': f'{app_url}/guide-etudiant',
+            'guide_label': 'Guide Étudiant',
+            'description': 'Vous pouvez désormais accéder à vos examens en ligne, soumettre vos copies et consulter vos résultats.',
+        },
+        'professor': {
+            'label': 'Enseignant',
+            'color': '#2563eb',
+            'bg': '#eff6ff',
+            'border': '#bfdbfe',
+            'icon': '📚',
+            'guide_url': f'{app_url}/guide-enseignant',
+            'guide_label': 'Guide Enseignant',
+            'description': "Vous pouvez créer des examens, surveiller les sessions en temps réel, corriger les copies avec l'IA et publier les notes.",
+        },
+        'surveillant': {
+            'label': 'Surveillant',
+            'color': '#d97706',
+            'bg': '#fffbeb',
+            'border': '#fcd34d',
+            'icon': '👁️',
+            'guide_url': f'{app_url}/guide-surveillant',
+            'guide_label': 'Guide Surveillant',
+            'description': "Vous serez affecté à des examens par les enseignants. Vous surveillerez un groupe d'étudiants qui vous sera assigné et pourrez intervenir en temps réel.",
+        },
+        'admin': {
+            'label': 'Administrateur',
+            'color': '#7c3aed',
+            'bg': '#f5f3ff',
+            'border': '#c4b5fd',
+            'icon': '⚙️',
+            'guide_url': f'{app_url}/app',
+            'guide_label': "Accéder à l'interface",
+            'description': "Vous disposez d'un accès complet à la plateforme : gestion des utilisateurs, des examens et des statistiques globales.",
+        },
     }
+
+    cfg = role_config.get(role.lower(), role_config['student'])
 
     html_body = f"""
     <html>
-    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-        <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
-            <h2 style="color: #2563eb;">🎓 Bienvenue sur le Système de Notation</h2>
-            <p>Bonjour <strong>{user_name}</strong>,</p>
-            <p>Votre compte {role_labels.get(role, role)} a été créé avec succès.</p>
+    <body style="font-family:Arial,sans-serif;line-height:1.6;color:#333;background:#f8fafc;margin:0;padding:0;">
+        <div style="max-width:600px;margin:0 auto;padding:32px 16px;">
 
-            <div style="background: #f8fafc; padding: 15px; border-radius: 6px; margin: 20px 0;">
-                <p style="margin: 5px 0;"><strong>📧 Email:</strong> {user_email}</p>
-                {f'<p style="margin: 5px 0;"><strong>🔒 Mot de passe:</strong> {temp_password}</p>' if temp_password else ''}
+            <!-- Header -->
+            <div style="background:linear-gradient(135deg,#1e3a8a,#2563eb);border-radius:12px 12px 0 0;padding:32px;text-align:center;">
+                <div style="font-size:48px;margin-bottom:12px;">{cfg['icon']}</div>
+                <h1 style="color:white;font-size:22px;font-weight:800;margin:0 0 8px;">Centre d'Examen Intelligent</h1>
+                <p style="color:rgba(255,255,255,.85);font-size:14px;margin:0;">Votre compte a été créé avec succès</p>
             </div>
 
-            <p><a href="https://cei.ec2lt.sn/app" style="display: inline-block; padding: 12px 24px; background: #2563eb; color: white; text-decoration: none; border-radius: 6px;">Se connecter</a></p>
+            <!-- Body -->
+            <div style="background:white;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 12px 12px;padding:32px;">
 
-            <p style="color: #64748b; font-size: 12px; margin-top: 30px;">
-                Ceci est un email automatique, merci de ne pas y répondre.
-            </p>
+                <!-- Role badge -->
+                <div style="display:inline-block;background:{cfg['bg']};border:1px solid {cfg['border']};color:{cfg['color']};padding:6px 16px;border-radius:99px;font-size:13px;font-weight:700;margin-bottom:20px;">
+                    {cfg['icon']} Rôle : {cfg['label']}
+                </div>
+
+                <p style="font-size:16px;color:#0f172a;margin:0 0 12px;">Bonjour <strong>{user_name}</strong>,</p>
+                <p style="font-size:14px;color:#475569;margin:0 0 24px;">{cfg['description']}</p>
+
+                <!-- Credentials box -->
+                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid {cfg['color']};border-radius:8px;padding:20px;margin-bottom:24px;">
+                    <p style="font-size:13px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin:0 0 14px;">Vos identifiants de connexion</p>
+                    <p style="margin:6px 0;font-size:14px;color:#0f172a;"><span style="color:#64748b;">📧 Email :</span> <strong>{user_email}</strong></p>
+                    {f'<p style="margin:6px 0;font-size:14px;color:#0f172a;"><span style="color:#64748b;">🔒 Mot de passe :</span> <strong style="font-family:monospace;background:#f1f5f9;padding:2px 8px;border-radius:4px;">{temp_password}</strong></p>' if temp_password else ''}
+                </div>
+
+                <!-- CTA buttons -->
+                <div style="text-align:center;margin-bottom:24px;">
+                    <a href="{app_url}/app"
+                       style="display:inline-block;padding:13px 28px;background:{cfg['color']};color:white;text-decoration:none;border-radius:8px;font-size:15px;font-weight:700;margin-bottom:12px;">
+                        Se connecter à la plateforme
+                    </a>
+                    <br>
+                    <a href="{cfg['guide_url']}"
+                       style="display:inline-block;margin-top:8px;font-size:13px;color:{cfg['color']};text-decoration:underline;">
+                        📖 Consulter le {cfg['guide_label']}
+                    </a>
+                </div>
+
+                <!-- Security note -->
+                <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:14px 16px;font-size:12px;color:#92400e;">
+                    ⚠️ Pour votre sécurité, changez votre mot de passe dès votre première connexion via les paramètres de votre profil.
+                </div>
+
+                <p style="color:#94a3b8;font-size:11px;margin-top:24px;text-align:center;line-height:1.7;">
+                    © 2026 CEI — Université Numérique Cheikh Hamidou Kane<br>
+                    Cité du savoir - Diamniadio, Castors, avenue Bourguiba, rue n°13<br>
+                    +221 30 108 41 53 &nbsp;·&nbsp;
+                    <a href="mailto:visioplus@unchk.edu.sn" style="color:#94a3b8;">visioplus@unchk.edu.sn</a>
+                </p>
+            </div>
         </div>
     </body>
     </html>
@@ -347,6 +606,7 @@ def send_paper_corrected_email(student_email, student_name, subject_title, score
     """Email de copie corrigée - Amélioré : Avec attachments"""
     subject = f"✅ Votre copie ({subject_title}) a été corrigée"
 
+    app_url = _smtp_config()['app_url']
     score_color = "#10b981" if score >= 10 else "#ef4444"
 
     html_body = f"""
@@ -364,10 +624,13 @@ def send_paper_corrected_email(student_email, student_name, subject_title, score
 
             <p>Vous pouvez consulter le détail dans l'application. Si vous souhaitez contester, vous avez 7 jours à compter de la correction.</p>
 
-            <p><a href="https://cei.ec2lt.sn/app" style="display: inline-block; padding: 12px 24px; background: #2563eb; color: white; text-decoration: none; border-radius: 6px;">Voir ma copie</a></p>
+            <p><a href="{app_url}/app" style="display: inline-block; padding: 12px 24px; background: #2563eb; color: white; text-decoration: none; border-radius: 6px;">Voir ma copie</a></p>
 
-            <p style="color: #64748b; font-size: 12px; margin-top: 30px;">
-                Ceci est un email automatique, merci de ne pas y répondre.
+            <p style="color:#94a3b8;font-size:11px;margin-top:30px;text-align:center;line-height:1.7;">
+                © 2026 CEI — Université Numérique Cheikh Hamidou Kane<br>
+                Cité du savoir - Diamniadio, Castors, avenue Bourguiba, rue n°13<br>
+                +221 30 108 41 53 &nbsp;·&nbsp;
+                <a href="mailto:visioplus@unchk.edu.sn" style="color:#94a3b8;">visioplus@unchk.edu.sn</a>
             </p>
         </div>
     </body>
