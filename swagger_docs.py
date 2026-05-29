@@ -1,8 +1,8 @@
 """
 CEI — Documentation API Swagger / OpenAPI 3.0
 Accessible à /api/docs (Swagger UI) et /api/docs/openapi.json (spec brute)
-104 endpoints documentés — scan exhaustif de app.py, proctoring_routes.py,
-csv_import_routes.py et export_route.py
+Scan exhaustif v3 — app.py, proctoring_routes.py, csv_import_routes.py, export_route.py
+119 endpoints API + champs réels des corps de requêtes et réponses
 """
 from flask import Blueprint, jsonify
 
@@ -131,7 +131,13 @@ _SCHEMAS = {
             "name":        {"type": "string", "example": "Protocoles TCP/IP"},
             "code":        {"type": "string", "example": "RT301-01"},
             "ue_id":       {"type": "integer"},
-            "coefficient": {"type": "number"}
+            "coefficient": {"type": "number"},
+            "cm":          {"type": "integer", "description": "Heures Cours Magistral"},
+            "td":          {"type": "integer", "description": "Heures Travaux Dirigés"},
+            "tp":          {"type": "integer", "description": "Heures Travaux Pratiques"},
+            "tpe":         {"type": "integer", "description": "Travail Personnel Étudiant"},
+            "vht":         {"type": "integer", "description": "Volume Horaire Total"},
+            "is_active":   {"type": "boolean"}
         }
     },
     "Reclamation": {
@@ -337,11 +343,12 @@ OPENAPI_SPEC = {
             "requestBody": {"required": True, "content": {"application/json": {"schema": {
                 "type": "object", "required": ["current_password","new_password"],
                 "properties": {
-                    "current_password": {"type": "string"},
-                    "new_password":     {"type": "string", "minLength": 6}
+                    "current_password":  {"type": "string"},
+                    "new_password":      {"type": "string", "minLength": 6},
+                    "confirm_password":  {"type": "string", "description": "Confirmation du nouveau mot de passe"}
                 }
             }}}},
-            "responses": {"200": {"description": "Mot de passe modifié"}, "400": {"description": "Mot de passe actuel incorrect"}}
+            "responses": {"200": {"description": "Mot de passe modifié"}, "400": {"description": "Mot de passe actuel incorrect ou confirmation non concordante"}}
         }},
 
         # ══════════════════════════════════════════════════════════════════════
@@ -354,8 +361,15 @@ OPENAPI_SPEC = {
                 "200": {"description": "Statistiques", "content": {"application/json": {"schema": {
                     "type": "object",
                     "properties": {
-                        "total_users": {"type": "integer"}, "total_subjects": {"type": "integer"},
-                        "total_papers": {"type": "integer"}, "active_exams": {"type": "integer"}
+                        "total_users":           {"type": "integer"},
+                        "total_students":        {"type": "integer"},
+                        "total_professors":      {"type": "integer"},
+                        "total_surveillants":    {"type": "integer"},
+                        "total_subjects":        {"type": "integer"},
+                        "total_papers":          {"type": "integer"},
+                        "total_corrected_papers":{"type": "integer"},
+                        "active_exams":          {"type": "integer"},
+                        "pending_reclamations":  {"type": "integer"}
                     }
                 }}}},
                 "403": {"$ref": "#/components/responses/Forbidden"}
@@ -620,7 +634,12 @@ OPENAPI_SPEC = {
                     "name":        {"type": "string"},
                     "code":        {"type": "string"},
                     "ue_id":       {"type": "integer"},
-                    "coefficient": {"type": "number", "example": 1}
+                    "coefficient": {"type": "number", "example": 1},
+                    "cm":          {"type": "integer", "default": 0, "description": "Heures Cours Magistral"},
+                    "td":          {"type": "integer", "default": 0, "description": "Heures Travaux Dirigés"},
+                    "tp":          {"type": "integer", "default": 0, "description": "Heures Travaux Pratiques"},
+                    "tpe":         {"type": "integer", "default": 0, "description": "Travail Personnel Étudiant"},
+                    "vht":         {"type": "integer", "default": 0, "description": "Volume Horaire Total"}
                 }
             }}}},
             "responses": {"201": {"description": "EC créé"}}
@@ -631,8 +650,17 @@ OPENAPI_SPEC = {
                 "parameters": [{"name": "ec_id", "in": "path", "required": True, "schema": {"type": "integer"}}],
                 "requestBody": {"content": {"application/json": {"schema": {
                     "type": "object",
-                    "properties": {"name": {"type": "string"}, "code": {"type": "string"},
-                                   "coefficient": {"type": "number"}}
+                    "properties": {
+                        "name":        {"type": "string"},
+                        "code":        {"type": "string"},
+                        "coefficient": {"type": "number"},
+                        "cm":          {"type": "integer"},
+                        "td":          {"type": "integer"},
+                        "tp":          {"type": "integer"},
+                        "tpe":         {"type": "integer"},
+                        "vht":         {"type": "integer"},
+                        "is_active":   {"type": "boolean"}
+                    }
                 }}}},
                 "responses": {"200": {"description": "EC mis à jour"}}
             },
@@ -898,10 +926,26 @@ OPENAPI_SPEC = {
                 "200": {"description": "Statistiques", "content": {"application/json": {"schema": {
                     "type": "object",
                     "properties": {
-                        "mean":    {"type": "number"}, "median": {"type": "number"},
-                        "min":     {"type": "number"}, "max":    {"type": "number"},
-                        "std_dev": {"type": "number"}, "count":  {"type": "integer"},
-                        "distribution": {"type": "object", "description": "Clés : tranches de notes, valeurs : effectifs"}
+                        "subject_id":    {"type": "integer"},
+                        "subject_title": {"type": "string"},
+                        "totalStudents": {"type": "integer"},
+                        "averageScore":  {"type": "number"},
+                        "medianScore":   {"type": "number"},
+                        "minScore":      {"type": "number"},
+                        "maxScore":      {"type": "number"},
+                        "stdDeviation":  {"type": "number"},
+                        "passRate":      {"type": "number", "description": "Taux de réussite (note ≥ 10)"},
+                        "scoreDistribution": {
+                            "type": "object",
+                            "description": "Distribution des notes par tranche",
+                            "properties": {
+                                "0-5":   {"type": "integer"},
+                                "5-10":  {"type": "integer"},
+                                "10-15": {"type": "integer"},
+                                "15-20": {"type": "integer"}
+                            }
+                        },
+                        "papers": {"type": "array", "items": {"$ref": "#/components/schemas/StudentPaper"}}
                     }
                 }}}}
             }
@@ -925,16 +969,19 @@ OPENAPI_SPEC = {
             "post": {
                 "tags": ["Examens en ligne"], "summary": "Créer un examen en ligne",
                 "requestBody": {"required": True, "content": {"application/json": {"schema": {
-                    "type": "object", "required": ["title","subject_id","duration_minutes"],
+                    "type": "object", "required": ["title","subject_id"],
                     "properties": {
-                        "title":            {"type": "string"},
-                        "subject_id":       {"type": "integer"},
-                        "duration_minutes": {"type": "integer", "example": 90},
-                        "access_code":      {"type": "string", "example": "EXAM2026"},
-                        "max_attempts":     {"type": "integer", "default": 1},
-                        "starts_at":        {"type": "string", "format": "date-time"},
-                        "ends_at":          {"type": "string", "format": "date-time"},
-                        "instructions":     {"type": "string"}
+                        "title":               {"type": "string", "example": "Examen Final L3"},
+                        "subject_id":          {"type": "integer"},
+                        "start_time":          {"type": "string", "format": "date-time"},
+                        "end_time":            {"type": "string", "format": "date-time"},
+                        "instructions":        {"type": "string"},
+                        "max_tab_switches":    {"type": "integer", "default": 2, "description": "Nb de changements d'onglet avant exclusion"},
+                        "enable_copy_paste":   {"type": "boolean", "default": False, "description": "Autoriser copier-coller"},
+                        "enable_right_click":  {"type": "boolean", "default": False, "description": "Autoriser clic droit"},
+                        "randomize_questions": {"type": "boolean", "default": False, "description": "Mélanger les questions"},
+                        "max_no_face_count":   {"type": "integer", "default": 10, "description": "Nb de détections sans visage avant alerte"},
+                        "ban_on_devtools":     {"type": "boolean", "default": True, "description": "Exclure si outils développeur détectés"}
                     }
                 }}}},
                 "responses": {"201": {"description": "Examen créé", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/OnlineExam"}}}}}
@@ -970,9 +1017,16 @@ OPENAPI_SPEC = {
                 "properties": {"access_code": {"type": "string", "example": "EXAM2026"}}
             }}}},
             "responses": {
-                "200": {"description": "Tentative démarrée", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ExamAttempt"}}}},
+                "200": {"description": "Tentative démarrée", "content": {"application/json": {"schema": {
+                    "type": "object",
+                    "properties": {
+                        "success":    {"type": "boolean"},
+                        "attempt":    {"$ref": "#/components/schemas/ExamAttempt"},
+                        "continuing": {"type": "boolean", "description": "True si une tentative en cours a été reprise"}
+                    }
+                }}}},
                 "400": {"description": "Code incorrect ou examen non actif"},
-                "409": {"description": "Tentative déjà en cours"}
+                "409": {"description": "Tentative déjà soumise"}
             }
         }},
         "/api/online_exams/{exam_id}/attempts": {"get": {
@@ -1043,23 +1097,28 @@ OPENAPI_SPEC = {
         "/api/exam_attempts/{attempt_id}/log_activity": {"post": {
             "tags": ["Examens en ligne"],
             "summary": "Logger une activité suspecte (client étudiant)",
-            "description": "Appelé automatiquement par le frontend. Incrémente le score de risque selon le type d'événement.",
+            "description": "Appelé automatiquement par le frontend lors d'un événement suspect. Incrémente le score de risque et peut déclencher un bannissement automatique.",
             "parameters": [{"name": "attempt_id", "in": "path", "required": True, "schema": {"type": "integer"}}],
             "requestBody": {"required": True, "content": {"application/json": {"schema": {
-                "type": "object", "required": ["activity_type"],
+                "type": "object", "required": ["event_type"],
                 "properties": {
-                    "activity_type": {
+                    "event_type": {
                         "type": "string",
-                        "enum": ["tab_switch","copy_paste","devtools_attempt","fullscreen_exit","window_blur"],
-                        "description": "tab_switch +15pts, devtools_attempt +10pts"
-                    }
+                        "enum": ["tab_switch","devtools_attempt","no_face_detected","multiple_faces","copy_paste","fullscreen_exit","window_blur"],
+                        "description": "tab_switch +15pts | devtools_attempt +10pts | no_face_detected +10pts | multiple_faces +20pts"
+                    },
+                    "event_data": {"type": "string", "description": "Données supplémentaires (JSON stringifié, optionnel)"}
                 }
             }}}},
             "responses": {"200": {"description": "Activité loguée", "content": {"application/json": {"schema": {
                 "type": "object",
                 "properties": {
-                    "risk_score": {"type": "integer"},
-                    "banned":     {"type": "boolean"}
+                    "success":        {"type": "boolean"},
+                    "warnings_count": {"type": "integer"},
+                    "tab_switches":   {"type": "integer"},
+                    "no_face_count":  {"type": "integer"},
+                    "banned":         {"type": "boolean"},
+                    "ban_reason":     {"type": "string"}
                 }
             }}}}}
         }},
@@ -1175,7 +1234,10 @@ OPENAPI_SPEC = {
             "tags": ["Proctoring"],
             "summary": "Messages en attente pour l'étudiant (polling côté étudiant)",
             "description": "L'interface étudiant appelle cet endpoint toutes les 5 secondes pour recevoir les avertissements du surveillant.",
-            "parameters": [{"name": "attempt_id", "in": "path", "required": True, "schema": {"type": "integer"}}],
+            "parameters": [
+                {"name": "attempt_id", "in": "path", "required": True, "schema": {"type": "integer"}},
+                {"name": "since", "in": "query", "schema": {"type": "string", "format": "date-time"}, "description": "ISO datetime — retourne uniquement les messages après cette date"}
+            ],
             "responses": {"200": {"description": "Messages non lus", "content": {"application/json": {"schema": {
                 "type": "object",
                 "properties": {
@@ -1196,8 +1258,26 @@ OPENAPI_SPEC = {
         }},
         "/api/online_exams/{exam_id}/student_messages": {"get": {
             "tags": ["Proctoring"], "summary": "Tous les messages des étudiants (surveillant/prof)",
-            "parameters": [{"name": "exam_id", "in": "path", "required": True, "schema": {"type": "integer"}}],
-            "responses": {"200": {"description": "Messages par étudiant"}}
+            "parameters": [
+                {"name": "exam_id", "in": "path", "required": True, "schema": {"type": "integer"}},
+                {"name": "since", "in": "query", "schema": {"type": "string", "format": "date-time"}, "description": "Retourne uniquement les messages après cette date"}
+            ],
+            "responses": {"200": {"description": "Messages", "content": {"application/json": {"schema": {
+                "type": "object",
+                "properties": {
+                    "success":  {"type": "boolean"},
+                    "messages": {"type": "array", "items": {
+                        "type": "object",
+                        "properties": {
+                            "attempt_id":   {"type": "integer"},
+                            "student_name": {"type": "string"},
+                            "message":      {"type": "string"},
+                            "timestamp":    {"type": "string", "format": "date-time"},
+                            "log_id":       {"type": "integer"}
+                        }
+                    }}
+                }
+            }}}}}
         }},
         "/api/exam_attempts/{attempt_id}/livekit_token": {"get": {
             "tags": ["Proctoring"], "summary": "Token LiveKit étudiant (publier flux vidéo)",
@@ -1226,7 +1306,23 @@ OPENAPI_SPEC = {
             "get": {
                 "tags": ["Proctoring"], "summary": "Surveillants affectés à un examen",
                 "parameters": [{"name": "exam_id", "in": "path", "required": True, "schema": {"type": "integer"}}],
-                "responses": {"200": {"description": "Surveillants"}}
+                "responses": {"200": {"description": "Surveillants", "content": {"application/json": {"schema": {
+                    "type": "object",
+                    "properties": {
+                        "success":             {"type": "boolean"},
+                        "proctors":            {"type": "array", "items": {
+                            "type": "object",
+                            "properties": {
+                                "id":            {"type": "integer"},
+                                "proctor_id":    {"type": "integer"},
+                                "proctor_name":  {"type": "string"},
+                                "student_count": {"type": "integer"}
+                            }
+                        }},
+                        "total_students":      {"type": "integer"},
+                        "unassigned_students": {"type": "integer"}
+                    }
+                }}}}}
             },
             "post": {
                 "tags": ["Proctoring"], "summary": "Affecter un surveillant à un examen",
@@ -1249,13 +1345,27 @@ OPENAPI_SPEC = {
         "/api/online_exams/{exam_id}/distribute_proctors": {"post": {
             "tags": ["Proctoring"],
             "summary": "Distribuer automatiquement les étudiants entre les surveillants",
-            "description": "Répartit équitablement les étudiants actifs entre les surveillants affectés.",
+            "description": "Répartit équitablement les étudiants actifs entre les surveillants affectés. Peut être relancé pour redistribuer.",
             "parameters": [{"name": "exam_id", "in": "path", "required": True, "schema": {"type": "integer"}}],
             "responses": {"200": {"description": "Distribution effectuée", "content": {"application/json": {"schema": {
                 "type": "object",
                 "properties": {
-                    "distributed": {"type": "integer"},
-                    "proctors":    {"type": "integer"}
+                    "success":        {"type": "boolean"},
+                    "total_students": {"type": "integer"},
+                    "total_proctors": {"type": "integer"},
+                    "mode":           {"type": "string", "enum": ["auto","manual"], "description": "Mode de distribution"},
+                    "message":        {"type": "string"},
+                    "distribution":   {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "proctor_id":    {"type": "integer"},
+                                "proctor_name":  {"type": "string"},
+                                "student_count": {"type": "integer"}
+                            }
+                        }
+                    }
                 }
             }}}}}
         }},
@@ -1266,27 +1376,98 @@ OPENAPI_SPEC = {
             }}}}}
         }},
         "/api/exam_attempts/{attempt_id}/recording": {"post": {
-            "tags": ["Proctoring"], "summary": "Démarrer l'enregistrement vidéo individuel (LiveKit)",
-            "description": "Lance l'enregistrement du flux vidéo d'un étudiant et le stocke dans MinIO/S3.",
+            "tags": ["Proctoring"],
+            "summary": "Démarrer ou arrêter l'enregistrement vidéo individuel (LiveKit → MinIO)",
             "parameters": [{"name": "attempt_id", "in": "path", "required": True, "schema": {"type": "integer"}}],
-            "responses": {"200": {"description": "Enregistrement démarré"}}
+            "requestBody": {"required": True, "content": {"application/json": {"schema": {
+                "type": "object", "required": ["action"],
+                "properties": {
+                    "action":    {"type": "string", "enum": ["start","stop"], "description": "Démarrer ou arrêter l'enregistrement"},
+                    "egress_id": {"type": "string", "description": "Requis si action=stop — ID LiveKit Egress retourné au démarrage"}
+                }
+            }}}},
+            "responses": {"200": {"description": "OK", "content": {"application/json": {"schema": {
+                "type": "object",
+                "properties": {
+                    "success":   {"type": "boolean"},
+                    "egress_id": {"type": "string", "description": "ID de l'Egress (action=start)"},
+                    "filepath":  {"type": "string", "description": "Chemin MinIO (action=stop)"}
+                }
+            }}}}}
         }},
         "/api/online_exams/{exam_id}/room_recording": {"post": {
-            "tags": ["Proctoring"], "summary": "Démarrer l'enregistrement de la salle entière",
-            "description": "Enregistre tous les flux vidéo de la salle en une seule track.",
+            "tags": ["Proctoring"],
+            "summary": "Démarrer ou arrêter l'enregistrement de la salle entière",
             "parameters": [{"name": "exam_id", "in": "path", "required": True, "schema": {"type": "integer"}}],
-            "responses": {"200": {"description": "Enregistrement salle démarré"}}
+            "requestBody": {"required": True, "content": {"application/json": {"schema": {
+                "type": "object", "required": ["action"],
+                "properties": {
+                    "action":    {"type": "string", "enum": ["start","stop"]},
+                    "egress_id": {"type": "string", "description": "Requis si action=stop"}
+                }
+            }}}},
+            "responses": {"200": {"description": "OK", "content": {"application/json": {"schema": {
+                "type": "object",
+                "properties": {
+                    "success":   {"type": "boolean"},
+                    "egress_id": {"type": "string"},
+                    "filepath":  {"type": "string"}
+                }
+            }}}}}
         }},
         "/api/online_exams/{exam_id}/group_recording": {"post": {
-            "tags": ["Proctoring"], "summary": "Démarrer l'enregistrement de groupe (surveillant)",
+            "tags": ["Proctoring"],
+            "summary": "Démarrer ou arrêter l'enregistrement du groupe du surveillant",
             "description": "Enregistre uniquement le groupe d'étudiants assigné au surveillant connecté.",
             "parameters": [{"name": "exam_id", "in": "path", "required": True, "schema": {"type": "integer"}}],
-            "responses": {"200": {"description": "Enregistrement groupe démarré"}}
+            "requestBody": {"required": True, "content": {"application/json": {"schema": {
+                "type": "object", "required": ["action"],
+                "properties": {
+                    "action":     {"type": "string", "enum": ["start","stop"]},
+                    "egress_ids": {"type": "array", "items": {"type": "string"}, "description": "IDs Egress à arrêter (action=stop)"}
+                }
+            }}}},
+            "responses": {"200": {"description": "OK", "content": {"application/json": {"schema": {
+                "type": "object",
+                "properties": {
+                    "success":  {"type": "boolean"},
+                    "started":  {"type": "integer", "description": "Nb d'enregistrements démarrés"},
+                    "stopped":  {"type": "integer", "description": "Nb d'enregistrements arrêtés"},
+                    "errors":   {"type": "array", "items": {"type": "string"}}
+                }
+            }}}}}
         }},
         "/api/online_exams/{exam_id}/recordings": {"get": {
-            "tags": ["Proctoring"], "summary": "Liste des enregistrements d'un examen",
+            "tags": ["Proctoring"],
+            "summary": "Snapshots caméra et enregistrements par étudiant",
+            "description": "Retourne pour chaque étudiant ses snapshots caméra avec métadonnées de détection visage.",
             "parameters": [{"name": "exam_id", "in": "path", "required": True, "schema": {"type": "integer"}}],
-            "responses": {"200": {"description": "Enregistrements disponibles"}}
+            "responses": {"200": {"description": "Données d'enregistrement", "content": {"application/json": {"schema": {
+                "type": "object",
+                "properties": {
+                    "exam_id": {"type": "integer"},
+                    "students": {"type": "array", "items": {
+                        "type": "object",
+                        "properties": {
+                            "attempt_id":      {"type": "integer"},
+                            "student_name":    {"type": "string"},
+                            "student_email":   {"type": "string"},
+                            "status":          {"type": "string"},
+                            "snapshots_count": {"type": "integer"},
+                            "snapshots": {"type": "array", "items": {
+                                "type": "object",
+                                "properties": {
+                                    "id":            {"type": "integer"},
+                                    "timestamp":     {"type": "string", "format": "date-time"},
+                                    "event_type":    {"type": "string"},
+                                    "image_data":    {"type": "string", "description": "Base64 (peut être null)"},
+                                    "face_detected": {"type": "boolean"}
+                                }
+                            }}
+                        }
+                    }}
+                }
+            }}}}}
         }},
         "/api/online_exams/{exam_id}/video_recordings": {"get": {
             "tags": ["Proctoring"], "summary": "Enregistrements vidéo stockés dans MinIO",
@@ -1603,7 +1784,7 @@ _SWAGGER_HTML = """<!DOCTYPE html>
     .topbar { background:#1e3a8a !important; }
     .topbar-wrapper img { display:none; }
     .topbar-wrapper::after {
-      content: "CEI — Centre d'Examen Intelligent · API v2.1 · 104 endpoints";
+      content: "CEI — Centre d'Examen Intelligent · API v2.1 · 119 endpoints";
       color:#fff; font-weight:700; font-size:15px;
       font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
     }
