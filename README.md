@@ -24,7 +24,8 @@
 8. [Agent de surveillance autonome](#8-agent-de-surveillance-autonome)
 9. [Déploiement production PM2 + Nginx](#9-déploiement-production-pm2--nginx)
 10. [Dépendances IA](#10-dépendances-ia)
-11. [Dépannage](#11-dépannage)
+11. [Documentation API Swagger](#11-documentation-api-swagger)
+12. [Dépannage](#12-dépannage)
 
 ---
 
@@ -602,7 +603,7 @@ pdftoppm -v   # doit fonctionner sans erreur
 
 ---
 
-## 11. Dépannage
+## 12. Dépannage
 
 ### La correction IA retourne "service indisponible"
 
@@ -692,6 +693,105 @@ sudo -u postgres psql -c "ALTER USER exam_user WITH PASSWORD 'nouveau_mdp';"
 lsof -i :5000
 # Modifier le port dans gunicorn.conf.py et ecosystem.config.js
 ```
+
+---
+
+## 11. Documentation API Swagger
+
+La plateforme expose une documentation interactive **OpenAPI 3.0** permettant à n'importe quel développeur de découvrir, tester et intégrer les API CEI sans avoir à lire le code source.
+
+### URLs d'accès
+
+| Interface | URL | Description |
+|---|---|---|
+| **Swagger UI** | `https://votre-domaine.sn/api/docs` | Interface interactive — tester les endpoints en un clic |
+| **ReDoc** | `https://votre-domaine.sn/api/docs/redoc` | Lecture alternative, plus lisible pour la documentation |
+| **Spec JSON** | `https://votre-domaine.sn/api/docs/openapi.json` | Spec brute OpenAPI 3.0 pour les générateurs de clients |
+
+### Contenu de la documentation
+
+**52 endpoints documentés** répartis en **11 groupes** :
+
+| Groupe | Endpoints | Description |
+|---|---|---|
+| Authentification | 5 | Login, profil, mot de passe |
+| Administration | 4 | Utilisateurs, tableau de bord |
+| Académique | 8 | Formations, UE, EC, inscriptions |
+| Sujets | 4 | Upload, création, gestion des sujets |
+| Copies | 5 | Upload, correction IA, statistiques |
+| Examens en ligne | 9 | Création, activation, tentatives, correction |
+| Proctoring | 8 | Surveillance vidéo, risques, avertissements |
+| Agent autonome | 5 | API interne du service de surveillance IA |
+| Intelligence Artificielle | 3 | Suggestions et génération de sujets |
+| Réclamations | 3 | Dépôt et traitement par IA |
+| Relevés de notes | 3 | Génération et téléchargement PDF |
+
+### Authentification dans Swagger UI
+
+1. Ouvrir `https://votre-domaine.sn/api/docs`
+2. Cliquer sur **Authorize** (cadenas en haut à droite)
+3. Appeler d'abord `POST /api/auth/login` pour obtenir un `access_token`
+4. Saisir `Bearer <access_token>` dans le champ **BearerAuth**
+5. Tous les endpoints protégés sont maintenant accessibles via **Try it out**
+
+### Générer un client automatiquement
+
+La spec OpenAPI 3.0 permet de générer un SDK client dans n'importe quel langage :
+
+```bash
+# TypeScript / JavaScript (React, Vue, Angular, Next.js...)
+npx openapi-typescript-codegen \
+  --input https://votre-domaine.sn/api/docs/openapi.json \
+  --output ./src/api-client \
+  --client axios
+
+# Python
+pip install openapi-python-client
+openapi-python-client generate \
+  --url https://votre-domaine.sn/api/docs/openapi.json
+
+# Dart / Flutter
+# Ajouter openapi_generator dans pubspec.yaml
+flutter pub run build_runner build
+
+# Java / Kotlin (Android, Spring)
+openapi-generator-cli generate \
+  -i https://votre-domaine.sn/api/docs/openapi.json \
+  -g kotlin \
+  -o ./sdk-android
+
+# PHP (Laravel, Symfony)
+openapi-generator-cli generate \
+  -i https://votre-domaine.sn/api/docs/openapi.json \
+  -g php \
+  -o ./sdk-php
+```
+
+### Importer dans Postman
+
+```
+1. Ouvrir Postman
+2. File → Import
+3. Coller l'URL : https://votre-domaine.sn/api/docs/openapi.json
+4. Importer → toute la collection est prête à l'emploi
+```
+
+### Structure du fichier swagger_docs.py
+
+```
+swagger_docs.py
+├── OPENAPI_SPEC     — Dictionnaire Python complet OpenAPI 3.0
+│   ├── info         — Titre, version, contact, licence
+│   ├── servers      — URLs production et développement
+│   ├── tags         — 11 groupes d'endpoints
+│   ├── components   — Schémas réutilisables (User, Subject, ExamAttempt...)
+│   └── paths        — 52 endpoints avec paramètres, corps et réponses
+├── /api/docs        — Route Swagger UI (HTML + CDN)
+├── /api/docs/redoc  — Route ReDoc (HTML + CDN)
+└── /api/docs/openapi.json — Route spec JSON brute
+```
+
+> La documentation est un **Blueprint Flask** (`swagger_docs.py`) enregistré dans `app.py`. Aucune dépendance pip supplémentaire n'est nécessaire — Swagger UI et ReDoc sont chargés depuis CDN.
 
 ---
 
