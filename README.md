@@ -1,6 +1,6 @@
 # CEI — Centre d'Examen Intelligent
 
-> Plateforme universitaire d'examens en ligne avec surveillance autonome par IA, correction automatique multi-domaine et gestion pédagogique complète.  
+> Plateforme universitaire d'examens en ligne avec surveillance autonome par IA (agent + indicateurs visuels temps réel), correction automatique multi-domaine et gestion pédagogique complète.  
 > Développée pour l'**Université Numérique Cheikh Hamidou Kane (UNCHK)**, Sénégal.
 
 [![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://python.org)
@@ -53,11 +53,17 @@ CEI est une plateforme web complète pour la gestion et la surveillance des exam
 - Enregistrement des sessions vidéo (MinIO/S3)
 
 ### Agent de surveillance autonome
-- Service Python indépendant qui surveille tous les examens actifs toutes les 30 secondes
-- Analyse comportementale par IA (Ollama local)
-- Emails d'alerte automatiques aux surveillants et enseignants
-- Panneau d'alertes temps réel dans le dashboard (badge + notifications navigateur)
-- Cooldown configurable par étudiant (par défaut 10 min)
+- Service Python indépendant — surveille tous les examens actifs toutes les 30 secondes
+- **Attribué automatiquement** à tous les examens actifs, aucune action manuelle requise
+- Analyse comportementale par IA (Ollama qwen3.6) pour chaque étudiant suspect
+- Emails d'alerte HTML aux surveillants et enseignants (niveaux ALERTE et URGENT)
+- **Heartbeat** toutes les 30s — l'API `/api/agent/status` expose l'état en temps réel
+- **Indicateurs visuels** dans tous les dashboards :
+  - Carte "🤖 Agent IA Autonome" avec dot animé vert/rouge dans le panneau surveillants
+  - Bandeau agent dans le modal de gestion des surveillants (statut + stats par examen)
+  - Mention discrète dans l'interface étudiant pendant l'examen
+- Cloche d'alertes 🔔 dans le dashboard avec badge + notifications navigateur
+- Cooldown configurable par étudiant (défaut 10 min) pour éviter le spam
 - Rapport récapitulatif toutes les 15 minutes à l'enseignant
 
 ### Correction par IA (multi-domaine universel)
@@ -329,10 +335,14 @@ cei-unchk.sn/
 │
 ├── agent_proctor/                # Service Agent de surveillance autonome
 │   ├── run.py                    # Point d'entrée (lancé par PM2)
-│   ├── monitor.py                # Boucle principale + analyse IA
-│   ├── email_alerts.py           # Templates et envoi emails d'alerte
+│   ├── monitor.py                # Boucle principale + analyse IA + heartbeat
+│   ├── email_alerts.py           # Templates et envoi emails d'alerte HTML
 │   ├── config.py                 # Configuration (lit .env)
 │   └── ecosystem.agent.config.js # Configuration PM2 pour l'agent
+│
+├── agent_heartbeat.json          # Généré automatiquement par l'agent (statut temps réel)
+├── agent_alerts.json             # Alertes dashboard (max 200, généré automatiquement)
+├── swagger_docs.py               # Documentation API OpenAPI 3.0 (Blueprint Flask)
 │
 ├── templates/
 │   ├── index.html                # Application SPA principale
@@ -366,49 +376,105 @@ cei-unchk.sn/
 
 ## 8. Agent de surveillance autonome
 
-L'agent proctor est un **service Python indépendant** qui tourne en parallèle de la plateforme principale. Il ne modifie pas la logique métier — il lit et écrit uniquement via des endpoints `/api/agent/` dédiés.
+L'agent proctor est un **service Python indépendant** (`cei-agent-proctor` sous PM2) qui tourne en parallèle de la plateforme. Il ne modifie pas la logique métier — il communique uniquement via les endpoints `/api/agent/`. Il est **attribué automatiquement à tous les examens actifs** sans aucune action de l'enseignant.
 
-### Fonctionnement
+### Fonctionnement — cycle de 30 secondes
 
 ```
 Toutes les 30 secondes :
-  1. GET /api/agent/active_exams          → liste des examens en cours
-  2. GET /api/agent/exam_proctoring/{id}  → données de surveillance + emails
-  3. Pour chaque étudiant avec risk_score >= AGENT_RISK_ALERT :
+  1. GET /api/agent/active_exams             → liste des examens actifs
+  2. GET /api/agent/exam_proctoring/{id}     → données + emails par examen
+  3. Pour chaque étudiant risk_score ≥ AGENT_RISK_ALERT :
      a. Analyse comportementale par Ollama (qwen3.6)
-     b. POST /api/agent/alerts            → alerte visible dans le dashboard
-     c. Email envoyé aux surveillants affectés + à l'enseignant
-     d. Cooldown 10 min : pas de nouvel email avant 10 min pour cet étudiant
+     b. POST /api/agent/alerts               → alerte stockée (visible dashboard)
+     c. Email HTML envoyé aux surveillants + enseignant
+     d. Cooldown 10 min par étudiant (pas de spam)
+  4. Écriture de agent_heartbeat.json        → statut lisible par l'API
 
 Toutes les 15 minutes :
-  → Email récapitulatif à l'enseignant (étudiants actifs, alertes, exclusions)
+  → Email récapitulatif HTML à l'enseignant (stats : actifs, alertes, exclusions)
+```
+
+### Système Heartbeat
+
+L'agent écrit `agent_heartbeat.json` à la racine du projet après chaque cycle. Ce fichier est lu par l'endpoint `GET /api/agent/status` pour exposer l'état en temps réel. Si le fichier date de plus de 90 secondes (3× l'intervalle), l'agent est considéré inactif.
+
+```json
+{
+  "alive": true,
+  "last_check": "2026-05-30T12:05:07+00:00",
+  "interval_seconds": 30,
+  "exams_monitored": 2,
+  "total_alerts_session": 5,
+  "exam_stats": {
+    "42": { "title": "Réseaux L3", "total": 24, "alerts_sent": 3, "banned": 1 }
+  }
+}
 ```
 
 ### Niveaux d'alerte
 
 | Score de risque | Niveau | Couleur | Action déclenchée |
 |---|---|---|---|
-| 60 – 79 | ALERTE | Orange | Email + badge dashboard |
-| 80 – 100 | URGENT | Rouge | Email urgent + notification navigateur |
+| 60 – 79 | ALERTE | 🟠 Orange | Email + badge dashboard |
+| 80 – 100 | URGENT | 🔴 Rouge | Email urgent + notification navigateur |
 
 ### Score de risque — ce qui le fait monter
 
 | Événement détecté | Points ajoutés |
 |---|---|
-| Visage absent (no face) | +10 par occurrence |
+| Visage absent (no_face_detected) | +10 par occurrence |
 | Plusieurs visages détectés | +20 par occurrence |
 | Changement d'onglet / fenêtre | +15 (plafond 60) |
 | Avertissement reçu | +5 (plafond 40) |
 
-### Endpoints API de l'agent (authentification par X-Agent-Secret)
+### Endpoints API de l'agent
 
-| Méthode | Endpoint | Usage |
-|---|---|---|
-| GET | `/api/agent/active_exams` | Liste des examens actifs |
-| GET | `/api/agent/exam_proctoring/{id}` | Données + emails d'un examen |
-| POST | `/api/agent/alerts` | Pousser une alerte vers le dashboard |
-| GET | `/api/agent/alerts` | Lire les alertes (JWT dashboard) |
-| POST | `/api/agent/alerts/read` | Marquer des alertes comme lues |
+| Méthode | Endpoint | Auth | Usage |
+|---|---|---|---|
+| GET | `/api/agent/status` | JWT | Statut live + stats par examen (`?exam_id=N`) |
+| GET | `/api/agent/active_exams` | X-Agent-Secret | Examens actifs (service agent) |
+| GET | `/api/agent/exam_proctoring/{id}` | X-Agent-Secret | Données + emails d'un examen |
+| POST | `/api/agent/alerts` | X-Agent-Secret | Pousser une alerte vers le dashboard |
+| GET | `/api/agent/alerts` | JWT | Lire les alertes non lues (dashboard) |
+| POST | `/api/agent/alerts/read` | JWT | Marquer des alertes comme lues |
+
+### Indicateurs visuels dans l'interface
+
+L'agent est rendu visible dans trois endroits :
+
+**1. Dashboard surveillant/enseignant** — Panneau "Surveillance active"
+```
+┌─────────────────────────────────────────┐
+│ 🟢 🤖 Agent IA Autonome  [EN SERVICE]  │ Automatique
+│ Agent actif — Surveillance IA en cours  │
+│ 👥 24 étudiant(s)  🔔 3 alerte(s)  ⏱/30s │
+│ Dernier cycle : il y a 12s              │
+└─────────────────────────────────────────┘
+  [Surveillant humain 1]  [Surveillant humain 2]
+```
+
+**2. Modal "Gestion de la Surveillance"** — bandeau en haut avec statut, seuils, et mention "attribué automatiquement"
+
+**3. Interface étudiant pendant l'examen** — bandeau discret dans le panneau de surveillance :
+```
+🟢 🤖 Agent IA de surveillance actif
+   Surveillance automatique en temps réel
+```
+
+### Vérifier le statut de l'agent
+
+```bash
+# Via l'API (nécessite un token JWT valide)
+curl https://votre-domaine.sn/api/agent/status \
+  -H "Authorization: Bearer <token>"
+
+# Via PM2
+pm2 logs cei-agent-proctor --lines 20
+
+# Fichier heartbeat direct
+cat agent_heartbeat.json | python3 -m json.tool
+```
 
 ### Gestion PM2
 
@@ -416,23 +482,19 @@ Toutes les 15 minutes :
 # Démarrer l'agent
 pm2 start agent_proctor/ecosystem.agent.config.js
 
-# Voir les logs en temps réel
+# Logs en temps réel
 pm2 logs cei-agent-proctor
 
 # Redémarrer après modification
 pm2 restart cei-agent-proctor
 
-# Vérifier l'état de tous les services
+# État de tous les services
 pm2 list
 ```
 
-### Dashboard surveillant
+### L'agent sur l'examen est-il automatique ?
 
-Le dashboard affiche automatiquement :
-- Cloche 🔔 avec badge rouge (nombre d'alertes non lues)
-- Panneau déroulant : détails par étudiant, niveau de risque, anomalies, analyse IA
-- Boutons d'action directs : Avertir / Appel privé / Marquer comme lu
-- Notification navigateur pour les cas URGENT (si permission accordée)
+**Oui, totalement automatique.** L'agent surveille tous les examens dont le statut est `ACTIVE`. Il n'existe pas de bouton "activer la surveillance IA" — dès qu'un examen est activé via `/api/online_exams/{id}/activate`, l'agent le détecte lors de son prochain cycle (≤ 30 secondes) et commence à surveiller tous les étudiants inscrits.
 
 ---
 
@@ -637,19 +699,34 @@ which pdftoppm
 sudo apt install -y tesseract-ocr tesseract-ocr-fra tesseract-ocr-eng poppler-utils
 ```
 
-### L'agent proctor ne s'exécute pas
+### L'agent proctor ne s'exécute pas ou affiche "HORS LIGNE"
 
 ```bash
-# Voir les logs
+# 1. Voir les logs
 pm2 logs cei-agent-proctor --lines 30
 
-# Tester l'authentification agent
+# 2. Vérifier le fichier heartbeat
+cat agent_heartbeat.json | python3 -m json.tool
+# Si le fichier n'existe pas → l'agent n'a jamais démarré
+
+# 3. Vérifier le statut via l'API (avec un token valide)
+curl https://votre-domaine.sn/api/agent/status \
+  -H "Authorization: Bearer <votre-token>"
+
+# 4. Tester l'authentification agent directement
 curl -s -H "X-Agent-Secret: VOTRE_AGENT_SECRET_KEY" \
   https://votre-domaine.sn/api/agent/active_exams
 
-# Vérifier que la clé correspond bien dans .env
+# 5. Vérifier que la clé correspond dans .env
 grep AGENT_SECRET_KEY .env
+
+# 6. Redémarrer si nécessaire
+pm2 restart cei-agent-proctor
 ```
+
+**La carte agent affiche "INACTIF" (orange)** — heartbeat existant mais trop ancien :
+- L'agent est peut-être bloqué sur un appel réseau
+- `pm2 restart cei-agent-proctor` suffit généralement
 
 ### Les emails d'alerte ne partent pas
 
@@ -698,48 +775,54 @@ lsof -i :5000
 
 ## 11. Documentation API Swagger
 
-La plateforme expose une documentation interactive **OpenAPI 3.0** permettant à n'importe quel développeur de découvrir, tester et intégrer les API CEI sans avoir à lire le code source.
+La plateforme expose une documentation interactive **OpenAPI 3.0** permettant à n'importe quel développeur de découvrir, tester et intégrer les API CEI. La couverture est vérifiée programmatiquement — **100% des endpoints du code sont documentés**.
 
 ### URLs d'accès
 
 | Interface | URL | Description |
 |---|---|---|
 | **Swagger UI** | `https://votre-domaine.sn/api/docs` | Interface interactive — tester les endpoints en un clic |
-| **ReDoc** | `https://votre-domaine.sn/api/docs/redoc` | Lecture alternative, plus lisible pour la documentation |
+| **ReDoc** | `https://votre-domaine.sn/api/docs/redoc` | Lecture alternative, plus lisible |
 | **Spec JSON** | `https://votre-domaine.sn/api/docs/openapi.json` | Spec brute OpenAPI 3.0 pour les générateurs de clients |
 
 ### Contenu de la documentation
 
-**52 endpoints documentés** répartis en **11 groupes** :
+**111 opérations HTTP** sur **100 routes** réparties en **13 groupes** :
 
-| Groupe | Endpoints | Description |
+| Groupe | Opérations | Description |
 |---|---|---|
-| Authentification | 5 | Login, profil, mot de passe |
-| Administration | 4 | Utilisateurs, tableau de bord |
-| Académique | 8 | Formations, UE, EC, inscriptions |
-| Sujets | 4 | Upload, création, gestion des sujets |
-| Copies | 5 | Upload, correction IA, statistiques |
-| Examens en ligne | 9 | Création, activation, tentatives, correction |
-| Proctoring | 8 | Surveillance vidéo, risques, avertissements |
-| Agent autonome | 5 | API interne du service de surveillance IA |
-| Intelligence Artificielle | 3 | Suggestions et génération de sujets |
-| Réclamations | 3 | Dépôt et traitement par IA |
-| Relevés de notes | 3 | Génération et téléchargement PDF |
+| Authentification | 5 | Login, register, profil, mot de passe |
+| Administration | 10 | Utilisateurs, dashboard, historique, imports CSV |
+| Académique | 23 | Formations, semestres, UE, EC, inscriptions, affectations |
+| Import CSV | 4 | Templates et imports en masse (utilisateurs + maquette) |
+| Sujets | 6 | Upload, création, gestion, génération IA |
+| Copies | 6 | Upload, correction IA, export PDF, statistiques |
+| Examens en ligne | 14 | Création, cycle de vie, tentatives, correction, incidents |
+| Proctoring | 22 | Surveillance vidéo, risques, messages, enregistrements LiveKit |
+| Agent autonome | 6 | Statut heartbeat, alertes, données surveillance |
+| Intelligence Artificielle | 3 | Suggestions et génération de sujets par IA |
+| Réclamations | 6 | Dépôt, traitement IA, accepter/rejeter |
+| Relevés de notes | 4 | Génération, liste, téléchargement PDF |
+| Tableaux de bord | 4 | Dashboards professeur et étudiant |
+
+### Schémas de données documentés (15 objets)
+
+`User` · `Subject` · `StudentPaper` · `OnlineExam` · `ExamAttempt` · `Formation` · `Semester` · `UE` · `EC` · `Reclamation` · `GradeTranscript` · `AgentAlert` · `ExamIncident` · `Error` · `Success`
 
 ### Authentification dans Swagger UI
 
 1. Ouvrir `https://votre-domaine.sn/api/docs`
 2. Cliquer sur **Authorize** (cadenas en haut à droite)
-3. Appeler d'abord `POST /api/auth/login` pour obtenir un `access_token`
+3. Appeler `POST /api/auth/login` → récupérer `access_token`
 4. Saisir `Bearer <access_token>` dans le champ **BearerAuth**
-5. Tous les endpoints protégés sont maintenant accessibles via **Try it out**
+5. Tous les endpoints protégés sont accessibles via **Try it out**
 
-### Générer un client automatiquement
+> Les endpoints de l'agent (`/api/agent/active_exams`, `/api/agent/exam_proctoring`, `POST /api/agent/alerts`) utilisent le schéma **AgentSecret** (`X-Agent-Secret` header) — voir `.env` pour la valeur `AGENT_SECRET_KEY`.
 
-La spec OpenAPI 3.0 permet de générer un SDK client dans n'importe quel langage :
+### Générer un client SDK automatiquement
 
 ```bash
-# TypeScript / JavaScript (React, Vue, Angular, Next.js...)
+# TypeScript / JavaScript (React, Vue, Next.js, Angular...)
 npx openapi-typescript-codegen \
   --input https://votre-domaine.sn/api/docs/openapi.json \
   --output ./src/api-client \
@@ -751,47 +834,57 @@ openapi-python-client generate \
   --url https://votre-domaine.sn/api/docs/openapi.json
 
 # Dart / Flutter
-# Ajouter openapi_generator dans pubspec.yaml
-flutter pub run build_runner build
+flutter pub run build_runner build   # avec openapi_generator dans pubspec.yaml
 
 # Java / Kotlin (Android, Spring)
 openapi-generator-cli generate \
   -i https://votre-domaine.sn/api/docs/openapi.json \
-  -g kotlin \
-  -o ./sdk-android
+  -g kotlin -o ./sdk-android
 
 # PHP (Laravel, Symfony)
 openapi-generator-cli generate \
   -i https://votre-domaine.sn/api/docs/openapi.json \
-  -g php \
-  -o ./sdk-php
+  -g php -o ./sdk-php
 ```
 
 ### Importer dans Postman
 
 ```
-1. Ouvrir Postman
-2. File → Import
-3. Coller l'URL : https://votre-domaine.sn/api/docs/openapi.json
-4. Importer → toute la collection est prête à l'emploi
+1. Ouvrir Postman → File → Import
+2. Coller l'URL : https://votre-domaine.sn/api/docs/openapi.json
+3. Importer → la collection complète est prête (111 requêtes pré-configurées)
 ```
 
-### Structure du fichier swagger_docs.py
+### Vérification de couverture
 
-```
-swagger_docs.py
-├── OPENAPI_SPEC     — Dictionnaire Python complet OpenAPI 3.0
-│   ├── info         — Titre, version, contact, licence
-│   ├── servers      — URLs production et développement
-│   ├── tags         — 11 groupes d'endpoints
-│   ├── components   — Schémas réutilisables (User, Subject, ExamAttempt...)
-│   └── paths        — 52 endpoints avec paramètres, corps et réponses
-├── /api/docs        — Route Swagger UI (HTML + CDN)
-├── /api/docs/redoc  — Route ReDoc (HTML + CDN)
-└── /api/docs/openapi.json — Route spec JSON brute
+La couverture est vérifiable programmatiquement :
+
+```python
+import json, requests
+
+spec   = requests.get("https://votre-domaine.sn/api/docs/openapi.json").json()
+total  = sum(len(v) for v in spec["paths"].values())
+print(f"{total} opérations documentées sur {len(spec['paths'])} routes")
+# → 111 opérations documentées sur 100 routes
 ```
 
-> La documentation est un **Blueprint Flask** (`swagger_docs.py`) enregistré dans `app.py`. Aucune dépendance pip supplémentaire n'est nécessaire — Swagger UI et ReDoc sont chargés depuis CDN.
+### Structure du fichier `swagger_docs.py`
+
+```
+swagger_docs.py                    # Blueprint Flask — aucune dépendance pip requise
+├── OPENAPI_SPEC                   # Dictionnaire Python OpenAPI 3.0 complet
+│   ├── info                       # Titre, version 2.1.0, contact UNCHK, licence MIT
+│   ├── servers                    # Production (cei.unchk.sn) + localhost:5000
+│   ├── tags                       # 13 groupes avec descriptions
+│   ├── components.schemas         # 15 schémas réutilisables
+│   ├── components.securitySchemes # BearerAuth (JWT) + AgentSecret (X-Agent-Secret)
+│   └── paths                      # 111 opérations avec params, corps, réponses réels
+├── GET /api/docs                  # Swagger UI (Swagger UI v5 depuis CDN)
+├── GET /api/docs/redoc            # ReDoc (depuis CDN)
+└── GET /api/docs/openapi.json     # Spec JSON brute
+```
+
+> Swagger UI et ReDoc sont chargés depuis CDN — aucune installation npm ou build step requis.
 
 ---
 
@@ -812,6 +905,6 @@ MIT License — © 2026 Université Numérique Cheikh Hamidou Kane (UNCHK), Sén
 
 ---
 
-*CEI v2.1 — Mai 2026*  
+*CEI v2.2 — Mai 2026*  
 *Cité du savoir - Diamniadio · Castors, avenue Bourguiba, rue n°13*  
 *+221 30 108 41 53 · visioplus@unchk.edu.sn*

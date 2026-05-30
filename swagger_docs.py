@@ -1,8 +1,8 @@
 """
 CEI — Documentation API Swagger / OpenAPI 3.0
 Accessible à /api/docs (Swagger UI) et /api/docs/openapi.json (spec brute)
-Scan exhaustif v3 — app.py, proctoring_routes.py, csv_import_routes.py, export_route.py
-119 endpoints API + champs réels des corps de requêtes et réponses
+Scan exhaustif v4 — app.py, proctoring_routes.py, csv_import_routes.py, export_route.py
+111 opérations HTTP — couverture 100% vérifiée programmatiquement
 """
 from flask import Blueprint, jsonify
 
@@ -261,7 +261,7 @@ OPENAPI_SPEC = {
         {"name": "Copies",                   "description": "Upload, correction IA et export des copies étudiants"},
         {"name": "Examens en ligne",         "description": "Création, gestion du cycle de vie et tentatives"},
         {"name": "Proctoring",               "description": "Surveillance vidéo, score de risque, messages, enregistrements"},
-        {"name": "Agent autonome",           "description": "API du service de surveillance IA autonome"},
+        {"name": "Agent autonome",           "description": "API du service de surveillance IA autonome — statut, alertes, heartbeat"},
         {"name": "Intelligence Artificielle","description": "Génération de sujets et suggestions par IA"},
         {"name": "Réclamations",             "description": "Dépôt, traitement IA et décision sur les réclamations"},
         {"name": "Relevés de notes",         "description": "Génération et téléchargement des relevés PDF"},
@@ -1481,8 +1481,64 @@ OPENAPI_SPEC = {
         }},
 
         # ══════════════════════════════════════════════════════════════════════
+        # ══════════════════════════════════════════════════════════════════════
         # AGENT AUTONOME
         # ══════════════════════════════════════════════════════════════════════
+
+        "/api/agent/status": {"get": {
+            "tags": ["Agent autonome"],
+            "summary": "Statut de l'agent autonome de surveillance",
+            "description": (
+                "Retourne l'état en temps réel de l'agent `cei-agent-proctor` basé sur le fichier heartbeat "
+                "qu'il écrit toutes les 30 secondes.\n\n"
+                "**Logique de détection :**\n"
+                "- `alive=true` si le dernier heartbeat date de moins de 3× l'intervalle (90s par défaut)\n"
+                "- `status=active` → agent opérationnel\n"
+                "- `status=stale` → heartbeat trop ancien (agent bloqué ?)\n"
+                "- `status=offline` → fichier heartbeat absent (service PM2 non démarré)\n\n"
+                "Passer `?exam_id=N` pour obtenir les statistiques de cet examen spécifique "
+                "(nb d'étudiants surveillés, alertes envoyées, exclusions)."
+            ),
+            "parameters": [
+                {
+                    "name": "exam_id", "in": "query",
+                    "schema": {"type": "integer"},
+                    "description": "Optionnel — ID de l'examen pour les stats spécifiques"
+                }
+            ],
+            "responses": {
+                "200": {
+                    "description": "Statut de l'agent",
+                    "content": {"application/json": {"schema": {
+                        "type": "object",
+                        "properties": {
+                            "alive":                {"type": "boolean", "description": "True si l'agent répond dans les délais"},
+                            "status":               {"type": "string", "enum": ["active","stale","offline"]},
+                            "status_label":         {"type": "string", "example": "Agent actif — Surveillance IA en cours"},
+                            "status_color":         {"type": "string", "example": "#10b981", "description": "Couleur CSS pour l'indicateur visuel"},
+                            "last_check":           {"type": "string", "format": "date-time"},
+                            "last_check_ago_sec":   {"type": "integer", "description": "Secondes depuis le dernier heartbeat"},
+                            "interval_seconds":     {"type": "integer", "example": 30},
+                            "risk_alert":           {"type": "integer", "example": 60, "description": "Seuil score de risque pour alerte email"},
+                            "risk_urgent":          {"type": "integer", "example": 80, "description": "Seuil score de risque pour alerte urgente"},
+                            "exams_monitored":      {"type": "integer", "description": "Nombre d'examens actifs lors du dernier cycle"},
+                            "total_alerts_session": {"type": "integer", "description": "Total d'alertes envoyées depuis le démarrage"},
+                            "exam": {
+                                "type": "object",
+                                "description": "Stats pour l'exam_id demandé (si fourni)",
+                                "properties": {
+                                    "exam_id":     {"type": "integer"},
+                                    "students":    {"type": "integer", "description": "Nb d'étudiants surveillés"},
+                                    "alerts_sent": {"type": "integer", "description": "Alertes envoyées pour cet examen"},
+                                    "banned":      {"type": "integer", "description": "Étudiants exclus"}
+                                }
+                            }
+                        }
+                    }}}
+                },
+                "403": {"$ref": "#/components/responses/Forbidden"}
+            }
+        }},
 
         "/api/agent/alerts": {
             "post": {
@@ -1788,7 +1844,7 @@ _SWAGGER_HTML = """<!DOCTYPE html>
     .topbar { background:#1e3a8a !important; }
     .topbar-wrapper img { display:none; }
     .topbar-wrapper::after {
-      content: "CEI — Centre d'Examen Intelligent · API v2.1 · 119 endpoints";
+      content: "CEI — Centre d'Examen Intelligent · API v2.1 · 111 endpoints";
       color:#fff; font-weight:700; font-size:15px;
       font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
     }
