@@ -400,23 +400,27 @@ OPENAPI_SPEC = {
                 "responses": {"201": {"description": "Utilisateur créé"}, "409": {"description": "Email déjà utilisé"}}
             }
         },
-        "/api/admin/users/{user_id}": {
+        "/api/admin/users/{target_user_id}": {
             "put": {
                 "tags": ["Administration"], "summary": "Modifier un utilisateur (admin)",
-                "parameters": [{"name": "user_id", "in": "path", "required": True, "schema": {"type": "integer"}}],
+                "parameters": [{"name": "target_user_id", "in": "path", "required": True, "schema": {"type": "integer"}, "description": "ID de l'utilisateur à modifier"}],
                 "requestBody": {"content": {"application/json": {"schema": {
                     "type": "object",
                     "properties": {
-                        "full_name": {"type": "string"}, "email": {"type": "string"},
-                        "role": {"type": "string"}, "password": {"type": "string"}
+                        "full_name": {"type": "string"},
+                        "email":     {"type": "string"},
+                        "role":      {"type": "string", "enum": ["admin","professor","surveillant","student"]},
+                        "password":  {"type": "string"},
+                        "is_active": {"type": "boolean"}
                     }
                 }}}},
                 "responses": {"200": {"description": "Mis à jour"}, "404": {"$ref": "#/components/responses/NotFound"}}
             },
             "delete": {
                 "tags": ["Administration"], "summary": "Supprimer un utilisateur (admin)",
-                "parameters": [{"name": "user_id", "in": "path", "required": True, "schema": {"type": "integer"}}],
-                "responses": {"200": {"description": "Supprimé"}, "404": {"$ref": "#/components/responses/NotFound"}}
+                "description": "Impossible de supprimer son propre compte.",
+                "parameters": [{"name": "target_user_id", "in": "path", "required": True, "schema": {"type": "integer"}}],
+                "responses": {"200": {"description": "Supprimé"}, "400": {"description": "Impossible de se supprimer soi-même"}, "404": {"$ref": "#/components/responses/NotFound"}}
             }
         },
         "/api/admin/users/student-no-email": {"post": {
