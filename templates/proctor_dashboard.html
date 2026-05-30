@@ -72,6 +72,13 @@
 
         @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.6;transform:scale(.9)} }
 
+        /* Animation dot agent — ripple vert */
+        @keyframes agentPulse {
+            0%   { box-shadow: 0 0 0 0 rgba(16,185,129,0.7); transform: scale(1); }
+            50%  { box-shadow: 0 0 0 6px rgba(16,185,129,0); transform: scale(1.1); }
+            100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); transform: scale(1); }
+        }
+
         .header-right { display:flex;gap:8px;align-items:center; }
 
         .btn {
@@ -484,39 +491,92 @@
 <!-- ════════ CORPS PRINCIPAL ════════ -->
 <div class="dashboard-body" id="dashboard-body" style="display:none">
 
-    <!-- ── Panneau Surveillants (visible uniquement pour l'enseignant) ── -->
-    <div id="proctors-panel" style="display:none;padding:12px 20px;border-bottom:1px solid rgba(255,255,255,.08);">
-        <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.5);letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px;">
-            <i class="fas fa-shield-alt"></i> Surveillance active
-        </div>
-        <div style="display:flex;gap:12px;flex-wrap:wrap;">
-            <!-- Carte Agent IA — toujours présente en premier -->
-            <div id="agent-status-card" style="background:linear-gradient(135deg,rgba(16,185,129,.15),rgba(5,150,105,.08));
-                 border:1px solid rgba(16,185,129,.35);border-radius:10px;padding:12px 14px;min-width:260px;flex:1;max-width:380px;">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-                    <div style="display:flex;align-items:center;gap:7px;">
-                        <span id="agent-dot" style="display:inline-block;width:9px;height:9px;background:#64748b;border-radius:50%;flex-shrink:0;"></span>
-                        <span style="font-size:13px;font-weight:700;color:#d1fae5;">🤖 Agent IA Autonome</span>
-                        <span id="agent-status-badge" style="background:#334155;color:#94a3b8;font-size:10px;font-weight:700;
-                              padding:2px 7px;border-radius:10px;">...</span>
-                    </div>
-                    <span style="font-size:11px;color:rgba(255,255,255,.35);">Automatique</span>
+    <!-- ── Carte Agent IA — TOUJOURS VISIBLE pour tous les rôles ── -->
+    <div id="agent-status-wrap" style="padding:12px 20px 0;">
+        <div id="agent-status-card" style="
+            background:linear-gradient(135deg,rgba(16,185,129,.12),rgba(5,150,105,.06));
+            border:1px solid rgba(16,185,129,.3);border-radius:10px;
+            padding:12px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+
+            <!-- Icône SVG agent -->
+            <div style="width:38px;height:38px;background:rgba(16,185,129,.15);border-radius:9px;
+                        display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+                     stroke="#6ee7b7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <!-- Tête robot / agent IA -->
+                    <rect x="4" y="7" width="16" height="11" rx="2"/>
+                    <!-- Yeux avec pupilles -->
+                    <circle cx="9"  cy="12" r="1.8" fill="#6ee7b7" stroke="none"/>
+                    <circle cx="15" cy="12" r="1.8" fill="#6ee7b7" stroke="none"/>
+                    <circle cx="9.6"  cy="11.4" r="0.6" fill="#0f172a" stroke="none"/>
+                    <circle cx="15.6" cy="11.4" r="0.6" fill="#0f172a" stroke="none"/>
+                    <!-- Bouche / barre de données -->
+                    <path d="M8 16 h8" stroke-width="1.2"/>
+                    <!-- Antenne -->
+                    <line x1="12" y1="7" x2="12" y2="4"/>
+                    <circle cx="12" cy="3.2" r="1.2" fill="#10b981" stroke="none"/>
+                    <!-- Connecteurs latéraux -->
+                    <line x1="2"  y1="11" x2="4"  y2="11" stroke-width="1.2"/>
+                    <line x1="20" y1="11" x2="22" y2="11" stroke-width="1.2"/>
+                </svg>
+            </div>
+
+            <!-- Statut + label -->
+            <div style="flex:1;min-width:160px;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                    <span id="agent-dot" style="
+                        display:inline-block;width:9px;height:9px;
+                        border-radius:50%;background:#64748b;flex-shrink:0;
+                        transition:background .4s;"></span>
+                    <span style="font-size:13px;font-weight:700;color:#d1fae5;">Agent IA Autonome</span>
+                    <span id="agent-status-badge" style="
+                        background:#1e293b;color:#64748b;font-size:10px;font-weight:700;
+                        padding:2px 8px;border-radius:10px;letter-spacing:.04em;">
+                        CHARGEMENT…
+                    </span>
                 </div>
-                <div style="font-size:11px;color:rgba(255,255,255,.55);line-height:1.6;margin-bottom:8px;">
-                    <span id="agent-status-label">Vérification en cours…</span>
-                </div>
-                <div style="display:flex;gap:16px;font-size:11px;color:rgba(255,255,255,.4);">
-                    <span><i class="fas fa-users" style="margin-right:4px;"></i><span id="agent-students-count">—</span> étudiant(s)</span>
-                    <span><i class="fas fa-bell" style="margin-right:4px;"></i><span id="agent-alerts-count">—</span> alerte(s)</span>
-                    <span><i class="fas fa-clock" style="margin-right:4px;"></i>/<span id="agent-interval">30</span>s</span>
-                </div>
-                <div style="margin-top:8px;font-size:10px;color:rgba(255,255,255,.25);">
-                    Dernier cycle : <span id="agent-last-check">—</span>
+                <div style="font-size:11px;color:rgba(255,255,255,.5);">
+                    <span id="agent-status-label">Vérification du service…</span>
                 </div>
             </div>
-            <!-- Grille des surveillants humains -->
-            <div id="proctors-grid" style="display:flex;gap:12px;flex-wrap:wrap;flex:2;"></div>
+
+            <!-- Métriques -->
+            <div style="display:flex;gap:20px;font-size:11px;color:rgba(255,255,255,.45);flex-shrink:0;">
+                <div style="text-align:center;">
+                    <div style="font-size:16px;font-weight:700;color:#6ee7b7;line-height:1;">
+                        <span id="agent-students-count">—</span>
+                    </div>
+                    <div>étudiant(s)</div>
+                </div>
+                <div style="text-align:center;">
+                    <div style="font-size:16px;font-weight:700;color:#fbbf24;line-height:1;">
+                        <span id="agent-alerts-count">—</span>
+                    </div>
+                    <div>alerte(s)</div>
+                </div>
+                <div style="text-align:center;">
+                    <div style="font-size:14px;font-weight:600;color:rgba(255,255,255,.4);line-height:1;">
+                        /<span id="agent-interval">30</span>s
+                    </div>
+                    <div>cycle</div>
+                </div>
+            </div>
+
+            <!-- Dernier cycle -->
+            <div style="font-size:10px;color:rgba(255,255,255,.25);text-align:right;flex-shrink:0;">
+                Dernier cycle<br>
+                <span id="agent-last-check" style="color:rgba(255,255,255,.4);">—</span>
+            </div>
         </div>
+    </div>
+
+    <!-- ── Panneau Surveillants humains (visible seulement pour l'enseignant) ── -->
+    <div id="proctors-panel" style="display:none;padding:10px 20px;border-bottom:1px solid rgba(255,255,255,.08);">
+        <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.4);letter-spacing:.08em;
+                    text-transform:uppercase;margin-bottom:8px;margin-top:6px;">
+            <i class="fas fa-user-tie" style="margin-right:5px;"></i>Surveillants humains connectés
+        </div>
+        <div id="proctors-grid" style="display:flex;gap:12px;flex-wrap:wrap;"></div>
     </div>
 
     <!-- Barre de filtre -->
@@ -839,7 +899,8 @@ function applyRoleUI() {
     if (camLabel) camLabel.textContent = isSurveillant ? 'Diffuser caméra' : 'Caméra';
     if (micLabel) micLabel.textContent = isSurveillant ? 'Diffuser micro' : 'Micro';
 
-    // Panneau surveillants (visible seulement enseignant)
+    // Panneau surveillants humains (visible seulement enseignant/admin)
+    // La carte Agent IA (#agent-status-wrap) est TOUJOURS visible pour tous les rôles
     const pp = document.getElementById('proctors-panel');
     if (pp) pp.style.display = isSurveillant ? 'none' : 'block';
 }
@@ -2300,27 +2361,20 @@ function _renderAlerts(alerts) {
 
 async function fetchAgentAlerts() {
     try {
-        const r = await authenticatedFetch('/api/agent/alerts');
-        if (!r.ok) return;
-        const data = await r.json();
+        // api() retourne une Response — appeler .json() ensuite
+        const resp = await api('/api/agent/alerts');
+        if (!resp || !resp.ok) return;
+        const data   = await resp.json();
         const alerts = data.alerts || [];
         const count  = data.total_unread || 0;
 
-        // Badge
+        // Badge cloche
         const badge = document.getElementById('agent-bell-badge');
         const wrap  = document.getElementById('agent-bell-wrap');
-        wrap.style.display = 'block';
-        if (count > 0) {
-            badge.style.display = 'block';
+        if (wrap) wrap.style.display = 'block';
+        if (badge) {
+            badge.style.display = count > 0 ? 'block' : 'none';
             badge.textContent   = count > 99 ? '99+' : count;
-            // Son d'alerte si nouveaux
-            if (!_agentAlertSound && count > 0) {
-                try {
-                    _agentAlertSound = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAA...');
-                } catch(e) {}
-            }
-        } else {
-            badge.style.display = 'none';
         }
 
         if (_agentPanelOpen) _renderAlerts(alerts);
@@ -2335,19 +2389,17 @@ async function fetchAgentAlerts() {
             }
         });
 
-    } catch(e) {
-        // Silencieux si endpoint indisponible
-    }
+    } catch(e) { /* Silencieux */ }
 }
 
 async function markAlertRead(attemptId) {
     try {
-        await authenticatedFetch('/api/agent/alerts/read', {
-            method: 'POST',
+        await api('/api/agent/alerts/read', {
+            method:  'POST',
             headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({attempt_ids: [attemptId]})
+            body:    JSON.stringify({attempt_ids: [attemptId]})
         });
-        fetchAgentAlerts();
+        fetchAgentAlerts(); fetchAgentStatusCard();
     } catch(e) {}
 }
 
@@ -2356,12 +2408,12 @@ async function markAllAlertsRead() {
     const ids  = [...list.querySelectorAll('[data-attempt]')].map(el => +el.dataset.attempt);
     if (!ids.length) return;
     try {
-        await authenticatedFetch('/api/agent/alerts/read', {
-            method: 'POST',
+        await api('/api/agent/alerts/read', {
+            method:  'POST',
             headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({attempt_ids: ids})
+            body:    JSON.stringify({attempt_ids: ids})
         });
-        fetchAgentAlerts();
+        fetchAgentAlerts(); fetchAgentStatusCard();
     } catch(e) {}
 }
 
@@ -2375,12 +2427,13 @@ setInterval(fetchAgentAlerts, 15000);
 // Premier appel au chargement
 setTimeout(fetchAgentAlerts, 2000);
 
-// ─── Statut Agent IA dans le panneau surveillants ──────────────────────────
+// ─── Statut Agent IA — mise à jour de la carte ────────────────────────────
 async function fetchAgentStatusCard() {
     try {
-        const r = await authenticatedFetch(`/api/agent/status?exam_id=${EXAM_ID}`);
-        if (!r.ok) return;
-        const d = await r.json();
+        // api() retourne une Response — appeler .json() ensuite
+        const rawResp = await api(`/api/agent/status?exam_id=${EXAM_ID}`);
+        if (!rawResp || !rawResp.ok) return;
+        const resp = await rawResp.json();
 
         const dot    = document.getElementById('agent-dot');
         const badge  = document.getElementById('agent-status-badge');
@@ -2390,45 +2443,59 @@ async function fetchAgentStatusCard() {
         const intv   = document.getElementById('agent-interval');
         const last   = document.getElementById('agent-last-check');
         const card   = document.getElementById('agent-status-card');
-        if (!dot) return;
+        if (!dot || !resp) return;
 
-        if (d.alive) {
-            dot.style.background   = '#10b981';
-            dot.style.animation    = 'pulse 2s infinite';
-            badge.textContent      = 'EN SERVICE';
-            badge.style.background = 'rgba(16,185,129,.25)';
-            badge.style.color      = '#6ee7b7';
-            card.style.borderColor = 'rgba(16,185,129,.5)';
+        if (resp.alive) {
+            // Dot vert animé — on le remplace par une span avec class CSS
+            dot.style.background    = '#10b981';
+            dot.style.boxShadow     = '0 0 0 0 rgba(16,185,129,0.7)';
+            dot.style.animation     = 'agentPulse 1.8s ease-in-out infinite';
+            badge.textContent       = 'EN SERVICE';
+            badge.style.background  = 'rgba(16,185,129,.2)';
+            badge.style.color       = '#6ee7b7';
+            badge.style.border      = '1px solid rgba(16,185,129,.4)';
+            card.style.borderColor  = 'rgba(16,185,129,.5)';
+            card.style.background   = 'linear-gradient(135deg,rgba(16,185,129,.15),rgba(5,150,105,.07))';
+        } else if (resp.status === 'stale') {
+            dot.style.background    = '#f59e0b';
+            dot.style.boxShadow     = 'none';
+            dot.style.animation     = 'none';
+            badge.textContent       = 'INACTIF';
+            badge.style.background  = 'rgba(245,158,11,.2)';
+            badge.style.color       = '#fcd34d';
+            badge.style.border      = '1px solid rgba(245,158,11,.3)';
+            card.style.borderColor  = 'rgba(245,158,11,.4)';
         } else {
-            dot.style.background   = d.status === 'stale' ? '#f59e0b' : '#ef4444';
-            dot.style.animation    = 'none';
-            badge.textContent      = d.status === 'stale' ? 'INACTIF' : 'HORS LIGNE';
-            badge.style.background = 'rgba(239,68,68,.2)';
-            badge.style.color      = '#fca5a5';
-            card.style.borderColor = 'rgba(239,68,68,.3)';
+            dot.style.background    = '#ef4444';
+            dot.style.boxShadow     = 'none';
+            dot.style.animation     = 'none';
+            badge.textContent       = 'HORS LIGNE';
+            badge.style.background  = 'rgba(239,68,68,.2)';
+            badge.style.color       = '#fca5a5';
+            badge.style.border      = '1px solid rgba(239,68,68,.3)';
+            card.style.borderColor  = 'rgba(239,68,68,.3)';
+            card.style.background   = 'linear-gradient(135deg,rgba(239,68,68,.08),rgba(239,68,68,.03))';
         }
 
-        label.textContent = d.status_label || '—';
-        intv.textContent  = d.interval_seconds || '30';
+        if (label) label.textContent = resp.status_label || '—';
+        if (intv)  intv.textContent  = resp.interval_seconds ?? 30;
 
-        const ex = d.exam || {};
-        studs.textContent  = ex.students  ?? d.exams_monitored ?? '—';
-        alerts.textContent = ex.alerts_sent ?? d.total_alerts_session ?? '—';
+        const ex = resp.exam || {};
+        if (studs)  studs.textContent  = ex.students  ?? resp.exams_monitored ?? '0';
+        if (alerts) alerts.textContent = ex.alerts_sent ?? resp.total_alerts_session ?? '0';
 
-        if (d.last_check_ago_sec != null) {
-            const ago = d.last_check_ago_sec;
-            last.textContent = ago < 60
-                ? `il y a ${ago}s`
-                : `il y a ${Math.floor(ago/60)}min ${ago%60}s`;
+        if (last && resp.last_check_ago_sec != null) {
+            const s = resp.last_check_ago_sec;
+            last.textContent = s < 60 ? `il y a ${s}s` : `il y a ${Math.floor(s/60)}min ${s%60}s`;
         }
     } catch(e) {
-        // silencieux
+        // Silencieux — ne pas masquer d'autres erreurs
     }
 }
 
-// Mettre à jour la carte agent toutes les 30s
+// Mettre à jour la carte agent toutes les 30s (même intervalle que l'agent)
 setInterval(fetchAgentStatusCard, 30000);
-setTimeout(fetchAgentStatusCard, 1500);
+setTimeout(fetchAgentStatusCard, 800);  // Premier appel rapide au chargement
 </script>
 <script src="{{ url_for('static', filename='js/site_translator.js') }}?v=7"></script>
 </body>
