@@ -31,6 +31,37 @@ _exam_stats: dict[int, dict] = {}
 # lock pour la sécurité thread
 _lock = threading.Lock()
 
+# Fichier heartbeat — lu par l'API pour connaître le statut de l'agent
+_HEARTBEAT_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'agent_heartbeat.json')
+
+
+def _write_heartbeat(exams_monitored: int, total_alerts_session: int):
+    """Écrit un fichier heartbeat toutes les 30s pour que l'API sache que l'agent est actif."""
+    try:
+        import json as _j
+        data = {
+            "alive":               True,
+            "last_check":          datetime.now(timezone.utc).isoformat(),
+            "interval_seconds":    CHECK_INTERVAL,
+            "risk_alert":          RISK_ALERT,
+            "risk_urgent":         RISK_URGENT,
+            "exams_monitored":     exams_monitored,
+            "total_alerts_session":total_alerts_session,
+            "exam_stats":          {},
+        }
+        with _lock:
+            for exam_id, stats in _exam_stats.items():
+                data["exam_stats"][str(exam_id)] = {
+                    "title":       stats.get("title", ""),
+                    "total":       stats.get("total", 0),
+                    "alerts_sent": stats.get("alerts", 0),
+                    "banned":      stats.get("banned", 0),
+                }
+        with open(_HEARTBEAT_FILE, 'w') as f:
+            _j.dump(data, f)
+    except Exception as e:
+        print(f"⚠️  Heartbeat write error: {e}")
+
 
 # ── Appel API CEI ─────────────────────────────────────────────────────────────
 
@@ -243,8 +274,9 @@ def run():
     print(f"  Intervalle  : {CHECK_INTERVAL}s | Cooldown : {ALERT_COOLDOWN}s")
     print("=" * 60)
 
-    summary_interval = 900  # 15 minutes
-    last_summary     = time.time()
+    summary_interval    = 900  # 15 minutes
+    last_summary        = time.time()
+    total_alerts_session = 0
 
     while True:
         try:
@@ -254,9 +286,14 @@ def run():
                       f"Analyse de {len(exams)} examen(s) actif(s)…")
                 for exam in exams:
                     _process_exam(exam)
+                with _lock:
+                    total_alerts_session = sum(s.get("alerts", 0) for s in _exam_stats.values())
             else:
                 print(f"[{datetime.now().strftime('%H:%M:%S')}] "
                       "Aucun examen actif.")
+
+            # Écrire le heartbeat après chaque cycle
+            _write_heartbeat(len(exams) if exams else 0, total_alerts_session)
 
             # Rapport périodique
             if time.time() - last_summary >= summary_interval:

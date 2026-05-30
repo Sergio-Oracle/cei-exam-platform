@@ -8918,16 +8918,60 @@ async function showManageProctorsModal(examId) {
                 </td>
             </tr>`;
 
+        // Charger le statut agent pour cet examen
+        let agentStatusHtml = '';
+        try {
+            const agentResp = await authenticatedFetch(`/api/agent/status?exam_id=${examId}`);
+            if (agentResp.ok) {
+                const ag = await agentResp.json();
+                const dotColor  = ag.alive ? '#10b981' : '#ef4444';
+                const badgeTxt  = ag.alive ? 'EN SERVICE' : 'HORS LIGNE';
+                const badgeBg   = ag.alive ? 'rgba(16,185,129,.15)' : 'rgba(239,68,68,.15)';
+                const badgeClr  = ag.alive ? '#059669' : '#dc2626';
+                const borderClr = ag.alive ? '#a7f3d0' : '#fecaca';
+                const bgColor   = ag.alive ? '#f0fdf4' : '#fef2f2';
+                const ex        = ag.exam || {};
+                const lastCheck = ag.last_check_ago_sec != null
+                    ? (ag.last_check_ago_sec < 60 ? `il y a ${ag.last_check_ago_sec}s` : `il y a ${Math.floor(ag.last_check_ago_sec/60)}min`)
+                    : '—';
+                agentStatusHtml = `
+                <div style="background:${bgColor};border:1px solid ${borderClr};border-radius:10px;padding:14px 16px;margin-bottom:16px;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <span style="width:10px;height:10px;background:${dotColor};border-radius:50%;display:inline-block;flex-shrink:0;${ag.alive?'animation:pulse 2s infinite':''}"></span>
+                            <span style="font-weight:700;font-size:14px;color:#0f172a;">🤖 Agent IA Autonome</span>
+                            <span style="background:${badgeBg};color:${badgeClr};font-size:11px;font-weight:700;padding:2px 9px;border-radius:10px;">${badgeTxt}</span>
+                        </div>
+                        <span style="font-size:11px;color:#64748b;">Dernier cycle : ${lastCheck}</span>
+                    </div>
+                    <p style="margin:8px 0 0;font-size:12px;color:#475569;line-height:1.5;">
+                        ${ag.alive
+                            ? `L'agent surveille <strong>tous les ${ex.students || proctorsData.total_students || '?'} étudiant(s)</strong> automatiquement.
+                               Seuil d'alerte : risque <strong>≥ ${ag.risk_alert || 60}/100</strong> · Urgence : <strong>≥ ${ag.risk_urgent || 80}/100</strong>.
+                               Alertes envoyées cette session : <strong>${ex.alerts_sent ?? 0}</strong>.`
+                            : `Le service <code>cei-agent-proctor</code> n'est pas actif. Relancez-le via : <code>pm2 restart cei-agent-proctor</code>`
+                        }
+                    </p>
+                    <p style="margin:6px 0 0;font-size:11px;color:#94a3b8;">
+                        <i class="fas fa-info-circle"></i>
+                        L'agent est <strong>attribué automatiquement</strong> à tous les examens actifs — aucune action requise.
+                        Il analyse les comportements et envoie des emails aux surveillants + enseignant en cas d'anomalie.
+                    </p>
+                </div>`;
+            }
+        } catch(e) {}
+
         const content = `
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
                 <div style="width:40px;height:40px;background:#fef3c7;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                    <i class="fas fa-eye" style="color:#f59e0b;font-size:16px;"></i>
+                    <i class="fas fa-shield-alt" style="color:#f59e0b;font-size:16px;"></i>
                 </div>
                 <div>
-                    <h2 style="margin:0;font-size:17px;font-weight:700;color:#0f172a;">Gestion des Surveillants</h2>
+                    <h2 style="margin:0;font-size:17px;font-weight:700;color:#0f172a;">Gestion de la Surveillance</h2>
                     <p style="margin:0;font-size:12px;color:#64748b;">${proctorsData.total_students || 0} étudiant(s) · ${proctorsData.unassigned_students || 0} non affecté(s)</p>
                 </div>
             </div>
+            ${agentStatusHtml}
 
             <!-- Ajouter un surveillant -->
             <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:16px;">

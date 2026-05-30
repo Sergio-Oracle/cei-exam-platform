@@ -2103,3 +2103,88 @@ def agent_exam_proctoring(exam_id):
     except Exception as e:
         session.close()
         return jsonify({'error': str(e)}), 500
+
+
+@proctoring_bp.route('/api/agent/status', methods=['GET'])
+@jwt_required()
+def agent_status():
+    """
+    Statut de l'agent autonome de surveillance.
+    Retourne si l'agent est actif, son dernier cycle, et les stats par examen.
+    Accessible à tous les rôles authentifiés (prof, admin, surveillant).
+    """
+    import json as _json
+    import os as _os
+    from datetime import datetime, timezone, timedelta
+
+    claims = get_jwt()
+    role   = claims.get('role')
+    if role not in ['professor', 'admin', 'surveillant']:
+        return jsonify({'error': 'Accès non autorisé'}), 403
+
+    heartbeat_file = _os.path.join(_os.path.dirname(__file__), 'agent_heartbeat.json')
+    exam_id        = request.args.get('exam_id', type=int)
+
+    try:
+        if not _os.path.exists(heartbeat_file):
+            return jsonify({
+                'alive':        False,
+                'status':       'offline',
+                'status_label': 'Agent hors ligne',
+                'status_color': '#ef4444',
+                'message':      "Le service cei-agent-proctor n'est pas démarré.",
+            })
+
+        with open(heartbeat_file, 'r') as f:
+            hb = _json.load(f)
+
+        # Vérifier si le heartbeat est récent (< 2× l'intervalle)
+        last_check_str = hb.get('last_check', '')
+        interval       = hb.get('interval_seconds', 30)
+        alive          = False
+        last_check_ago = None
+
+        if last_check_str:
+            last_check_dt  = datetime.fromisoformat(last_check_str)
+            now_utc        = datetime.now(timezone.utc)
+            delta          = (now_utc - last_check_dt).total_seconds()
+            last_check_ago = int(delta)
+            alive          = delta < (interval * 3)   # 3× l'intervalle = marge réseau
+
+        if alive:
+            status       = 'active'
+            status_label = 'Agent actif — Surveillance IA en cours'
+            status_color = '#10b981'
+        else:
+            status       = 'stale'
+            status_label = 'Agent inactif (dernier signal trop ancien)'
+            status_color = '#f59e0b'
+
+        result = {
+            'alive':               alive,
+            'status':              status,
+            'status_label':        status_label,
+            'status_color':        status_color,
+            'last_check':          last_check_str,
+            'last_check_ago_sec':  last_check_ago,
+            'interval_seconds':    interval,
+            'risk_alert':          hb.get('risk_alert', 60),
+            'risk_urgent':         hb.get('risk_urgent', 80),
+            'exams_monitored':     hb.get('exams_monitored', 0),
+            'total_alerts_session':hb.get('total_alerts_session', 0),
+        }
+
+        # Stats spécifiques à un examen si demandé
+        if exam_id:
+            exam_stats = hb.get('exam_stats', {}).get(str(exam_id), {})
+            result['exam'] = {
+                'exam_id':     exam_id,
+                'students':    exam_stats.get('total', 0),
+                'alerts_sent': exam_stats.get('alerts_sent', 0),
+                'banned':      exam_stats.get('banned', 0),
+            }
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({'error': str(e), 'alive': False}), 500

@@ -487,9 +487,36 @@
     <!-- ── Panneau Surveillants (visible uniquement pour l'enseignant) ── -->
     <div id="proctors-panel" style="display:none;padding:12px 20px;border-bottom:1px solid rgba(255,255,255,.08);">
         <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.5);letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px;">
-            <i class="fas fa-user-tie"></i> Surveillants connectés
+            <i class="fas fa-shield-alt"></i> Surveillance active
         </div>
-        <div id="proctors-grid" style="display:flex;gap:12px;flex-wrap:wrap;"></div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;">
+            <!-- Carte Agent IA — toujours présente en premier -->
+            <div id="agent-status-card" style="background:linear-gradient(135deg,rgba(16,185,129,.15),rgba(5,150,105,.08));
+                 border:1px solid rgba(16,185,129,.35);border-radius:10px;padding:12px 14px;min-width:260px;flex:1;max-width:380px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                    <div style="display:flex;align-items:center;gap:7px;">
+                        <span id="agent-dot" style="display:inline-block;width:9px;height:9px;background:#64748b;border-radius:50%;flex-shrink:0;"></span>
+                        <span style="font-size:13px;font-weight:700;color:#d1fae5;">🤖 Agent IA Autonome</span>
+                        <span id="agent-status-badge" style="background:#334155;color:#94a3b8;font-size:10px;font-weight:700;
+                              padding:2px 7px;border-radius:10px;">...</span>
+                    </div>
+                    <span style="font-size:11px;color:rgba(255,255,255,.35);">Automatique</span>
+                </div>
+                <div style="font-size:11px;color:rgba(255,255,255,.55);line-height:1.6;margin-bottom:8px;">
+                    <span id="agent-status-label">Vérification en cours…</span>
+                </div>
+                <div style="display:flex;gap:16px;font-size:11px;color:rgba(255,255,255,.4);">
+                    <span><i class="fas fa-users" style="margin-right:4px;"></i><span id="agent-students-count">—</span> étudiant(s)</span>
+                    <span><i class="fas fa-bell" style="margin-right:4px;"></i><span id="agent-alerts-count">—</span> alerte(s)</span>
+                    <span><i class="fas fa-clock" style="margin-right:4px;"></i>/<span id="agent-interval">30</span>s</span>
+                </div>
+                <div style="margin-top:8px;font-size:10px;color:rgba(255,255,255,.25);">
+                    Dernier cycle : <span id="agent-last-check">—</span>
+                </div>
+            </div>
+            <!-- Grille des surveillants humains -->
+            <div id="proctors-grid" style="display:flex;gap:12px;flex-wrap:wrap;flex:2;"></div>
+        </div>
     </div>
 
     <!-- Barre de filtre -->
@@ -2347,6 +2374,61 @@ if (Notification.permission === 'default') {
 setInterval(fetchAgentAlerts, 15000);
 // Premier appel au chargement
 setTimeout(fetchAgentAlerts, 2000);
+
+// ─── Statut Agent IA dans le panneau surveillants ──────────────────────────
+async function fetchAgentStatusCard() {
+    try {
+        const r = await authenticatedFetch(`/api/agent/status?exam_id=${EXAM_ID}`);
+        if (!r.ok) return;
+        const d = await r.json();
+
+        const dot    = document.getElementById('agent-dot');
+        const badge  = document.getElementById('agent-status-badge');
+        const label  = document.getElementById('agent-status-label');
+        const studs  = document.getElementById('agent-students-count');
+        const alerts = document.getElementById('agent-alerts-count');
+        const intv   = document.getElementById('agent-interval');
+        const last   = document.getElementById('agent-last-check');
+        const card   = document.getElementById('agent-status-card');
+        if (!dot) return;
+
+        if (d.alive) {
+            dot.style.background   = '#10b981';
+            dot.style.animation    = 'pulse 2s infinite';
+            badge.textContent      = 'EN SERVICE';
+            badge.style.background = 'rgba(16,185,129,.25)';
+            badge.style.color      = '#6ee7b7';
+            card.style.borderColor = 'rgba(16,185,129,.5)';
+        } else {
+            dot.style.background   = d.status === 'stale' ? '#f59e0b' : '#ef4444';
+            dot.style.animation    = 'none';
+            badge.textContent      = d.status === 'stale' ? 'INACTIF' : 'HORS LIGNE';
+            badge.style.background = 'rgba(239,68,68,.2)';
+            badge.style.color      = '#fca5a5';
+            card.style.borderColor = 'rgba(239,68,68,.3)';
+        }
+
+        label.textContent = d.status_label || '—';
+        intv.textContent  = d.interval_seconds || '30';
+
+        const ex = d.exam || {};
+        studs.textContent  = ex.students  ?? d.exams_monitored ?? '—';
+        alerts.textContent = ex.alerts_sent ?? d.total_alerts_session ?? '—';
+
+        if (d.last_check_ago_sec != null) {
+            const ago = d.last_check_ago_sec;
+            last.textContent = ago < 60
+                ? `il y a ${ago}s`
+                : `il y a ${Math.floor(ago/60)}min ${ago%60}s`;
+        }
+    } catch(e) {
+        // silencieux
+    }
+}
+
+// Mettre à jour la carte agent toutes les 30s
+setInterval(fetchAgentStatusCard, 30000);
+setTimeout(fetchAgentStatusCard, 1500);
 </script>
 <script src="{{ url_for('static', filename='js/site_translator.js') }}?v=7"></script>
 </body>
