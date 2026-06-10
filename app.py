@@ -711,12 +711,12 @@ def get_ue_ecs(ue_id):
 @app.route('/api/ecs', methods=['GET'])
 @jwt_required()
 def get_all_ecs():
-    """Récupérer tous les ECs (pour les sélecteurs) - Amélioré : Filtrer par professeur"""
+    """Récupérer tous les ECs — filtrable par niveau (L1/L2/L3/M1/M2) et par professeur"""
     try:
         user_id = int(get_jwt_identity())
         session = get_session()
         user = session.query(User).filter_by(id=user_id).first()
-        
+
         query = session.query(EC).filter_by(is_active=True).options(joinedload(EC.ue))
 
         if user.role == UserRole.PROFESSOR:
@@ -1249,17 +1249,13 @@ def assign_ec_to_professor():
             session.close()
             return jsonify({'error': 'Professeur non trouvé'}), 404
 
-        # Vérifier si déjà affecté
-        existing_assignment = session.query(ECAssignment).filter_by(ec_id=ec_id).first()
-        if existing_assignment:
+        # Vérifier si cette combinaison EC+professeur existe déjà
+        existing = session.query(ECAssignment).filter_by(ec_id=ec_id, professor_id=professor_id).first()
+        if existing:
             session.close()
-            return jsonify({'error': 'Cet EC est déjà affecté à un professeur'}), 400
+            return jsonify({'error': 'Ce professeur est déjà affecté à cet EC'}), 400
 
-        assignment = ECAssignment(
-            ec_id=ec_id,
-            professor_id=professor_id
-        )
-
+        assignment = ECAssignment(ec_id=ec_id, professor_id=professor_id)
         session.add(assignment)
         session.commit()
         session.close()
@@ -3935,7 +3931,7 @@ def generate_transcript(student_id, semester_id):
             return jsonify({'error': 'Semestre non trouvé'}), 404
         
         # Calculer les notes
-        # Récupérer toutes les copies corrigées de l'étudiant pour ce semestre
+        # 1. Copies papier corrigées
         papers = session.query(StudentPaper).join(Subject).join(EC).join(UE).filter(
             StudentPaper.student_id == student_id,
             UE.semester_id == semester_id,
@@ -4207,7 +4203,7 @@ def correct_exam_attempt(attempt_id):
                 answers_data.get('text') or
                 ''
             )
-        except:
+        except Exception:
             student_answers = attempt.answers or ''
 
         if not student_answers or student_answers.strip() == '':

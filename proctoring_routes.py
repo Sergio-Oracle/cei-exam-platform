@@ -1917,7 +1917,7 @@ def get_video_recordings(exam_id):
                     Params={'Bucket': bucket, 'Key': key},
                     ExpiresIn=14400
                 )
-            except ClientError:
+            except Exception:
                 url = None
 
             if is_group_cam:

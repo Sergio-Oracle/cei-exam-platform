@@ -1416,6 +1416,30 @@ async function loadCreateSubject() {
             formationsOptions += `<option value="${f.id}">${f.name}</option>`;
         });
 
+        const niveaux = ['L1','L2','L3','M1','M2'];
+        let niveauOptions = '<option value="">— Tous les niveaux —</option>';
+        niveaux.forEach(n => { niveauOptions += `<option value="${n}">${n}</option>`; });
+
+        function buildEcsOptions(ecs) {
+            let opts = '<option value="">— Aucun (sujet indépendant) —</option>';
+            ecs.forEach(ec => {
+                opts += `<option value="${ec.id}">${ec.ue_code} › ${ec.code} — ${ec.name}</option>`;
+            });
+            return opts;
+        }
+
+        window._filterEcsCreate = function() {
+            const fid = parseInt(document.getElementById('filter-formation-create')?.value) || null;
+            const niv = document.getElementById('filter-niveau-create')?.value || '';
+            let filtered = window._allEcsCreate || [];
+            if (fid) filtered = filtered.filter(ec => ec.formation_id === fid || ec.ue_formation_id === fid);
+            if (niv) filtered = filtered.filter(ec => ec.formation_level === niv || ec.niveau === niv);
+            const sel = document.getElementById('subject-ec');
+            if (sel) sel.innerHTML = buildEcsOptions(filtered);
+        };
+
+        let ecsOptions = buildEcsOptions(allEcs);
+
         document.getElementById('main-content').innerHTML = `
             <div class="page-header">
                 <h2><i class="fas fa-file-circle-plus" style="color:#3b82f6;"></i> Créer un Sujet d'Examen</h2>
