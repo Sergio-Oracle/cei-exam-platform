@@ -1295,19 +1295,13 @@ def assign_ec_by_id(ec_id):
             session.close()
             return jsonify({'error': 'Professeur non trouvé'}), 404
 
-        # Vérifier si déjà affecté
-        existing_assignment = session.query(ECAssignment).filter_by(ec_id=ec_id).first()
+        # Vérifier si cette combinaison EC+professeur existe déjà
+        existing_assignment = session.query(ECAssignment).filter_by(ec_id=ec_id, professor_id=professor_id).first()
         if existing_assignment:
-            existing_assignment.professor_id = professor_id
-            session.commit()
             session.close()
-            return jsonify({'success': True, 'message': 'Affectation mise à jour'}), 200
+            return jsonify({'error': 'Ce professeur est déjà affecté à cet EC'}), 400
 
-        assignment = ECAssignment(
-            ec_id=ec_id,
-            professor_id=professor_id
-        )
-
+        assignment = ECAssignment(ec_id=ec_id, professor_id=professor_id)
         session.add(assignment)
         session.commit()
         session.close()
