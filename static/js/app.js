@@ -654,19 +654,41 @@ async function loadStudentDashboard() {
 // ============================================================================
 // GESTION DES UTILISATEURS
 // ============================================================================
-async function loadUsers() {
+async function loadUsers(searchQuery = '', niveauFilter = '') {
     if (window.event && window.event.target) setActiveTab(window.event.target);
     showLoader(true);
     try {
+        // Toujours charger TOUS les utilisateurs — filtrage étudiant côté client
         const response = await authenticatedFetch('/api/admin/users');
         const users = await response.json();
 
-        const students      = users.filter(u => u.role === 'student');
+        const allStudents   = users.filter(u => u.role === 'student');
         const professors    = users.filter(u => u.role === 'professor');
         const admins        = users.filter(u => u.role === 'admin');
         const surveillants  = users.filter(u => u.role === 'surveillant');
 
-        const makeRow = (user, canDelete) => {
+        // Filtrage étudiant : niveau + recherche (client-side)
+        let students = allStudents;
+        if (niveauFilter) students = students.filter(u => u.niveau === niveauFilter);
+        if (searchQuery) {
+            const q = searchQuery.toLowerCase();
+            students = students.filter(u =>
+                u.full_name.toLowerCase().includes(q) ||
+                (u.email || '').toLowerCase().includes(q)
+            );
+        }
+
+        const niveauColors = {
+            'L1': ['#eff6ff','#1d4ed8'], 'L2': ['#f0fdf4','#15803d'],
+            'L3': ['#fefce8','#a16207'], 'M1': ['#fdf4ff','#7c3aed'], 'M2': ['#fff1f2','#be123c']
+        };
+        const niveauBadge = (n) => {
+            if (!n) return '';
+            const [bg, color] = niveauColors[n] || ['#f1f5f9','#475569'];
+            return `<span style="background:${bg};color:${color};padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;">${n}</span>`;
+        };
+
+        const makeRow = (user, canDelete, showNiveau = false) => {
             const initials  = user.full_name.split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
             const statusBadge = user.is_active
                 ? `<span style="display:inline-flex;align-items:center;gap:4px;background:#dcfce7;color:#15803d;padding:3px 9px;border-radius:99px;font-size:11px;font-weight:600;"><i class="fas fa-circle" style="font-size:5px;"></i> ${t('status.active')}</span>`
@@ -676,10 +698,14 @@ async function loadUsers() {
                     <td style="padding:12px 16px;border-bottom:1px solid #f1f5f9;">
                         <div style="display:flex;align-items:center;gap:9px;">
                             <div style="width:32px;height:32px;border-radius:50%;background:#dbeafe;color:#1d4ed8;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${initials}</div>
-                            <span style="font-size:13px;font-weight:600;color:#0f172a;">${user.full_name}</span>
+                            <div>
+                                <span style="font-size:13px;font-weight:600;color:#0f172a;">${user.full_name}</span>
+                                ${showNiveau && user.niveau ? `<br><span style="font-size:11px;color:#94a3b8;">${user.email}</span>` : ''}
+                            </div>
                         </div>
                     </td>
-                    <td style="padding:12px 16px;border-bottom:1px solid #f1f5f9;font-size:13px;color:#64748b;">${user.email}</td>
+                    ${showNiveau ? `<td style="padding:12px 16px;border-bottom:1px solid #f1f5f9;">${niveauBadge(user.niveau) || '<span style="color:#94a3b8;font-size:12px;">—</span>'}</td>` : ''}
+                    <td style="padding:12px 16px;border-bottom:1px solid #f1f5f9;font-size:13px;color:#64748b;">${showNiveau ? '' : user.email}</td>
                     <td style="padding:12px 16px;border-bottom:1px solid #f1f5f9;">${statusBadge}</td>
                     <td style="padding:12px 16px;border-bottom:1px solid #f1f5f9;">
                         <div style="display:flex;align-items:center;gap:6px;">
@@ -702,18 +728,19 @@ async function loadUsers() {
             `;
         };
 
-        const makeTable = (list, canDelete) => `
+        const makeTable = (list, canDelete, showNiveau = false) => `
             <div style="overflow-x:auto;">
                 <table style="width:100%;border-collapse:collapse;">
                     <thead>
                         <tr style="background:#f8fafc;">
                             <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e2e8f0;">Nom</th>
-                            <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e2e8f0;">Email</th>
+                            ${showNiveau ? `<th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e2e8f0;">Niveau</th>` : ''}
+                            <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e2e8f0;">${showNiveau ? '' : 'Email'}</th>
                             <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e2e8f0;">Statut</th>
                             <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid #e2e8f0;">Actions</th>
                         </tr>
                     </thead>
-                    <tbody>${list.map(u => makeRow(u, canDelete)).join('')}</tbody>
+                    <tbody>${list.map(u => makeRow(u, canDelete, showNiveau)).join('')}</tbody>
                 </table>
             </div>
         `;
@@ -805,7 +832,7 @@ async function loadUsers() {
                         <i class="fas fa-user-graduate" style="color:#3b82f6;font-size:16px;"></i>
                     </div>
                     <div>
-                        <p style="margin:0;font-size:22px;font-weight:800;color:#0f172a;">${students.length}</p>
+                        <p style="margin:0;font-size:22px;font-weight:800;color:#0f172a;">${allStudents.length}</p>
                         <p style="margin:0;font-size:12px;color:#64748b;">${t('section.counter_students')}</p>
                     </div>
                 </div>
@@ -814,7 +841,52 @@ async function loadUsers() {
             ${makeSection(t('section.section_admins'), 'fas fa-crown', '#f59e0b', '#fffbeb', admins, false, t('section.no_admins'))}
             ${makeSection(t('section.section_professors'), 'fas fa-chalkboard-user', '#10b981', '#dcfce7', professors, true, t('section.no_professors'))}
             ${makeSection(t('section.section_surveillants'), 'fas fa-eye', '#f59e0b', '#fef3c7', surveillants, true, t('section.no_surveillants'))}
-            ${makeSection(t('section.section_students'), 'fas fa-user-graduate', '#3b82f6', '#dbeafe', students, true, t('section.no_students'))}
+
+            <!-- Section étudiants avec recherche + filtres niveau -->
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+                <div style="padding:14px 20px;border-bottom:1px solid #f1f5f9;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            <div style="width:32px;height:32px;border-radius:8px;background:#dbeafe;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                                <i class="fas fa-user-graduate" style="color:#3b82f6;font-size:14px;"></i>
+                            </div>
+                            <h3 style="margin:0;font-size:15px;color:#0f172a;font-weight:600;">${t('section.section_students')}</h3>
+                            <span id="student-count-badge" style="background:#f1f5f9;color:#64748b;padding:1px 8px;border-radius:99px;font-size:12px;">${students.length}</span>
+                        </div>
+                        <!-- Barre de recherche -->
+                        <div style="display:flex;align-items:center;gap:8px;flex:1;max-width:340px;min-width:200px;">
+                            <div style="position:relative;flex:1;">
+                                <i class="fas fa-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:12px;pointer-events:none;"></i>
+                                <input id="student-search-input" type="text" placeholder="Rechercher par nom ou email…"
+                                    value="${searchQuery}"
+                                    oninput="clearTimeout(window._searchTimer); window._searchTimer = setTimeout(() => loadUsers(this.value, document.querySelector('[data-niveau-active]')?.dataset.niveauActive || ''), 300)"
+                                    style="width:100%;padding:7px 10px 7px 30px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;box-sizing:border-box;outline:none;"
+                                    onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e2e8f0'">
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Onglets de niveau -->
+                    <div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;" id="niveau-tabs">
+                        ${['','L1','L2','L3','M1','M2'].map(n => {
+                            const label = n || 'Tous';
+                            const count = n ? allStudents.filter(s => s.niveau === n).length : allStudents.length;
+                            const isActive = niveauFilter === n;
+                            const [bg, color] = n ? (niveauColors[n] || ['#f1f5f9','#475569']) : ['#eff6ff','#1d4ed8'];
+                            return `<button
+                                data-niveau-active="${n}"
+                                onclick="loadUsers(document.getElementById('student-search-input')?.value||'', '${n}')"
+                                style="padding:5px 14px;border-radius:99px;font-size:12px;font-weight:600;cursor:pointer;border:2px solid ${isActive ? color : 'transparent'};background:${isActive ? bg : '#f8fafc'};color:${isActive ? color : '#64748b'};transition:all .15s;"
+                                onmouseover="this.style.background='${bg}';this.style.color='${color}'"
+                                onmouseout="${isActive ? '' : "this.style.background='#f8fafc';this.style.color='#64748b'"}">
+                                ${label} <span style="opacity:.7;">(${count})</span>
+                            </button>`;
+                        }).join('')}
+                    </div>
+                </div>
+                ${students.length === 0
+                    ? `<p style="padding:32px 20px;text-align:center;color:#94a3b8;margin:0;font-size:13px;"><i class="fas fa-search" style="display:block;font-size:28px;margin-bottom:8px;"></i>${searchQuery || niveauFilter ? 'Aucun étudiant trouvé pour cette recherche.' : t('section.no_students')}</p>`
+                    : makeTable(students, true, true)}
+            </div>
         `;
 
     } catch (error) {
@@ -843,10 +915,21 @@ function showCreateUserModal(role = 'student') {
             </div>
             <div class="form-group">
                 <label><i class="fas fa-user-tag"></i> Rôle</label>
-                <select id="new-user-role">
+                <select id="new-user-role" onchange="document.getElementById('new-user-niveau-group').style.display=this.value==='student'?'block':'none'">
                     <option value="student" ${role === 'student' ? 'selected' : ''}>${t('role.student')}</option>
                     <option value="professor" ${role === 'professor' ? 'selected' : ''}>${t('role.professor')}</option>
                     <option value="surveillant" ${role === 'surveillant' ? 'selected' : ''}>${t('role.surveillant')}</option>
+                </select>
+            </div>
+            <div class="form-group" id="new-user-niveau-group" style="display:${role === 'student' ? 'block' : 'none'}">
+                <label><i class="fas fa-layer-group"></i> Niveau</label>
+                <select id="new-user-niveau">
+                    <option value="">— Non défini —</option>
+                    <option value="L1">Licence 1 (L1)</option>
+                    <option value="L2">Licence 2 (L2)</option>
+                    <option value="L3">Licence 3 (L3)</option>
+                    <option value="M1">Master 1 (M1)</option>
+                    <option value="M2">Master 2 (M2)</option>
                 </select>
             </div>
             <div class="d-flex gap-2 mt-2">
@@ -870,7 +953,8 @@ function showCreateUserModal(role = 'student') {
                     full_name: document.getElementById('new-user-name').value,
                     email: document.getElementById('new-user-email').value,
                     password: document.getElementById('new-user-password').value,
-                    role: document.getElementById('new-user-role').value
+                    role: document.getElementById('new-user-role').value,
+                    niveau: document.getElementById('new-user-niveau')?.value || ''
                 })
             });
             const data = await response.json();
@@ -924,11 +1008,22 @@ async function showEditUserModal(userId) {
                 </div>
                 <div class="form-group">
                     <label><i class="fas fa-user-tag"></i> Rôle</label>
-                    <select id="edit-user-role">
+                    <select id="edit-user-role" onchange="document.getElementById('edit-user-niveau-group').style.display=this.value==='student'?'block':'none'">
                         <option value="student" ${user.role === 'student' ? 'selected' : ''}>${t('role.student')}</option>
                         <option value="professor" ${user.role === 'professor' ? 'selected' : ''}>${t('role.professor')}</option>
                         <option value="surveillant" ${user.role === 'surveillant' ? 'selected' : ''}>${t('role.surveillant')}</option>
                         <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>${t('role.admin')}</option>
+                    </select>
+                </div>
+                <div class="form-group" id="edit-user-niveau-group" style="display:${user.role==='student'?'block':'none'}">
+                    <label><i class="fas fa-layer-group"></i> Niveau</label>
+                    <select id="edit-user-niveau">
+                        <option value="" ${!user.niveau ? 'selected' : ''}>— Non défini —</option>
+                        <option value="L1" ${user.niveau==='L1' ? 'selected' : ''}>Licence 1 (L1)</option>
+                        <option value="L2" ${user.niveau==='L2' ? 'selected' : ''}>Licence 2 (L2)</option>
+                        <option value="L3" ${user.niveau==='L3' ? 'selected' : ''}>Licence 3 (L3)</option>
+                        <option value="M1" ${user.niveau==='M1' ? 'selected' : ''}>Master 1 (M1)</option>
+                        <option value="M2" ${user.niveau==='M2' ? 'selected' : ''}>Master 2 (M2)</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -961,7 +1056,8 @@ async function showEditUserModal(userId) {
                     full_name: document.getElementById('edit-user-name').value,
                     email: document.getElementById('edit-user-email').value,
                     role: document.getElementById('edit-user-role').value,
-                    is_active: document.getElementById('edit-user-active').checked
+                    is_active: document.getElementById('edit-user-active').checked,
+                    niveau: document.getElementById('edit-user-niveau')?.value || ''
                 };
 
                 // Ajouter le mot de passe seulement s'il a été rempli
@@ -1301,12 +1397,43 @@ async function loadCreateSubject() {
     if (window.event && window.event.target) setActiveTab(window.event.target);
     showLoader(true);
     try {
-        const ecsResponse = await authenticatedFetch('/api/ecs');
-        const ecs = await ecsResponse.json();
-        let ecsOptions = '<option value="">— Aucun (sujet indépendant) —</option>';
-        ecs.forEach(ec => {
-            ecsOptions += `<option value="${ec.id}">${ec.ue_code} › ${ec.code} — ${ec.name}</option>`;
+        const [ecsResponse, formationsResponse] = await Promise.all([
+            authenticatedFetch('/api/ecs'),
+            authenticatedFetch('/api/formations')
+        ]);
+        const allEcs = await ecsResponse.json();
+        const formations = await formationsResponse.json();
+
+        window._allEcsCreate = allEcs;
+
+        let formationOptions = '<option value="">— Toutes les formations —</option>';
+        formations.forEach(f => {
+            formationOptions += `<option value="${f.id}">${f.name}${f.level ? ' (' + f.level + ')' : ''}</option>`;
         });
+
+        const niveaux = ['L1','L2','L3','M1','M2'];
+        let niveauOptions = '<option value="">— Tous les niveaux —</option>';
+        niveaux.forEach(n => { niveauOptions += `<option value="${n}">${n}</option>`; });
+
+        function buildEcsOptions(ecs) {
+            let opts = '<option value="">— Aucun (sujet indépendant) —</option>';
+            ecs.forEach(ec => {
+                opts += `<option value="${ec.id}">${ec.ue_code} › ${ec.code} — ${ec.name}</option>`;
+            });
+            return opts;
+        }
+
+        window._filterEcsCreate = function() {
+            const fid = parseInt(document.getElementById('filter-formation-create')?.value) || null;
+            const niv = document.getElementById('filter-niveau-create')?.value || '';
+            let filtered = window._allEcsCreate || [];
+            if (fid) filtered = filtered.filter(ec => ec.formation_id === fid || ec.ue_formation_id === fid);
+            if (niv) filtered = filtered.filter(ec => ec.formation_level === niv || ec.niveau === niv);
+            const sel = document.getElementById('subject-ec');
+            if (sel) sel.innerHTML = buildEcsOptions(filtered);
+        };
+
+        let ecsOptions = buildEcsOptions(allEcs);
 
         document.getElementById('main-content').innerHTML = `
             <div class="page-header">
@@ -1363,6 +1490,28 @@ async function loadCreateSubject() {
                                 <i class="fas fa-lightbulb" style="color:#f59e0b;"></i>
                                 Choisissez un titre clair qui identifie la matière et le niveau
                             </small>
+                        </div>
+
+                        <!-- Filtres Formation + Niveau -->
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px;">
+                            <div>
+                                <label style="font-size:12px;font-weight:600;color:#64748b;margin-bottom:4px;display:block;">
+                                    <i class="fas fa-university" style="color:#6366f1;"></i> Filtrer par formation
+                                </label>
+                                <select id="filter-formation-create" onchange="window._filterEcsCreate()"
+                                    style="font-size:13px;padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:7px;width:100%;background:#f8fafc;">
+                                    ${formationOptions}
+                                </select>
+                            </div>
+                            <div>
+                                <label style="font-size:12px;font-weight:600;color:#64748b;margin-bottom:4px;display:block;">
+                                    <i class="fas fa-graduation-cap" style="color:#6366f1;"></i> Filtrer par niveau
+                                </label>
+                                <select id="filter-niveau-create" onchange="window._filterEcsCreate()"
+                                    style="font-size:13px;padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:7px;width:100%;background:#f8fafc;">
+                                    ${niveauOptions}
+                                </select>
+                            </div>
                         </div>
 
                         <!-- EC -->
@@ -4853,6 +5002,18 @@ async function loadOnlineExams() {
                         actionsHTML = `<button class="btn btn-success btn-sm" onclick="startOnlineExam(${exam.id})" style="flex:1;"><i class="fas fa-play"></i> Composer</button>`;
                     } else if (now < startTime) {
                         actionsHTML = `<button class="btn btn-sm" style="flex:1;background:#fffbeb;color:#d97706;border:1px solid #fcd34d;cursor:pointer;" onclick="showExamNotStartedInfo('${exam.start_time}','${safeTitle}')"><i class="fas fa-clock"></i> Pas encore ouvert</button>`;
+                    } else if (exam.my_attempt && exam.my_attempt.corrected_at) {
+                        const scoreVal = exam.my_attempt.score !== null ? exam.my_attempt.score.toFixed(2) : '—';
+                        const scoreColor = exam.my_attempt.score >= 10 ? '#10b981' : '#ef4444';
+                        actionsHTML = `
+                            <span style="font-size:13px;font-weight:700;color:${scoreColor};display:flex;align-items:center;gap:5px;">
+                                <i class="fas fa-star"></i> ${scoreVal}/20
+                            </span>
+                            <button class="btn btn-sm btn-primary" onclick="viewMyExamResult(${exam.my_attempt.id})" style="flex:1;">
+                                <i class="fas fa-eye"></i> Voir ma note
+                            </button>`;
+                    } else if (exam.my_attempt) {
+                        actionsHTML = `<span style="color:#f59e0b;font-size:13px;display:flex;align-items:center;gap:6px;"><i class="fas fa-hourglass-half"></i> Correction en cours…</span>`;
                     } else {
                         actionsHTML = `<span style="color:#94a3b8;font-size:13px;display:flex;align-items:center;gap:6px;"><i class="fas fa-check"></i> Terminé</span>`;
                     }
@@ -5180,6 +5341,135 @@ async function closeExam(examId) {
     } finally {
         showLoader(false);
     }
+}
+
+async function viewMyExamResult(attemptId) {
+    try {
+        showLoader(true);
+        const res = await authenticatedFetch(`/api/exam_attempts/${attemptId}/result`);
+        const data = await res.json();
+        if (data.error) { showAlert(data.error, 'error'); return; }
+        const scoreColor = data.score >= 10 ? '#10b981' : '#ef4444';
+        const scoreBg    = data.score >= 10 ? '#ecfdf5' : '#fff1f2';
+        const feedbackHtml = (data.feedback || 'Aucun feedback disponible.')
+            .replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        const correctedDate = data.corrected_at
+            ? new Date(data.corrected_at).toLocaleString('fr-FR', {timeZone:'Africa/Dakar'}) : '—';
+
+        const modal = document.createElement('div');
+        modal.id = 'exam-result-modal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+        modal.innerHTML = `
+        <div style="background:#fff;border-radius:16px;max-width:700px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 24px 60px rgba(0,0,0,.25);">
+            <div style="padding:22px 26px;border-bottom:1px solid #f1f5f9;display:flex;justify-content:space-between;align-items:center;">
+                <h2 style="margin:0;font-size:18px;font-weight:700;color:#0f172a;display:flex;align-items:center;gap:10px;">
+                    <i class="fas fa-file-alt" style="color:#3b82f6;"></i> Résultat de mon examen
+                </h2>
+                <button onclick="document.getElementById('exam-result-modal').remove()"
+                    style="background:none;border:none;font-size:22px;color:#94a3b8;cursor:pointer;">&times;</button>
+            </div>
+            <div style="padding:22px 26px;">
+                <h3 style="margin:0 0 18px;font-size:15px;color:#334155;">${data.exam_title || 'Examen'}</h3>
+                <div style="display:flex;gap:14px;margin-bottom:20px;flex-wrap:wrap;">
+                    <div style="background:${scoreBg};border-radius:12px;padding:18px 24px;text-align:center;flex:1;min-width:130px;">
+                        <div style="font-size:40px;font-weight:800;color:${scoreColor};line-height:1;">
+                            ${data.score !== null ? data.score.toFixed(2) : '—'}
+                        </div>
+                        <div style="font-size:12px;color:#64748b;margin-top:3px;">/ 20</div>
+                        <div style="font-size:12px;color:${scoreColor};font-weight:700;margin-top:5px;">
+                            ${data.score >= 10 ? '✓ Admis' : '✗ Ajourné'}
+                        </div>
+                    </div>
+                    <div style="background:#f8fafc;border-radius:12px;padding:14px 18px;flex:2;min-width:180px;">
+                        <div style="font-size:11px;color:#94a3b8;margin-bottom:3px;"><i class="fas fa-calendar"></i> Corrigé le</div>
+                        <div style="font-size:13px;color:#334155;font-weight:600;">${correctedDate}</div>
+                        <div style="font-size:11px;color:#94a3b8;margin-top:10px;margin-bottom:3px;"><i class="fas fa-robot"></i> Correction</div>
+                        <div style="font-size:13px;color:#334155;">Automatique par IA</div>
+                    </div>
+                </div>
+                <div style="background:#f8fafc;border-radius:12px;padding:18px;border:1px solid #e2e8f0;margin-bottom:18px;">
+                    <h4 style="margin:0 0 12px;font-size:14px;color:#0f172a;display:flex;align-items:center;gap:8px;">
+                        <i class="fas fa-comment-alt" style="color:#3b82f6;"></i> Feedback détaillé
+                    </h4>
+                    <div style="font-size:13px;color:#334155;line-height:1.8;">${feedbackHtml}</div>
+                </div>
+                <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+                    <div style="font-size:13px;color:#92400e;">
+                        <i class="fas fa-exclamation-triangle" style="margin-right:6px;"></i>
+                        <strong>Vous contestez cette note ?</strong> Vous avez 7 jours pour faire une réclamation.
+                    </div>
+                    <button onclick="showReclamationModalForAttempt(${attemptId}, '${(data.exam_title||'').replace(/'/g,"\\'")}'); document.getElementById('exam-result-modal').remove();"
+                        style="background:#d97706;color:white;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;">
+                        <i class="fas fa-exclamation-circle"></i> Faire une réclamation
+                    </button>
+                </div>
+            </div>
+        </div>`;
+        document.body.appendChild(modal);
+        modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+    } catch(e) { showAlert('Erreur lors du chargement du résultat.', 'error'); }
+    finally { showLoader(false); }
+}
+
+function showReclamationModalForAttempt(attemptId, examTitle) {
+    const modal = document.createElement('div');
+    modal.id = 'reclamation-attempt-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+    modal.innerHTML = `
+    <div style="background:#fff;border-radius:16px;max-width:520px;width:100%;box-shadow:0 24px 60px rgba(0,0,0,.25);">
+        <div style="padding:22px 26px;border-bottom:1px solid #f1f5f9;display:flex;justify-content:space-between;align-items:center;">
+            <h2 style="margin:0;font-size:17px;font-weight:700;color:#0f172a;">
+                <i class="fas fa-exclamation-triangle" style="color:#d97706;margin-right:8px;"></i>Réclamation
+            </h2>
+            <button onclick="document.getElementById('reclamation-attempt-modal').remove()"
+                style="background:none;border:none;font-size:22px;color:#94a3b8;cursor:pointer;">&times;</button>
+        </div>
+        <div style="padding:22px 26px;">
+            <p style="margin:0 0 14px;font-size:13px;color:#64748b;">
+                Examen : <strong>${examTitle}</strong>
+            </p>
+            <div style="margin-bottom:16px;">
+                <label style="font-size:13px;font-weight:600;color:#334155;display:block;margin-bottom:6px;">
+                    <i class="fas fa-comment"></i> Motif de la réclamation *
+                </label>
+                <textarea id="attempt-reclamation-reason" rows="5"
+                    placeholder="Expliquez précisément pourquoi vous contestez cette correction…"
+                    style="width:100%;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;font-size:13px;resize:vertical;box-sizing:border-box;"></textarea>
+            </div>
+            <div style="display:flex;gap:10px;">
+                <button onclick="submitReclamationForAttempt(${attemptId})"
+                    style="background:#d97706;color:white;border:none;border-radius:8px;padding:10px 20px;font-size:13px;font-weight:600;cursor:pointer;flex:1;">
+                    <i class="fas fa-paper-plane"></i> Soumettre
+                </button>
+                <button onclick="document.getElementById('reclamation-attempt-modal').remove()"
+                    style="background:#f1f5f9;color:#475569;border:none;border-radius:8px;padding:10px 20px;font-size:13px;cursor:pointer;">
+                    Annuler
+                </button>
+            </div>
+        </div>
+    </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+}
+
+async function submitReclamationForAttempt(attemptId) {
+    const reason = document.getElementById('attempt-reclamation-reason')?.value?.trim();
+    if (!reason) { showAlert('Veuillez saisir le motif de votre réclamation.', 'error'); return; }
+    try {
+        showLoader(true);
+        const res = await authenticatedFetch('/api/reclamations', {
+            method: 'POST',
+            body: JSON.stringify({ attempt_id: attemptId, reason })
+        });
+        const data = await res.json();
+        if (data.success) {
+            document.getElementById('reclamation-attempt-modal')?.remove();
+            showAlert('✅ Réclamation soumise avec succès. Vous serez notifié de la réponse.', 'success');
+        } else {
+            showAlert(data.error || 'Erreur lors de la soumission.', 'error');
+        }
+    } catch(e) { showAlert('Erreur réseau.', 'error'); }
+    finally { showLoader(false); }
 }
 
 async function viewOnlineExamDetails(examId) {

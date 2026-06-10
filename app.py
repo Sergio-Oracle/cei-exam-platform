@@ -21,7 +21,7 @@ from google.genai import types as genai_types
 from werkzeug.utils import secure_filename
 import PyPDF2
 import docx
-from sqlalchemy import func, desc
+from sqlalchemy import func, desc, or_ as sa_or
 from sqlalchemy.orm import joinedload
 import io
 import re
@@ -191,7 +191,8 @@ def _call_anthropic(system_prompt: str, user_message: str, temperature: float, m
         max_tokens=max_tokens,
         temperature=temperature,
         system=system_prompt,
-        messages=[{"role": "user", "content": user_message}]
+        messages=[{"role": "user", "content": user_message}],
+        timeout=90,
     )
     return message.content[0].text
 
@@ -357,7 +358,8 @@ def call_ai_simple(prompt: str) -> str:
             message = anthropic_client.messages.create(
                 model="claude-sonnet-4-6",
                 max_tokens=4000,
-                messages=[{"role": "user", "content": prompt}]
+                messages=[{"role": "user", "content": prompt}],
+                timeout=90,
             )
             return message.content[0].text
         except Exception as e:
@@ -543,6 +545,8 @@ def login():
         return jsonify({'success': True, 'access_token': access_token, 'user': user_dict})
     except Exception as e:
         print(f"❌ Erreur login: {e}")
+        try: session.rollback(); session.close()
+        except: pass
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/auth/me', methods=['GET'])
@@ -707,18 +711,30 @@ def get_ue_ecs(ue_id):
 @app.route('/api/ecs', methods=['GET'])
 @jwt_required()
 def get_all_ecs():
-    """Récupérer tous les ECs (pour les sélecteurs) - Amélioré : Filtrer par professeur"""
+    """Récupérer tous les ECs — filtrable par niveau (L1/L2/L3/M1/M2) et par professeur"""
     try:
         user_id = int(get_jwt_identity())
         session = get_session()
         user = session.query(User).filter_by(id=user_id).first()
-        
+
         query = session.query(EC).filter_by(is_active=True).options(joinedload(EC.ue))
-        
+
         if user.role == UserRole.PROFESSOR:
-            # Seulement les ECs affectés
             query = query.join(ECAssignment).filter(ECAssignment.professor_id == user_id)
-        
+
+        # Filtres optionnels : niveau (?niveau=M2) et/ou formation (?formation_id=3)
+        niveau = request.args.get('niveau')
+        formation_id = request.args.get('formation_id', type=int)
+        if niveau or formation_id:
+            query = (query
+                     .join(UE, EC.ue_id == UE.id)
+                     .join(Semester, UE.semester_id == Semester.id)
+                     .join(Formation, Semester.formation_id == Formation.id))
+            if niveau:
+                query = query.filter(Formation.level == niveau)
+            if formation_id:
+                query = query.filter(Formation.id == formation_id)
+
         ecs = query.all()
         ecs_list = [ec.to_dict() for ec in ecs]
         session.close()
@@ -1234,17 +1250,13 @@ def assign_ec_to_professor():
             session.close()
             return jsonify({'error': 'Professeur non trouvé'}), 404
 
-        # Vérifier si déjà affecté
-        existing_assignment = session.query(ECAssignment).filter_by(ec_id=ec_id).first()
-        if existing_assignment:
+        # Vérifier si cette combinaison EC+professeur existe déjà
+        existing = session.query(ECAssignment).filter_by(ec_id=ec_id, professor_id=professor_id).first()
+        if existing:
             session.close()
-            return jsonify({'error': 'Cet EC est déjà affecté à un professeur'}), 400
+            return jsonify({'error': 'Ce professeur est déjà affecté à cet EC'}), 400
 
-        assignment = ECAssignment(
-            ec_id=ec_id,
-            professor_id=professor_id
-        )
-
+        assignment = ECAssignment(ec_id=ec_id, professor_id=professor_id)
         session.add(assignment)
         session.commit()
         session.close()
@@ -1607,7 +1619,27 @@ def get_all_users():
             session.close()
             return jsonify({'error': 'Acces non autorise'}), 403
 
-        users = session.query(User).order_by(User.created_at.desc()).all()
+        search = request.args.get('search', '').strip()
+        niveau = request.args.get('niveau', '').strip()
+        role_filter = request.args.get('role', '').strip()
+
+        query = session.query(User)
+        if search:
+            query = query.filter(
+                sa_or(
+                    User.full_name.ilike(f'%{search}%'),
+                    User.email.ilike(f'%{search}%')
+                )
+            )
+        if niveau:
+            query = query.filter(User.niveau == niveau)
+        if role_filter:
+            try:
+                query = query.filter(User.role == UserRole[role_filter.upper()])
+            except KeyError:
+                pass
+
+        users = query.order_by(User.created_at.desc()).all()
         users_list = [u.to_dict() for u in users]
         session.close()
 
@@ -1641,11 +1673,16 @@ def create_user():
 
         hashed_password = bcrypt.generate_password_hash(data['password']).decode('utf-8')
 
+        niveau_val = data.get('niveau', '').strip().upper() or None
+        if niveau_val and niveau_val not in ['L1', 'L2', 'L3', 'M1', 'M2']:
+            niveau_val = None
+
         new_user = User(
             email=data['email'],
             password_hash=hashed_password,
             full_name=data['full_name'],
-            role=UserRole[role_str]
+            role=UserRole[role_str],
+            niveau=niveau_val
         )
 
         session.add(new_user)
@@ -1709,6 +1746,9 @@ def update_user(target_user_id):
                 user.role = UserRole[role_str]
         if 'is_active' in data:
             user.is_active = data['is_active']
+        if 'niveau' in data:
+            niveau_val = (data['niveau'] or '').strip().upper() or None
+            user.niveau = niveau_val if niveau_val in ['L1', 'L2', 'L3', 'M1', 'M2'] else None
 
         session.commit()
         user_dict = user.to_dict()
@@ -1791,6 +1831,27 @@ def delete_user(target_user_id):
 
         # Nouveau: Supprimer les inscriptions UE pour étudiants
         session.query(StudentUEEnrollment).filter_by(student_id=target_user_id).delete()
+
+        # Supprimer les relevés de notes de l'étudiant
+        session.query(GradeTranscript).filter_by(student_id=target_user_id).delete(synchronize_session=False)
+
+        # Supprimer les données liées aux tentatives d'examens en ligne
+        attempt_ids = [a.id for a in session.query(ExamAttempt.id).filter_by(student_id=target_user_id).all()]
+        if attempt_ids:
+            # ProctorAssignment AVANT ExamAttempt (FK constraint)
+            session.query(ProctorAssignment).filter(
+                ProctorAssignment.attempt_id.in_(attempt_ids)
+            ).delete(synchronize_session=False)
+            session.query(CameraLog).filter(
+                CameraLog.attempt_id.in_(attempt_ids)
+            ).delete(synchronize_session=False)
+            session.query(ExamActivityLog).filter(
+                ExamActivityLog.attempt_id.in_(attempt_ids)
+            ).delete(synchronize_session=False)
+            session.query(Reclamation).filter(
+                Reclamation.attempt_id.in_(attempt_ids)
+            ).delete(synchronize_session=False)
+        session.query(ExamAttempt).filter_by(student_id=target_user_id).delete(synchronize_session=False)
 
         # 9. Enfin, supprimer l'utilisateur
         session.delete(user)
@@ -2712,8 +2773,9 @@ def get_reclamations():
         return jsonify(reclamations_list)
     except Exception as e:
         print(f"❌ Erreur get_reclamations: {e}")
-        import traceback
-        traceback.print_exc()
+        import traceback; traceback.print_exc()
+        try: session.rollback(); session.close()
+        except: pass
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/reclamations', methods=['POST'])
@@ -2729,49 +2791,60 @@ def create_reclamation():
             return jsonify({'error': 'Seuls les étudiants peuvent créer des réclamations'}), 403
 
         data = request.json
-        paper_id = data.get('paper_id')
-        reason = data.get('reason')
+        paper_id   = data.get('paper_id')
+        attempt_id = data.get('attempt_id')
+        reason     = data.get('reason', '').strip()
 
-        if not paper_id or not reason:
+        if not reason or (not paper_id and not attempt_id):
             session.close()
-            return jsonify({'error': 'Données manquantes'}), 400
+            return jsonify({'error': 'Données manquantes (reason + paper_id ou attempt_id)'}), 400
 
-        paper = session.query(StudentPaper).filter_by(id=paper_id).first()
-        if not paper:
-            session.close()
-            return jsonify({'error': 'Copie non trouvée'}), 404
+        if paper_id:
+            # Réclamation sur copie papier
+            paper = session.query(StudentPaper).filter_by(id=paper_id).first()
+            if not paper:
+                session.close()
+                return jsonify({'error': 'Copie non trouvée'}), 404
+            if paper.student_id != user_id:
+                session.close()
+                return jsonify({'error': 'Cette copie ne vous appartient pas'}), 403
+            if paper.reclamation_window_end and paper.reclamation_window_end < utcnow():
+                session.close()
+                return jsonify({'error': 'Période de réclamation expirée (7 jours après correction)'}), 400
+            existing = session.query(Reclamation).filter_by(paper_id=paper_id, status=ReclamationStatus.PENDING).first()
+            if existing:
+                session.close()
+                return jsonify({'error': 'Une réclamation est déjà en cours pour cette copie'}), 400
+            reclamation = Reclamation(paper_id=paper_id, student_id=user_id, reason=reason)
 
-        if paper.student_id != user_id:
-            session.close()
-            return jsonify({'error': 'Cette copie ne vous appartient pas'}), 403
+        else:
+            # Réclamation sur examen en ligne
+            attempt = session.query(ExamAttempt).filter_by(id=attempt_id, student_id=user_id).first()
+            if not attempt:
+                session.close()
+                return jsonify({'error': 'Tentative non trouvée'}), 404
+            if not attempt.corrected_at:
+                session.close()
+                return jsonify({'error': 'La copie n\'a pas encore été corrigée'}), 400
+            # Fenêtre de 7 jours depuis la correction
+            if utcnow() > attempt.corrected_at + timedelta(days=7):
+                session.close()
+                return jsonify({'error': 'Période de réclamation expirée (7 jours après correction)'}), 400
+            existing = session.query(Reclamation).filter_by(attempt_id=attempt_id, status=ReclamationStatus.PENDING).first()
+            if existing:
+                session.close()
+                return jsonify({'error': 'Une réclamation est déjà en cours pour cet examen'}), 400
+            reclamation = Reclamation(attempt_id=attempt_id, student_id=user_id, reason=reason)
 
-        # Nouveau : Vérifier fenêtre de réclamation (1 semaine)
-        if paper.reclamation_window_end < utcnow():
-            session.close()
-            return jsonify({'error': 'Période de réclamation expirée (7 jours après correction)'}), 400
-
-        existing = session.query(Reclamation).filter_by(paper_id=paper_id, status=ReclamationStatus.PENDING).first()
-        if existing:
-            session.close()
-            return jsonify({'error': 'Une réclamation est déjà en cours'}), 400
-
-        reclamation = Reclamation(paper_id=paper_id, student_id=user_id, reason=reason)
         session.add(reclamation)
         session.commit()
-
-        reclamation_dict = {
-            'id': reclamation.id,
-            'paper_id': reclamation.paper_id,
-            'student_id': reclamation.student_id,
-            'reason': reclamation.reason,
-            'status': reclamation.status.value,
-            'created_at': reclamation.created_at.isoformat() if reclamation.created_at else None
-        }
+        reclamation_dict = reclamation.to_dict()
         session.close()
-
         return jsonify({'success': True, 'reclamation': reclamation_dict}), 201
     except Exception as e:
         print(f"❌ Erreur create_reclamation: {e}")
+        try: session.rollback(); session.close()
+        except: pass
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/reclamations/<int:reclamation_id>', methods=['PUT'])
@@ -2860,6 +2933,9 @@ def process_reclamation_ia(reclamation_id):
             return jsonify({'error': 'Réclamation déjà traitée'}), 400
 
         paper = reclamation.paper
+        if not paper:
+            session.close()
+            return jsonify({'error': "Le traitement IA n'est disponible que pour les réclamations sur copies papier. Pour les examens en ligne, répondez manuellement."}), 400
         subject = paper.subject
 
         system_prompt = """Tu es un arbitre impartial pour les réclamations de notes d'examen.
@@ -2952,6 +3028,9 @@ def apply_ai_proposal(reclamation_id):
             return jsonify({'error': 'Réclamation introuvable'}), 404
 
         paper = reclamation.paper
+        if not paper:
+            session.close()
+            return jsonify({'error': "Impossible d'appliquer une proposition IA sur une réclamation d'examen en ligne. Répondez manuellement."}), 400
         subject = paper.subject
 
         # Permissions: admin or professeur propriétaire du sujet
@@ -3015,6 +3094,9 @@ def reject_ai_proposal(reclamation_id):
             return jsonify({'error': 'Réclamation introuvable'}), 404
 
         paper = reclamation.paper
+        if not paper:
+            session.close()
+            return jsonify({'error': "Impossible de rejeter une proposition IA sur une réclamation d'examen en ligne. Répondez manuellement."}), 400
         subject = paper.subject
 
         # Permissions: admin or professeur propriétaire du sujet
@@ -3117,20 +3199,52 @@ def get_online_exams():
         )
         
         if user.role == UserRole.STUDENT:
-            # Étudiants : seulement les examens actifs/planifiés
-            exams = query.filter(OnlineExam.status.in_([ExamStatus.SCHEDULED, ExamStatus.ACTIVE])).all()
+            # Étudiants : examens actifs/planifiés ET examens terminés auxquels ils ont participé
+            active_exams = query.filter(OnlineExam.status.in_([ExamStatus.SCHEDULED, ExamStatus.ACTIVE])).all()
+            participated_ids = [
+                a.exam_id for a in session.query(ExamAttempt.exam_id)
+                .filter_by(student_id=user_id).all()
+            ]
+            closed_exams = []
+            if participated_ids:
+                closed_exams = query.filter(
+                    OnlineExam.id.in_(participated_ids),
+                    OnlineExam.status == ExamStatus.CLOSED
+                ).all()
+            exams = active_exams + closed_exams
         elif user.role == UserRole.PROFESSOR:
             # Professeurs : leurs propres examens
             exams = query.filter_by(created_by_id=user_id).all()
         else:
             # Admin : tous
             exams = query.all()
-        
-        exams_list = [exam.to_dict() for exam in exams]
+
+        exams_list = []
+        for exam in exams:
+            d = exam.to_dict()
+            # Pour les étudiants, inclure leur tentative si elle existe
+            if user.role == UserRole.STUDENT:
+                attempt = session.query(ExamAttempt).filter_by(
+                    exam_id=exam.id, student_id=user_id
+                ).first()
+                if attempt:
+                    d['my_attempt'] = {
+                        'id':           attempt.id,
+                        'status':       attempt.status.value,
+                        'score':        attempt.score,
+                        'feedback':     attempt.feedback,
+                        'corrected_at': attempt.corrected_at.isoformat() if attempt.corrected_at else None,
+                        'submitted_at': attempt.submitted_at.isoformat() if attempt.submitted_at else None,
+                    }
+                else:
+                    d['my_attempt'] = None
+            exams_list.append(d)
         session.close()
         return jsonify(exams_list)
     except Exception as e:
         print(f"❌ Erreur get_online_exams: {e}")
+        try: session.rollback(); session.close()
+        except: pass
         return jsonify({'error': str(e)}), 500
 
 # Exemple pour l'endpoint create_online_exam (ligne ~1570)
@@ -3256,6 +3370,56 @@ def activate_online_exam(exam_id):
         print(f"❌ Erreur activate_online_exam: {e}")
         return jsonify({'error': str(e)}), 500
 
+
+@app.route('/api/online_exams/<int:exam_id>/extend', methods=['POST'])
+@jwt_required()
+def extend_online_exam(exam_id):
+    """Rallonger la durée d'un examen en cours (professeur/admin)"""
+    try:
+        user_id = int(get_jwt_identity())
+        session = get_session()
+
+        user = session.query(User).filter_by(id=user_id).first()
+        if user.role not in [UserRole.PROFESSOR, UserRole.ADMIN]:
+            session.close()
+            return jsonify({'error': 'Accès non autorisé'}), 403
+
+        exam = session.query(OnlineExam).filter_by(id=exam_id).first()
+        if not exam:
+            session.close()
+            return jsonify({'error': 'Examen non trouvé'}), 404
+
+        if user.role == UserRole.PROFESSOR and exam.created_by_id != user_id:
+            session.close()
+            return jsonify({'error': 'Vous ne pouvez modifier que vos propres examens'}), 403
+
+        if exam.status not in [ExamStatus.ACTIVE, ExamStatus.SCHEDULED]:
+            session.close()
+            return jsonify({'error': 'Impossible de modifier un examen terminé ou fermé'}), 400
+
+        data = request.json or {}
+        extra_minutes = int(data.get('extra_minutes', 0))
+        if extra_minutes <= 0 or extra_minutes > 300:
+            session.close()
+            return jsonify({'error': 'Durée supplémentaire invalide (1–300 minutes)'}), 400
+
+        exam.end_time = exam.end_time + timedelta(minutes=extra_minutes)
+        exam.duration_minutes = exam.duration_minutes + extra_minutes
+        session.commit()
+
+        exam_dict = exam.to_dict()
+        session.close()
+
+        return jsonify({
+            'success': True,
+            'message': f'Durée prolongée de {extra_minutes} minutes',
+            'new_end_time': exam_dict.get('end_time'),
+            'new_duration_minutes': exam_dict.get('duration_minutes'),
+        })
+    except Exception as e:
+        print(f"❌ Erreur extend_online_exam: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/online_exams/<int:exam_id>/close', methods=['POST'])
 @jwt_required()
 def close_online_exam(exam_id):
@@ -3320,9 +3484,18 @@ def delete_online_exam(exam_id):
         session.query(ProctorAssignment).filter_by(exam_id=exam_id).delete(synchronize_session=False)
 
         if attempt_ids:
-            session.query(CameraLog).filter(CameraLog.attempt_id.in_(attempt_ids)).delete(synchronize_session=False)
-            session.query(ExamActivityLog).filter(ExamActivityLog.attempt_id.in_(attempt_ids)).delete(synchronize_session=False)
-            session.query(ExamAttempt).filter(ExamAttempt.id.in_(attempt_ids)).delete(synchronize_session=False)
+            session.query(CameraLog).filter(
+                CameraLog.attempt_id.in_(attempt_ids)
+            ).delete(synchronize_session=False)
+            session.query(ExamActivityLog).filter(
+                ExamActivityLog.attempt_id.in_(attempt_ids)
+            ).delete(synchronize_session=False)
+            session.query(Reclamation).filter(
+                Reclamation.attempt_id.in_(attempt_ids)
+            ).delete(synchronize_session=False)
+            session.query(ExamAttempt).filter(
+                ExamAttempt.id.in_(attempt_ids)
+            ).delete(synchronize_session=False)
 
         session.query(ExamProctor).filter_by(exam_id=exam_id).delete(synchronize_session=False)
         session.delete(exam)
@@ -3438,12 +3611,11 @@ def start_exam_attempt(exam_id):
             session.close()
             return jsonify({'error': 'Cet examen est terminé'}), 400
 
-        # Un examen SCHEDULED dans sa plage horaire est considéré accessible :
-        # l'enseignant a défini les horaires, l'activation manuelle est optionnelle.
-        if exam.status == ExamStatus.SCHEDULED and start_time <= now <= end_time:
-            exam.status = ExamStatus.ACTIVE
-            session.flush()
-        elif exam.status not in [ExamStatus.ACTIVE, ExamStatus.SCHEDULED]:
+        # L'activation manuelle par le professeur est obligatoire
+        if exam.status == ExamStatus.SCHEDULED:
+            session.close()
+            return jsonify({'error': "Cet examen n'a pas encore été activé par votre professeur. Veuillez patienter."}), 400
+        elif exam.status != ExamStatus.ACTIVE:
             session.close()
             return jsonify({'error': 'Examen non disponible actuellement'}), 400
         
@@ -3624,6 +3796,32 @@ def log_exam_activity(attempt_id):
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/exam_attempts/<int:attempt_id>/result', methods=['GET'])
+@jwt_required()
+def get_exam_attempt_result(attempt_id):
+    """Résultat d'une tentative pour l'étudiant concerné"""
+    try:
+        user_id = int(get_jwt_identity())
+        session = get_session()
+        attempt = session.query(ExamAttempt).filter_by(id=attempt_id, student_id=user_id).first()
+        if not attempt:
+            session.close()
+            return jsonify({'error': 'Tentative introuvable'}), 404
+        exam = session.query(OnlineExam).filter_by(id=attempt.exam_id).first()
+        result = {
+            'attempt_id':   attempt.id,
+            'exam_title':   exam.title if exam else '',
+            'score':        attempt.score,
+            'feedback':     attempt.feedback,
+            'corrected_at': attempt.corrected_at.isoformat() if attempt.corrected_at else None,
+            'submitted_at': attempt.submitted_at.isoformat() if attempt.submitted_at else None,
+            'status':       attempt.status.value,
+        }
+        session.close()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/exam_attempts/<int:attempt_id>/subject', methods=['GET'])
 @jwt_required()
 def get_exam_attempt_subject(attempt_id):
@@ -3744,27 +3942,44 @@ def generate_transcript(student_id, semester_id):
             return jsonify({'error': 'Semestre non trouvé'}), 404
         
         # Calculer les notes
-        # Récupérer toutes les copies corrigées de l'étudiant pour ce semestre
+        # 1. Copies papier corrigées
         papers = session.query(StudentPaper).join(Subject).join(EC).join(UE).filter(
             StudentPaper.student_id == student_id,
             UE.semester_id == semester_id,
             StudentPaper.score != None
         ).all()
-        
-        if not papers:
+
+        # 2. Examens en ligne corrigés (ExamAttempt avec score)
+        online_attempts = session.query(ExamAttempt).join(
+            OnlineExam, ExamAttempt.exam_id == OnlineExam.id
+        ).join(
+            Subject, OnlineExam.subject_id == Subject.id
+        ).join(EC).join(UE).filter(
+            ExamAttempt.student_id == student_id,
+            UE.semester_id == semester_id,
+            ExamAttempt.score != None
+        ).all()
+
+        if not papers and not online_attempts:
             session.close()
             return jsonify({'success': False, 'error': 'Aucune note disponible pour ce semestre'}), 200
-        
-        # Calculer moyennes
+
+        # Calculer la moyenne pondérée (copies papier + examens en ligne)
         total_weighted_score = 0
         total_coefficient = 0
-        
+
         for paper in papers:
             ec = paper.subject.ec
             if ec:
                 total_weighted_score += paper.score * ec.coefficient
                 total_coefficient += ec.coefficient
-        
+
+        for attempt in online_attempts:
+            ec = attempt.exam.subject.ec if attempt.exam and attempt.exam.subject else None
+            if ec:
+                total_weighted_score += attempt.score * ec.coefficient
+                total_coefficient += ec.coefficient
+
         gpa = (total_weighted_score / total_coefficient) if total_coefficient > 0 else 0
         
         # Créer/mettre à jour le relevé
@@ -4000,7 +4215,7 @@ def correct_exam_attempt(attempt_id):
                 answers_data.get('text') or
                 ''
             )
-        except:
+        except Exception:
             student_answers = attempt.answers or ''
 
         if not student_answers or student_answers.strip() == '':
@@ -4065,8 +4280,9 @@ RAPPEL: Tu DOIS finir par "Note totale: XX.XX/20" """
         
     except Exception as e:
         print(f"❌ Erreur correct_exam_attempt: {e}")
-        import traceback
-        traceback.print_exc()
+        import traceback; traceback.print_exc()
+        try: session.rollback(); session.close()
+        except: pass
         return jsonify({'error': str(e)}), 500
 
 
@@ -4110,6 +4326,8 @@ def get_exam_attempts(exam_id):
         
     except Exception as e:
         print(f"❌ Erreur get_exam_attempts: {e}")
+        try: session.rollback(); session.close()
+        except: pass
         return jsonify({'error': str(e)}), 500
 
 

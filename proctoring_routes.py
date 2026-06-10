@@ -1689,6 +1689,9 @@ def get_exam_recordings(exam_id):
 # VIDÉOS D'ENREGISTREMENT S3 (LiveKit Egress)
 # ============================================================================
 
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as _FuturesTimeout
+
+
 def _get_s3_client():
     """Créer un client boto3 configuré pour le MinIO/S3 de l'application."""
     return boto3.client(
@@ -1697,7 +1700,13 @@ def _get_s3_client():
         aws_access_key_id=os.environ.get('S3_KEY_ID', ''),
         aws_secret_access_key=os.environ.get('S3_KEY_SECRET', ''),
         region_name=os.environ.get('S3_REGION', 'us-east-1'),
-        config=Config(signature_version='s3v4', s3={'addressing_style': 'path'})
+        config=Config(
+            signature_version='s3v4',
+            s3={'addressing_style': 'path'},
+            connect_timeout=3,
+            read_timeout=10,
+            retries={'max_attempts': 1},
+        )
     )
 
 
@@ -1806,44 +1815,42 @@ def get_video_recordings(exam_id):
         except Exception as e:
             return jsonify({'exam_id': exam_id, 'videos': [], 'error': f'Connexion S3 impossible: {e}'})
 
-        all_objects = []
-        paginator = s3.get_paginator('list_objects_v2')
+        def _list_all_objects(s3_client, bkt, eid):
+            objs = []
+            pag = s3_client.get_paginator('list_objects_v2')
+            try:
+                resp = s3_client.list_objects_v2(Bucket=bkt, Prefix=f'recordings/exam-{eid}/')
+                objs.extend(resp.get('Contents', []))
+            except Exception:
+                pass
+            lk_room = f'exam-{eid}'
+            try:
+                for page in pag.paginate(Bucket=bkt, Prefix='recordings/'):
+                    for obj in page.get('Contents', []):
+                        parts = obj['Key'].split('/')
+                        if len(parts) >= 4 and parts[2] == lk_room:
+                            objs.append(obj)
+            except Exception:
+                pass
+            old_prefixes = [f'proctoring-{eid}-', f'surveillance-{eid}-']
+            try:
+                for page in pag.paginate(Bucket=bkt):
+                    for obj in page.get('Contents', []):
+                        k = obj['Key']
+                        fname = k.split('/')[-1]
+                        if any(fname.startswith(p) or k.startswith(p) for p in old_prefixes):
+                            objs.append(obj)
+            except Exception:
+                pass
+            return objs
 
-        # 1. Format CEI standard : recordings/exam-{exam_id}/
-        cei_prefix = f'recordings/exam-{exam_id}/'
-        try:
-            resp = s3.list_objects_v2(Bucket=bucket, Prefix=cei_prefix)
-            all_objects.extend(resp.get('Contents', []))
-        except ClientError as e:
-            return jsonify({'exam_id': exam_id, 'videos': [],
-                            'error': f'Erreur S3: {e.response["Error"]["Message"]}'})
-
-        # 2. Format LiveKit natif : recordings/YYYY-MM-DD/exam-{exam_id}/
-        lk_room = f'exam-{exam_id}'
-        try:
-            for page in paginator.paginate(Bucket=bucket, Prefix='recordings/'):
-                for obj in page.get('Contents', []):
-                    key = obj['Key']
-                    parts = key.split('/')
-                    if len(parts) >= 4 and parts[2] == lk_room:
-                        all_objects.append(obj)
-        except ClientError:
-            pass
-
-        # 3. Anciens formats : proctoring-{exam_id}-* et surveillance-{exam_id}-*
-        old_prefixes = [
-            f'proctoring-{exam_id}-',
-            f'surveillance-{exam_id}-',
-        ]
-        try:
-            for page in paginator.paginate(Bucket=bucket):
-                for obj in page.get('Contents', []):
-                    key = obj['Key']
-                    fname = key.split('/')[-1]
-                    if any(fname.startswith(p) or key.startswith(p) for p in old_prefixes):
-                        all_objects.append(obj)
-        except ClientError:
-            pass
+        with ThreadPoolExecutor(max_workers=1) as _pool:
+            _future = _pool.submit(_list_all_objects, s3, bucket, exam_id)
+            try:
+                all_objects = _future.result(timeout=15)
+            except _FuturesTimeout:
+                return jsonify({'exam_id': exam_id, 'videos': [],
+                                'error': 'Délai S3 dépassé (serveur lent ou inaccessible)'})
 
         # Dédupliquer par clé
         seen = set()
@@ -1911,7 +1918,7 @@ def get_video_recordings(exam_id):
                     Params={'Bucket': bucket, 'Key': key},
                     ExpiresIn=14400
                 )
-            except ClientError:
+            except Exception:
                 url = None
 
             if is_group_cam:
