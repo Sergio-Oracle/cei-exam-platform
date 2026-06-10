@@ -1,7 +1,7 @@
 # CEI — Centre d'Examen Intelligent
 
 > Plateforme universitaire d'examens en ligne avec surveillance autonome par IA (agent + indicateurs visuels temps réel), correction automatique multi-domaine et gestion pédagogique complète.  
-> Développée pour l'**Université Numérique Cheikh Hamidou Kane (UNCHK)**, Sénégal.
+> Développée pour l'**RTN – Réseaux et Techniques Numériques (EC2LT)**, Sénégal.
 
 [![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://python.org)
 [![Flask](https://img.shields.io/badge/Flask-3.0+-green.svg)](https://flask.palletsprojects.com)
@@ -873,8 +873,8 @@ print(f"{total} opérations documentées sur {len(spec['paths'])} routes")
 ```
 swagger_docs.py                    # Blueprint Flask — aucune dépendance pip requise
 ├── OPENAPI_SPEC                   # Dictionnaire Python OpenAPI 3.0 complet
-│   ├── info                       # Titre, version 2.1.0, contact UNCHK, licence MIT
-│   ├── servers                    # Production (cei.unchk.sn) + localhost:5000
+│   ├── info                       # Titre, version 2.1.0, contact EC2LT, licence MIT
+│   ├── servers                    # Production (cei.ec2lt.sn) + localhost:5000
 │   ├── tags                       # 13 groupes avec descriptions
 │   ├── components.schemas         # 15 schémas réutilisables
 │   ├── components.securitySchemes # BearerAuth (JWT) + AgentSecret (X-Agent-Secret)
@@ -901,10 +901,10 @@ swagger_docs.py                    # Blueprint Flask — aucune dépendance pip 
 
 ## Licence
 
-MIT License — © 2026 Université Numérique Cheikh Hamidou Kane (UNCHK), Sénégal.
+MIT License — © 2026 RTN – Réseaux et Techniques Numériques (EC2LT), Sénégal.
 
 ---
 
 *CEI v2.2 — Mai 2026*  
-*Cité du savoir - Diamniadio · Castors, avenue Bourguiba, rue n°13*  
-*+221 30 108 41 53 · visioplus@unchk.edu.sn*
+*Liberté 2, derrière immeuble BICIS, Jet d'eau – Dakar – Sénégal · Castors, avenue Bourguiba, rue n°13*  
+*(+221) 77 662 76 94 · entreprisertn221@gmail.com*

@@ -589,10 +589,10 @@ def send_account_created_email(user_email, user_name, role, temp_password=None):
                 </div>
 
                 <p style="color:#94a3b8;font-size:11px;margin-top:24px;text-align:center;line-height:1.7;">
-                    © 2026 CEI — Université Numérique Cheikh Hamidou Kane<br>
-                    Cité du savoir - Diamniadio, Castors, avenue Bourguiba, rue n°13<br>
-                    +221 30 108 41 53 &nbsp;·&nbsp;
-                    <a href="mailto:visioplus@unchk.edu.sn" style="color:#94a3b8;">visioplus@unchk.edu.sn</a>
+                    © 2026 CEI — RTN – Réseaux et Techniques Numériques<br>
+                    Liberté 2, derrière immeuble BICIS, Jet d'eau – Dakar – Sénégal<br>
+                    (+221) 77 662 76 94 &nbsp;·&nbsp;
+                    <a href="mailto:entreprisertn221@gmail.com" style="color:#94a3b8;">entreprisertn221@gmail.com</a>
                 </p>
             </div>
         </div>
@@ -627,10 +627,10 @@ def send_paper_corrected_email(student_email, student_name, subject_title, score
             <p><a href="{app_url}/app" style="display: inline-block; padding: 12px 24px; background: #2563eb; color: white; text-decoration: none; border-radius: 6px;">Voir ma copie</a></p>
 
             <p style="color:#94a3b8;font-size:11px;margin-top:30px;text-align:center;line-height:1.7;">
-                © 2026 CEI — Université Numérique Cheikh Hamidou Kane<br>
-                Cité du savoir - Diamniadio, Castors, avenue Bourguiba, rue n°13<br>
-                +221 30 108 41 53 &nbsp;·&nbsp;
-                <a href="mailto:visioplus@unchk.edu.sn" style="color:#94a3b8;">visioplus@unchk.edu.sn</a>
+                © 2026 CEI — RTN – Réseaux et Techniques Numériques<br>
+                Liberté 2, derrière immeuble BICIS, Jet d'eau – Dakar – Sénégal<br>
+                (+221) 77 662 76 94 &nbsp;·&nbsp;
+                <a href="mailto:entreprisertn221@gmail.com" style="color:#94a3b8;">entreprisertn221@gmail.com</a>
             </p>
         </div>
     </body>

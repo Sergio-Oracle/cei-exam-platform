@@ -31,10 +31,10 @@ def _send(to_emails: list[str], subject: str, html: str) -> bool:
 def _footer() -> str:
     return """
     <p style="color:#94a3b8;font-size:11px;margin-top:24px;text-align:center;line-height:1.7;">
-        © 2026 CEI — Université Numérique Cheikh Hamidou Kane<br>
-        Cité du savoir - Diamniadio, Castors, avenue Bourguiba, rue n°13<br>
-        +221 30 108 41 53 &nbsp;·&nbsp;
-        <a href="mailto:visioplus@unchk.edu.sn" style="color:#94a3b8;">visioplus@unchk.edu.sn</a>
+        © 2026 CEI — RTN – Réseaux et Techniques Numériques<br>
+        Liberté 2, derrière immeuble BICIS, Jet d'eau – Dakar – Sénégal<br>
+        (+221) 77 662 76 94 &nbsp;·&nbsp;
+        <a href="mailto:entreprisertn221@gmail.com" style="color:#94a3b8;">entreprisertn221@gmail.com</a>
     </p>"""
 
 

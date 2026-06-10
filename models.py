@@ -141,6 +141,8 @@ class EC(Base):
     assignments = relationship('ECAssignment', back_populates='ec', cascade='all, delete-orphan')  # Nouveau: Affectations professeurs
 
     def to_dict(self):
+        semester = self.ue.semester if self.ue else None
+        formation = semester.formation if semester else None
         return {
             'id': self.id,
             'ue_id': self.ue_id,
@@ -155,11 +157,15 @@ class EC(Base):
             'vht': self.vht,
             'coefficient': self.coefficient,
             'is_active': self.is_active,
-            'assigned_professor_id': self.assignments[0].professor_id if self.assignments else None,  # Nouveau
+            'assigned_professor_id': self.assignments[0].professor_id if self.assignments else None,
+            'assigned_professors': [a.professor_id for a in self.assignments],
+            'formation_id': formation.id if formation else None,
+            'formation_name': formation.name if formation else None,
+            'formation_level': formation.level if formation else None,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 
-# NOUVEAU: Affectation EC à Professeur (unicité par EC)
+# Affectation EC à Professeur (plusieurs profs possibles par EC)
 class ECAssignment(Base):
     __tablename__ = 'ec_assignments'
     id = Column(Integer, primary_key=True)
@@ -167,7 +173,7 @@ class ECAssignment(Base):
     professor_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     assigned_at = Column(DateTime, default=datetime.utcnow)
 
-    __table_args__ = (UniqueConstraint('ec_id', name='unique_ec_assignment'),)  # Unicité: Un EC = un professeur
+    __table_args__ = (UniqueConstraint('ec_id', 'professor_id', name='unique_ec_professor'),)
 
     ec = relationship('EC', back_populates='assignments')
     professor = relationship('User')
@@ -194,6 +200,7 @@ class User(Base):
     password_hash = Column(String(255), nullable=False)
     full_name = Column(String(100), nullable=False)
     role = Column(SQLEnum(UserRole), default=UserRole.STUDENT)
+    niveau = Column(String(5), nullable=True)   # L1, L2, L3, M1, M2
     is_active = Column(Boolean, default=True)
     email_verified = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -214,6 +221,7 @@ class User(Base):
             'email': self.email,
             'full_name': self.full_name,
             'role': self.role.value,
+            'niveau': self.niveau,
             'is_active': self.is_active,
             'email_verified': self.email_verified,
             'created_at': self.created_at.isoformat() if self.created_at else None,
@@ -308,14 +316,15 @@ class Reclamation(Base):
     __tablename__ = 'reclamations'
 
     id = Column(Integer, primary_key=True)
-    paper_id = Column(Integer, ForeignKey('student_papers.id'), nullable=False)
+    paper_id = Column(Integer, ForeignKey('student_papers.id'), nullable=True)
+    attempt_id = Column(Integer, ForeignKey('exam_attempts.id'), nullable=True)
     student_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     reason = Column(Text, nullable=False)
     status = Column(SQLEnum(ReclamationStatus), default=ReclamationStatus.PENDING)
     response = Column(Text)
 
-    ia_decision = Column(Text)  # Décision complète/textuelle retournée par l'IA
-    ia_proposed_status = Column(String(50))  # 'resolved' or 'rejected' as proposed by IA
+    ia_decision = Column(Text)
+    ia_proposed_status = Column(String(50))
     ia_proposed_score = Column(Float)
     ia_proposed_grade = Column(Text)
     ia_proposed_reason = Column(Text)
@@ -325,17 +334,26 @@ class Reclamation(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    paper = relationship('StudentPaper', back_populates='reclamations')
+    paper = relationship('StudentPaper', back_populates='reclamations', foreign_keys=[paper_id])
+    attempt = relationship('ExamAttempt', foreign_keys=[attempt_id])
     student = relationship('User', foreign_keys=[student_id], back_populates='reclamations')
     responder = relationship('User', foreign_keys=[responded_by_id], back_populates='responded_reclamations')
 
     def to_dict(self):
+        subject_title = None
+        if self.paper and self.paper.subject:
+            subject_title = self.paper.subject.title
+        elif self.attempt:
+            exam = self.attempt.exam if hasattr(self.attempt, 'exam') else None
+            subject_title = exam.title if exam else 'Examen en ligne'
         return {
             'id': self.id,
             'paper_id': self.paper_id,
+            'attempt_id': self.attempt_id,
+            'type': 'online_exam' if self.attempt_id else 'paper',
             'student_id': self.student_id,
             'student_name': self.student.full_name if self.student else None,
-            'subject_title': self.paper.subject.title if self.paper and self.paper.subject else None,
+            'subject_title': subject_title,
             'reason': self.reason,
             'status': self.status.value,
             'response': self.response,
@@ -666,7 +684,9 @@ print(f"🔗 Connexion à: {DATABASE_URL.split('@')[1] if '@' in DATABASE_URL el
 engine = create_engine(
     DATABASE_URL,
     echo=False,
-    connect_args={'options': '-c timezone=UTC'}  # Force UTC, évite conversion Europe/Berlin
+    pool_pre_ping=True,    # Teste la connexion avant usage (évite "connection closed")
+    pool_recycle=1800,     # Recycle les connexions toutes les 30 min
+    connect_args={'options': '-c timezone=UTC'}
 )
 SessionLocal = sessionmaker(bind=engine)
 
@@ -675,16 +695,32 @@ def get_session():
 
 def init_db():
     Base.metadata.create_all(engine)
-    # Migration : ajouter student_id et rendre attempt_id nullable si ancienne structure
-    _migrations = [
-        "ALTER TABLE proctor_assignments ADD COLUMN student_id INTEGER REFERENCES users(id)",
-        "ALTER TABLE proctor_assignments ALTER COLUMN attempt_id DROP NOT NULL",
-        "ALTER TABLE proctor_assignments DROP CONSTRAINT unique_attempt_proctor",
-        "ALTER TABLE proctor_assignments ADD CONSTRAINT unique_exam_student_proctor UNIQUE (exam_id, student_id)",
-    ]
+    # Migrations conditionnelles — exécutées uniquement si la colonne/contrainte n'existe pas déjà
+    # statement_timeout=2s évite les blocages si la table est verrouillée par l'app active
     from sqlalchemy import text as _text
+    _migrations = [
+        # Vérification préalable: n'exécuter que si la colonne n'existe pas
+        ("SELECT 1 FROM information_schema.columns WHERE table_name='proctor_assignments' AND column_name='student_id'",
+         "ALTER TABLE proctor_assignments ADD COLUMN student_id INTEGER REFERENCES users(id)"),
+    ]
     with engine.connect() as _conn:
-        for _sql in _migrations:
+        # Timeout court pour éviter le blocage au démarrage si l'app tourne déjà
+        try: _conn.execute(_text("SET LOCAL statement_timeout = '2000'"))
+        except: pass
+        for _check_sql, _alter_sql in _migrations:
+            try:
+                result = _conn.execute(_text(_check_sql))
+                if not result.fetchone():  # Colonne absente → appliquer la migration
+                    _conn.execute(_text(_alter_sql))
+                    _conn.commit()
+            except Exception:
+                _conn.rollback()
+        # Migrations non-bloquantes (idempotentes)
+        _safe_migrations = [
+            "ALTER TABLE proctor_assignments ALTER COLUMN attempt_id DROP NOT NULL",
+            "ALTER TABLE proctor_assignments DROP CONSTRAINT IF EXISTS unique_attempt_proctor",
+        ]
+        for _sql in _safe_migrations:
             try:
                 _conn.execute(_text(_sql))
                 _conn.commit()

@@ -28,7 +28,7 @@ _SCHEMAS = {
         "type": "object",
         "properties": {
             "id":         {"type": "integer"},
-            "email":      {"type": "string", "example": "user@unchk.edu.sn"},
+            "email":      {"type": "string", "example": "user@ec2lt.sn"},
             "full_name":  {"type": "string", "example": "Moussa Diallo"},
             "role":       {"type": "string", "enum": ["admin","professor","surveillant","student"]},
             "is_active":  {"type": "boolean"},
@@ -224,7 +224,7 @@ OPENAPI_SPEC = {
         "title": "CEI — Centre d'Examen Intelligent API",
         "version": "2.1.0",
         "description": (
-            "API REST complète de la plateforme CEI de l'**Université Numérique Cheikh Hamidou Kane (UNCHK)**.\n\n"
+            "API REST complète de la plateforme CEI de l'**RTN – Réseaux et Techniques Numériques (EC2LT)**.\n\n"
             "## Authentification\n"
             "1. `POST /api/auth/login` → récupérer `access_token`\n"
             "2. Bouton **Authorize** → saisir `Bearer <access_token>`\n\n"
@@ -242,14 +242,14 @@ OPENAPI_SPEC = {
             "| Changement onglet | +15 (max 60) |\n| Avertissement | +5 (max 40) |"
         ),
         "contact": {
-            "name": "UNCHK — VisioPLUS",
-            "email": "visioplus@unchk.edu.sn",
-            "url": "https://cei.unchk.sn"
+            "name": "EC2LT — VisioPLUS",
+            "email": "entreprisertn221@gmail.com",
+            "url": "https://cei.ec2lt.sn"
         },
         "license": {"name": "MIT", "url": "https://opensource.org/licenses/MIT"}
     },
     "servers": [
-        {"url": "https://cei.unchk.sn", "description": "Production UNCHK"},
+        {"url": "https://cei.ec2lt.sn", "description": "Production EC2LT"},
         {"url": "http://localhost:5000",  "description": "Développement local"}
     ],
     "tags": [
@@ -294,7 +294,7 @@ OPENAPI_SPEC = {
             "requestBody": {"required": True, "content": {"application/json": {"schema": {
                 "type": "object", "required": ["email","password"],
                 "properties": {
-                    "email":    {"type": "string", "example": "admin@unchk.edu.sn"},
+                    "email":    {"type": "string", "example": "admin@ec2lt.sn"},
                     "password": {"type": "string", "example": "motdepasse"}
                 }
             }}}},
