@@ -4109,16 +4109,43 @@ def export_transcript_pdf(transcript_id):
             session.close()
             return jsonify({'error': 'Accès non autorisé'}), 403
         
-        # Récupérer les notes détaillées
+        # Récupérer les notes détaillées — copies papier
         papers = session.query(StudentPaper).join(Subject).join(EC).join(UE).filter(
             StudentPaper.student_id == transcript.student_id,
             UE.semester_id == transcript.semester_id,
             StudentPaper.score != None
         ).all()
-        
+
+        # Récupérer les notes détaillées — examens en ligne
+        online_attempts = session.query(ExamAttempt).join(
+            OnlineExam, ExamAttempt.exam_id == OnlineExam.id
+        ).join(
+            Subject, OnlineExam.subject_id == Subject.id
+        ).join(EC).join(UE).filter(
+            ExamAttempt.student_id == transcript.student_id,
+            UE.semester_id == transcript.semester_id,
+            ExamAttempt.score != None
+        ).all()
+
         # Générer PDF
         from utils import generate_transcript_pdf
-        
+
+        notes_list = [{
+            'ec_code': p.subject.ec.code if p.subject.ec else 'N/A',
+            'ec_name': p.subject.ec.name if p.subject.ec else p.subject.title,
+            'score': p.score,
+            'coefficient': p.subject.ec.coefficient if p.subject.ec else 1
+        } for p in papers]
+
+        for attempt in online_attempts:
+            ec = attempt.exam.subject.ec if attempt.exam and attempt.exam.subject else None
+            notes_list.append({
+                'ec_code': ec.code if ec else 'N/A',
+                'ec_name': ec.name if ec else (attempt.exam.subject.title if attempt.exam and attempt.exam.subject else 'N/A'),
+                'score': attempt.score,
+                'coefficient': ec.coefficient if ec else 1
+            })
+
         transcript_data = {
             'student_name': transcript.student.full_name,
             'student_email': transcript.student.email,
@@ -4127,12 +4154,7 @@ def export_transcript_pdf(transcript_id):
             'gpa': transcript.gpa,
             'total_credits': transcript.total_credits,
             'obtained_credits': transcript.obtained_credits,
-            'papers': [{
-                'ec_code': p.subject.ec.code if p.subject.ec else 'N/A',
-                'ec_name': p.subject.ec.name if p.subject.ec else p.subject.title,
-                'score': p.score,
-                'coefficient': p.subject.ec.coefficient if p.subject.ec else 1
-            } for p in papers],
+            'papers': notes_list,
             'generated_at': transcript.generated_at.strftime('%d/%m/%Y')
         }
         
