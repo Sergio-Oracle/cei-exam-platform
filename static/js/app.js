@@ -1404,12 +1404,7 @@ async function loadCreateSubject() {
         const ecs = await ecsResponse.json();
         const formations = await formationsResponse.json();
 
-        window._allECs = ecs; // cache pour le filtre dynamique
-
-        let ecsOptions = '<option value="">— Aucun (sujet indépendant) —</option>';
-        ecs.forEach(ec => {
-            ecsOptions += `<option value="${ec.id}" data-niveau="${ec.formation_level || ''}" data-formation="${ec.formation_id || ''}">${ec.ue_code} › ${ec.code} — ${ec.name}</option>`;
-        });
+        window._allEcsCreate = ecs; // cache pour le filtre dynamique
 
         let formationsOptions = '<option value="">— Toutes les formations —</option>';
         formations.forEach(f => {
@@ -1420,9 +1415,9 @@ async function loadCreateSubject() {
         let niveauOptions = '<option value="">— Tous les niveaux —</option>';
         niveaux.forEach(n => { niveauOptions += `<option value="${n}">${n}</option>`; });
 
-        function buildEcsOptions(ecs) {
+        function buildEcsOptions(ecsList) {
             let opts = '<option value="">— Aucun (sujet indépendant) —</option>';
-            ecs.forEach(ec => {
+            ecsList.forEach(ec => {
                 opts += `<option value="${ec.id}">${ec.ue_code} › ${ec.code} — ${ec.name}</option>`;
             });
             return opts;
@@ -1432,13 +1427,13 @@ async function loadCreateSubject() {
             const fid = parseInt(document.getElementById('filter-formation-create')?.value) || null;
             const niv = document.getElementById('filter-niveau-create')?.value || '';
             let filtered = window._allEcsCreate || [];
-            if (fid) filtered = filtered.filter(ec => ec.formation_id === fid || ec.ue_formation_id === fid);
-            if (niv) filtered = filtered.filter(ec => ec.formation_level === niv || ec.niveau === niv);
+            if (fid) filtered = filtered.filter(ec => ec.formation_id === fid);
+            if (niv) filtered = filtered.filter(ec => ec.formation_level === niv);
             const sel = document.getElementById('subject-ec');
             if (sel) sel.innerHTML = buildEcsOptions(filtered);
         };
 
-        let ecsOptions = buildEcsOptions(allEcs);
+        let ecsOptions = buildEcsOptions(ecs);
 
         document.getElementById('main-content').innerHTML = `
             <div class="page-header">
@@ -1678,7 +1673,7 @@ function filterECSelect() {
     const niveau = document.getElementById('ec-filter-niveau')?.value || '';
     const select = document.getElementById('subject-ec');
     if (!select) return;
-    const allECs = window._allECs || [];
+    const allECs = window._allEcsCreate || [];
     let html = '<option value="">— Aucun (sujet indépendant) —</option>';
     allECs.forEach(ec => {
         if (formation && String(ec.formation_id) !== String(formation)) return;
