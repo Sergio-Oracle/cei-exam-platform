@@ -110,7 +110,13 @@ document.addEventListener('DOMContentLoaded', function() {
         showLogin();
     }
     document.getElementById('login-form').addEventListener('submit', handleLogin);
-    // ✅ Ligne register-form supprimée
+
+    // Réadapter la sidebar au redimensionnement de fenêtre
+    let _resizeTimer;
+    window.addEventListener('resize', () => {
+        clearTimeout(_resizeTimer);
+        _resizeTimer = setTimeout(initSidebar, 120);
+    });
 });
 
 // Authentification
@@ -191,6 +197,7 @@ function showApp() {
     document.getElementById('app-screen').style.display = 'block';
     refreshNavbarAvatar();
     loadNavigation();
+    initSidebar();
     loadDashboard();
     if (currentUser.role === 'student') startNotifPolling();
     // Rechargement complet quand la langue change
@@ -199,6 +206,7 @@ function showApp() {
         _origSetLang(code);
         if (currentUser) {
             loadNavigation();
+            initSidebar();
             applyI18n();
             if (window._currentView) window._currentView();
         }
@@ -228,6 +236,86 @@ function refreshNavbarAvatar() {
     const db = document.getElementById('dropdown-badge');
     if (db) { db.textContent = roleLabel; db.style.background = color; }
 }
+
+// ── Sidebar vertical ─────────────────────────────────────────────────────────
+
+function _isMobile() { return window.innerWidth <= 768; }
+
+function _sidebarCollapsed() {
+    return localStorage.getItem('sidebar_collapsed') === '1';
+}
+
+function initSidebar() {
+    const sidebar = document.getElementById('main-nav');
+    if (!sidebar) return;
+
+    // Ensure overlay exists
+    if (!document.getElementById('sidebar-overlay')) {
+        const ov = document.createElement('div');
+        ov.id = 'sidebar-overlay';
+        ov.onclick = closeSidebarMobile;
+        document.body.appendChild(ov);
+    }
+
+    if (_isMobile()) {
+        sidebar.classList.remove('collapsed');
+        document.getElementById('sidebar-toggle').style.display = 'flex';
+    } else {
+        document.getElementById('sidebar-toggle').style.display = 'none';
+        if (_sidebarCollapsed()) {
+            sidebar.classList.add('collapsed');
+            const ic = document.getElementById('collapse-icon');
+            if (ic) ic.style.transform = 'rotate(180deg)';
+        } else {
+            sidebar.classList.remove('collapsed');
+            const ic = document.getElementById('collapse-icon');
+            if (ic) ic.style.transform = '';
+        }
+    }
+
+    // Add tooltips to nav tabs for collapsed mode + close sidebar on click (mobile)
+    sidebar.querySelectorAll('.nav-tab').forEach(btn => {
+        const text = btn.textContent.trim();
+        if (text && !btn.title) btn.title = text;
+        // Close mobile sidebar when a tab is clicked
+        btn.addEventListener('click', () => { if (_isMobile()) closeSidebarMobile(); }, { once: false });
+    });
+}
+
+function toggleSidebar() {
+    const sidebar = document.getElementById('main-nav');
+    if (!sidebar) return;
+
+    if (_isMobile()) {
+        const isOpen = sidebar.classList.contains('open');
+        sidebar.classList.toggle('open', !isOpen);
+        const ov = document.getElementById('sidebar-overlay');
+        if (ov) ov.classList.toggle('visible', !isOpen);
+        const ic = document.getElementById('sidebar-toggle-icon');
+        if (ic) ic.className = isOpen ? 'fas fa-bars' : 'fas fa-times';
+    } else {
+        const isCollapsed = sidebar.classList.toggle('collapsed');
+        localStorage.setItem('sidebar_collapsed', isCollapsed ? '1' : '0');
+        const ic = document.getElementById('collapse-icon');
+        if (ic) ic.style.transform = isCollapsed ? 'rotate(180deg)' : '';
+    }
+}
+
+function closeSidebarMobile() {
+    const sidebar = document.getElementById('main-nav');
+    if (sidebar) sidebar.classList.remove('open');
+    const ov = document.getElementById('sidebar-overlay');
+    if (ov) ov.classList.remove('visible');
+    const ic = document.getElementById('sidebar-toggle-icon');
+    if (ic) ic.className = 'fas fa-bars';
+}
+
+// Close mobile sidebar when a tab is clicked
+function _navTabClicked() {
+    if (_isMobile()) closeSidebarMobile();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 // ── Notification bell (students only) ────────────────────────────────────────
 
