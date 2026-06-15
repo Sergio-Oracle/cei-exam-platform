@@ -798,6 +798,47 @@ def find_or_create_student(student_name, extracted_name, session):
     return student
 
 
+def send_password_reset_email(user_email, user_name, reset_link):
+    """Email de réinitialisation de mot de passe — token valide 1 heure."""
+    smtp_cfg = _smtp_config()
+    subject = "🔐 Réinitialisation de votre mot de passe CEI"
+    html_body = f"""
+    <!DOCTYPE html><html><body style="font-family:Arial,sans-serif;background:#f1f5f9;margin:0;padding:24px;">
+    <div style="max-width:520px;margin:0 auto;background:white;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+        <div style="background:linear-gradient(135deg,#3b82f6,#1d4ed8);padding:32px 36px;text-align:center;">
+            <div style="font-size:36px;margin-bottom:8px;">🔐</div>
+            <h1 style="color:white;margin:0;font-size:22px;font-weight:700;">Réinitialisation du mot de passe</h1>
+            <p style="color:rgba(255,255,255,.85);margin:6px 0 0;font-size:14px;">Centre d'Examen Intelligent</p>
+        </div>
+        <div style="padding:32px 36px;">
+            <p style="color:#1e293b;font-size:15px;margin:0 0 16px;">Bonjour <strong>{user_name}</strong>,</p>
+            <p style="color:#475569;font-size:14px;line-height:1.7;margin:0 0 24px;">
+                Nous avons reçu une demande de réinitialisation du mot de passe de votre compte CEI.<br>
+                Cliquez sur le bouton ci-dessous pour définir un nouveau mot de passe.
+            </p>
+            <div style="text-align:center;margin:28px 0;">
+                <a href="{reset_link}" style="display:inline-block;background:#3b82f6;color:white;text-decoration:none;padding:14px 32px;border-radius:10px;font-weight:700;font-size:15px;">
+                    Réinitialiser mon mot de passe
+                </a>
+            </div>
+            <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:14px 16px;margin-top:8px;">
+                <p style="margin:0;font-size:13px;color:#92400e;">
+                    <strong>⚠️ Ce lien expire dans 1 heure.</strong><br>
+                    Si vous n'avez pas demandé cette réinitialisation, ignorez cet email — votre mot de passe reste inchangé.
+                </p>
+            </div>
+        </div>
+        <div style="background:#f8fafc;padding:16px 36px;text-align:center;">
+            <p style="margin:0;font-size:12px;color:#94a3b8;">
+                CEI — Centre d'Examen Intelligent &nbsp;|&nbsp; {smtp_cfg.get('app_url','https://cei.unchk.sn')}
+            </p>
+        </div>
+    </div>
+    </body></html>
+    """
+    return send_email(user_email, subject, html_body)
+
+
 def generate_transcript_pdf(transcript_data, output_path):
     """Générer un relevé de notes en PDF
     transcript_data = {

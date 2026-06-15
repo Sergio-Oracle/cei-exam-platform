@@ -101,9 +101,17 @@ async function authenticatedFetch(url, options = {}) {
     }
 }
 // Initialisation
-// Initialisation
 document.addEventListener('DOMContentLoaded', function() {
     authToken = localStorage.getItem('authToken');
+
+    // Vérifier si un reset_token est présent dans l'URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const resetToken = urlParams.get('reset_token');
+    if (resetToken) {
+        showResetPasswordScreen(resetToken);
+        return;
+    }
+
     if (authToken) {
         verifyToken();
     } else {
@@ -118,6 +126,148 @@ document.addEventListener('DOMContentLoaded', function() {
         _resizeTimer = setTimeout(initSidebar, 120);
     });
 });
+
+// ============================================================================
+// MOT DE PASSE OUBLIÉ
+// ============================================================================
+
+function showForgotPasswordModal() {
+    const existing = document.getElementById('forgot-pw-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'forgot-pw-modal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.55);';
+    modal.innerHTML = `
+        <div style="background:#fff;border-radius:14px;padding:32px;max-width:400px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+            <div style="text-align:center;margin-bottom:20px;">
+                <span style="background:#eff6ff;border-radius:50%;width:52px;height:52px;display:inline-flex;align-items:center;justify-content:center;margin-bottom:10px;">
+                    <i class="fas fa-key" style="color:#3b82f6;font-size:22px;"></i>
+                </span>
+                <h3 style="margin:0;font-size:18px;color:#0f172a;">Mot de passe oublié</h3>
+                <p style="margin:6px 0 0;font-size:13px;color:#64748b;">Entrez votre email — vous recevrez un lien de réinitialisation valable 1 heure.</p>
+            </div>
+            <div style="margin-bottom:16px;">
+                <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:6px;">
+                    <i class="fas fa-envelope"></i> Adresse email
+                </label>
+                <input id="forgot-pw-email" type="email" placeholder="votre@email.com"
+                    style="width:100%;padding:10px 14px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;">
+            </div>
+            <div id="forgot-pw-msg" style="display:none;margin-bottom:12px;"></div>
+            <div style="display:flex;gap:10px;">
+                <button onclick="document.getElementById('forgot-pw-modal').remove()"
+                    style="flex:1;padding:10px;border:1px solid #e2e8f0;background:transparent;border-radius:8px;cursor:pointer;font-size:14px;color:#374151;">
+                    Annuler
+                </button>
+                <button onclick="submitForgotPassword()"
+                    style="flex:1;padding:10px;background:#3b82f6;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">
+                    <i class="fas fa-paper-plane"></i> Envoyer
+                </button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+    setTimeout(() => document.getElementById('forgot-pw-email')?.focus(), 100);
+}
+
+async function submitForgotPassword() {
+    const email = document.getElementById('forgot-pw-email')?.value?.trim();
+    const msgEl = document.getElementById('forgot-pw-msg');
+    if (!email) {
+        if (msgEl) { msgEl.style.display='block'; msgEl.innerHTML='<div style="background:#fee2e2;color:#dc2626;padding:10px 14px;border-radius:8px;font-size:13px;">Veuillez entrer votre email.</div>'; }
+        return;
+    }
+    try {
+        const res = await fetch('/api/auth/forgot-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        });
+        if (msgEl) {
+            msgEl.style.display = 'block';
+            msgEl.innerHTML = '<div style="background:#ecfdf5;color:#059669;padding:10px 14px;border-radius:8px;font-size:13px;"><i class="fas fa-check-circle"></i> Si cet email existe dans notre système, un lien vous a été envoyé.</div>';
+        }
+        // Désactiver le bouton pour éviter le double envoi
+        const btn = document.querySelector('#forgot-pw-modal button:last-child');
+        if (btn) { btn.disabled = true; btn.textContent = 'Email envoyé'; }
+    } catch(e) {
+        if (msgEl) { msgEl.style.display='block'; msgEl.innerHTML='<div style="background:#fee2e2;color:#dc2626;padding:10px 14px;border-radius:8px;font-size:13px;">Erreur réseau. Réessayez.</div>'; }
+    }
+}
+
+function showResetPasswordScreen(token) {
+    // Cacher l'écran de connexion et afficher le formulaire de réinitialisation
+    const loginScreen = document.getElementById('login-screen');
+    if (loginScreen) loginScreen.style.display = 'none';
+
+    const wrap = document.createElement('div');
+    wrap.id = 'reset-pw-screen';
+    wrap.className = 'auth-screen';
+    wrap.style.cssText = 'display:flex;min-height:100vh;align-items:center;justify-content:center;background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);';
+    wrap.innerHTML = `
+        <div style="background:#fff;border-radius:16px;padding:36px;max-width:420px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,0.18);">
+            <div style="text-align:center;margin-bottom:24px;">
+                <span style="background:#eff6ff;border-radius:50%;width:60px;height:60px;display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px;">
+                    <i class="fas fa-lock" style="color:#3b82f6;font-size:26px;"></i>
+                </span>
+                <h2 style="margin:0;font-size:20px;color:#0f172a;">Nouveau mot de passe</h2>
+                <p style="margin:6px 0 0;font-size:13px;color:#64748b;">Choisissez un mot de passe sécurisé (min. 8 caractères).</p>
+            </div>
+            <div style="margin-bottom:14px;">
+                <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:6px;"><i class="fas fa-lock"></i> Nouveau mot de passe</label>
+                <input id="reset-pw-new" type="password" placeholder="••••••••"
+                    style="width:100%;padding:10px 14px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;">
+            </div>
+            <div style="margin-bottom:20px;">
+                <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:6px;"><i class="fas fa-lock"></i> Confirmer le mot de passe</label>
+                <input id="reset-pw-confirm" type="password" placeholder="••••••••"
+                    style="width:100%;padding:10px 14px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;">
+            </div>
+            <div id="reset-pw-msg" style="display:none;margin-bottom:14px;"></div>
+            <button onclick="submitResetPassword('${token}')"
+                style="width:100%;padding:12px;background:#3b82f6;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:15px;font-weight:700;">
+                <i class="fas fa-check"></i> Enregistrer le nouveau mot de passe
+            </button>
+            <p style="text-align:center;margin:14px 0 0;">
+                <a href="/app" style="font-size:13px;color:#64748b;text-decoration:none;">
+                    <i class="fas fa-arrow-left"></i> Retour à la connexion
+                </a>
+            </p>
+        </div>
+    `;
+    document.body.appendChild(wrap);
+}
+
+async function submitResetPassword(token) {
+    const newPw = document.getElementById('reset-pw-new')?.value || '';
+    const confirm = document.getElementById('reset-pw-confirm')?.value || '';
+    const msgEl = document.getElementById('reset-pw-msg');
+
+    const showMsg = (text, color) => {
+        if (msgEl) { msgEl.style.display='block'; msgEl.innerHTML=`<div style="background:${color==='error'?'#fee2e2':'#ecfdf5'};color:${color==='error'?'#dc2626':'#059669'};padding:10px 14px;border-radius:8px;font-size:13px;">${text}</div>`; }
+    };
+    if (newPw.length < 8) return showMsg('<i class="fas fa-exclamation-circle"></i> Le mot de passe doit contenir au moins 8 caractères.', 'error');
+    if (newPw !== confirm) return showMsg('<i class="fas fa-exclamation-circle"></i> Les mots de passe ne correspondent pas.', 'error');
+
+    try {
+        const res = await fetch('/api/auth/reset-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token, new_password: newPw })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            showMsg('<i class="fas fa-check-circle"></i> Mot de passe mis à jour ! Redirection vers la connexion...', 'success');
+            setTimeout(() => { window.location.href = '/app'; }, 2000);
+        } else {
+            showMsg(`<i class="fas fa-exclamation-circle"></i> ${data.error || 'Erreur inconnue'}`, 'error');
+        }
+    } catch(e) {
+        showMsg('<i class="fas fa-exclamation-circle"></i> Erreur réseau. Réessayez.', 'error');
+    }
+}
 
 // Authentification
 async function handleLogin(e) {
@@ -578,6 +728,9 @@ function loadNavigation() {
             </button>
             <button class="nav-tab" onclick="loadMyReclamations()">
                 <i class="fas fa-exclamation-circle"></i> ${t('nav.my_reclamations')}
+            </button>
+            <button class="nav-tab" onclick="loadExamSchedule()">
+                <i class="fas fa-calendar-alt"></i> Planning
             </button>
             <button class="nav-tab" onclick="loadStudentHelp()">
                 <i class="fas fa-question-circle"></i> Aide
@@ -3481,6 +3634,113 @@ async function deleteTranscript(transcriptId) {
         }
     } catch(e) {
         showAlert('Erreur réseau lors de la suppression.', 'error');
+    } finally {
+        showLoader(false);
+    }
+}
+
+async function loadExamSchedule() {
+    if (window.event && window.event.target) setActiveTab(window.event.target);
+    window._currentView = loadExamSchedule;
+    showLoader(true);
+    try {
+        const res = await authenticatedFetch('/api/online_exams');
+        const exams = res.ok ? await res.json() : [];
+
+        const now = new Date();
+        const upcoming = exams
+            .filter(e => e.status === 'scheduled' || e.status === 'active')
+            .sort((a, b) => new Date(a.scheduled_start || 0) - new Date(b.scheduled_start || 0));
+        const past = exams
+            .filter(e => e.status === 'closed')
+            .sort((a, b) => new Date(b.scheduled_start || 0) - new Date(a.scheduled_start || 0))
+            .slice(0, 10);
+
+        const fmtDate = iso => {
+            if (!iso) return '—';
+            const d = new Date(iso);
+            return d.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long', year:'numeric' }) + ' à ' +
+                   d.toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' });
+        };
+        const fmtDuration = mins => mins >= 60 ? `${Math.floor(mins/60)}h${mins%60?String(mins%60).padStart(2,'0'):''}` : `${mins} min`;
+
+        const renderCard = (exam, isPast) => {
+            const statusColors = { active: '#10b981', scheduled: '#3b82f6', closed: '#94a3b8' };
+            const statusLabels = { active: 'En cours', scheduled: 'À venir', closed: 'Terminé' };
+            const color = statusColors[exam.status] || '#64748b';
+            const label = statusLabels[exam.status] || exam.status;
+            const start = exam.scheduled_start ? new Date(exam.scheduled_start) : null;
+            const diffMs = start ? start - now : null;
+            const diffH = diffMs ? Math.floor(diffMs / 3600000) : null;
+            const diffMin = diffMs ? Math.floor((diffMs % 3600000) / 60000) : null;
+            const countdown = !isPast && diffMs > 0
+                ? (diffH > 0 ? `Dans ${diffH}h${diffMin > 0 ? diffMin + 'min' : ''}` : diffMin > 0 ? `Dans ${diffMin} min` : 'Imminente')
+                : '';
+
+            return `
+            <div style="background:var(--surface,#fff);border-radius:12px;border:1px solid var(--border,#e2e8f0);border-left:4px solid ${color};padding:18px 20px;display:flex;align-items:flex-start;gap:16px;">
+                <div style="background:${color}1a;width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <i class="fas fa-${isPast ? 'history' : exam.status==='active' ? 'play-circle' : 'clock'}" style="color:${color};font-size:18px;"></i>
+                </div>
+                <div style="flex:1;min-width:0;">
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
+                        <strong style="font-size:15px;color:var(--text,#0f172a);">${exam.title}</strong>
+                        <span style="background:${color}1a;color:${color};padding:2px 10px;border-radius:99px;font-size:11px;font-weight:700;">${label}</span>
+                        ${countdown ? `<span style="background:#fef3c7;color:#92400e;padding:2px 10px;border-radius:99px;font-size:11px;font-weight:700;"><i class="fas fa-hourglass-half"></i> ${countdown}</span>` : ''}
+                    </div>
+                    <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--text-secondary,#64748b);">
+                        ${start ? `<span><i class="fas fa-calendar-day"></i> ${fmtDate(exam.scheduled_start)}</span>` : ''}
+                        ${exam.duration_minutes ? `<span><i class="fas fa-stopwatch"></i> ${fmtDuration(exam.duration_minutes)}</span>` : ''}
+                        ${exam.auto_correct ? `<span style="color:#10b981;"><i class="fas fa-robot"></i> Correction IA</span>` : ''}
+                    </div>
+                    ${exam.status === 'active' ? `
+                    <div style="margin-top:10px;">
+                        <button onclick="loadOnlineExams()" style="display:inline-flex;align-items:center;gap:6px;padding:7px 16px;background:#10b981;color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
+                            <i class="fas fa-play"></i> Rejoindre l'examen
+                        </button>
+                    </div>` : ''}
+                </div>
+            </div>`;
+        };
+
+        let html = `
+        <div style="margin-bottom:24px;">
+            <h2 style="font-size:20px;font-weight:700;color:var(--text,#0f172a);margin:0 0 4px;display:flex;align-items:center;gap:10px;">
+                <i class="fas fa-calendar-alt" style="color:#3b82f6;"></i> Planning des examens
+            </h2>
+            <p style="color:var(--text-secondary,#64748b);margin:0;font-size:13px;">Vue chronologique de vos examens en ligne</p>
+        </div>`;
+
+        if (upcoming.length === 0 && past.length === 0) {
+            html += `<div style="text-align:center;padding:64px 24px;background:var(--surface,#fff);border-radius:16px;border:1px solid var(--border,#e2e8f0);">
+                <i class="fas fa-calendar-times" style="font-size:48px;color:#cbd5e1;display:block;margin-bottom:16px;"></i>
+                <h3 style="color:#475569;margin:0 0 8px;">Aucun examen planifié</h3>
+                <p style="color:#94a3b8;margin:0;font-size:14px;">Vos examens apparaîtront ici dès qu'un professeur les programmera.</p>
+            </div>`;
+        } else {
+            if (upcoming.length > 0) {
+                html += `<div style="margin-bottom:28px;">
+                    <h3 style="font-size:14px;font-weight:700;color:var(--text-secondary,#64748b);text-transform:uppercase;letter-spacing:.05em;margin:0 0 12px;display:flex;align-items:center;gap:8px;">
+                        <span style="background:#3b82f6;width:3px;height:16px;border-radius:2px;display:inline-block;"></span>
+                        Examens à venir & en cours (${upcoming.length})
+                    </h3>
+                    <div style="display:flex;flex-direction:column;gap:10px;">${upcoming.map(e => renderCard(e, false)).join('')}</div>
+                </div>`;
+            }
+            if (past.length > 0) {
+                html += `<div>
+                    <h3 style="font-size:14px;font-weight:700;color:var(--text-secondary,#64748b);text-transform:uppercase;letter-spacing:.05em;margin:0 0 12px;display:flex;align-items:center;gap:8px;">
+                        <span style="background:#94a3b8;width:3px;height:16px;border-radius:2px;display:inline-block;"></span>
+                        Examens passés (${past.length})
+                    </h3>
+                    <div style="display:flex;flex-direction:column;gap:10px;">${past.map(e => renderCard(e, true)).join('')}</div>
+                </div>`;
+            }
+        }
+
+        document.getElementById('main-content').innerHTML = html;
+    } catch(e) {
+        showAlert('Erreur lors du chargement du planning.', 'error');
     } finally {
         showLoader(false);
     }
@@ -7744,7 +8004,7 @@ async function loadExamCorrections() {
                                 ${corrected.length} corrigée(s)
                             </small>
                         </div>
-                        <div style="display:flex;gap:8px;align-items:center;">
+                        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                             ${exam.status === 'active' ? `
                                 <button class="btn btn-sm" onclick="openProctoringDashboard(${exam.id})"
                                     style="background:#7c3aed;color:white;">
@@ -7756,6 +8016,10 @@ async function loadExamCorrections() {
                                     <i class="fas fa-magic"></i> Tout Corriger avec IA
                                 </button>
                             ` : ''}
+                            <button class="btn btn-sm" onclick="exportExamResultsCSV(${exam.id}, '${(exam.title||'').replace(/'/g,"\\'")}')"
+                                style="background:#0f766e;color:white;" title="Exporter les résultats en CSV">
+                                <i class="fas fa-file-csv"></i> Export CSV
+                            </button>
                         </div>
                     </div>
                     
@@ -7795,18 +8059,23 @@ async function loadExamCorrections() {
                         <td>${incidentsBadge}</td>
                         <td>${scoreDisplay}</td>
                         <td>
-                            ${attempt.status === 'banned' ? 
-                                '<span style="color: #ef4444;">Banni</span>' : 
-                                attempt.needs_correction ? `
-                                    <button class="btn btn-sm btn-primary" onclick="correctSingleAttempt(${attempt.id})">
-                                        <i class="fas fa-magic"></i> Corriger
-                                    </button>
-                                ` : `
-                                    <button class="btn btn-sm btn-info" onclick="viewAttemptDetails(${attempt.id})">
-                                        <i class="fas fa-eye"></i> Voir
-                                    </button>
-                                `
-                            }
+                            <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                            ${attempt.status === 'banned' ? `
+                                <span class="status-badge danger" style="font-size:11px;">Banni</span>
+                                <button class="btn btn-sm" onclick="confirmUnbanAttempt(${attempt.id}, '${(attempt.student_name||'').replace(/'/g,"\\'")}')"
+                                    style="background:#f59e0b;color:#fff;font-size:11px;padding:3px 8px;" title="Lever le bannissement">
+                                    <i class="fas fa-user-check"></i> Débannir
+                                </button>
+                            ` : attempt.needs_correction ? `
+                                <button class="btn btn-sm btn-primary" onclick="correctSingleAttempt(${attempt.id})">
+                                    <i class="fas fa-magic"></i> Corriger
+                                </button>
+                            ` : `
+                                <button class="btn btn-sm btn-info" onclick="viewAttemptDetails(${attempt.id})">
+                                    <i class="fas fa-eye"></i> Voir
+                                </button>
+                            `}
+                            </div>
                         </td>
                     </tr>
                 `;
@@ -7894,6 +8163,91 @@ async function correctAllExamAttempts(examId) {
         loadExamCorrections();
     } catch (error) {
         showAlert(humanError(error), 'error');
+    } finally {
+        showLoader(false);
+    }
+}
+
+function confirmUnbanAttempt(attemptId, studentName) {
+    const existing = document.getElementById('unban-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'unban-modal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.55);';
+    modal.innerHTML = `
+        <div style="background:var(--surface,#fff);border-radius:12px;padding:28px 32px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.22);">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+                <span style="background:#fef3c7;border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <i class="fas fa-user-check" style="color:#d97706;font-size:18px;"></i>
+                </span>
+                <h3 style="margin:0;font-size:1.1rem;color:var(--text,#1e293b);">Lever le bannissement</h3>
+            </div>
+            <p style="color:var(--text-secondary,#475569);margin:0 0 8px;">
+                Vous allez réautoriser <strong>${studentName}</strong> à poursuivre l'examen.
+            </p>
+            <div style="margin-bottom:16px;">
+                <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:6px;">Motif (optionnel)</label>
+                <input id="unban-reason" type="text" placeholder="Ex : erreur de détection, incident technique..."
+                    style="width:100%;padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;box-sizing:border-box;">
+            </div>
+            <div style="background:#fef3c7;border-radius:8px;padding:10px 14px;margin-bottom:20px;">
+                <p style="margin:0;font-size:12px;color:#92400e;"><i class="fas fa-info-circle"></i> L'étudiant retrouvera accès à l'examen avec le temps restant à l'expiration d'origine.</p>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button onclick="document.getElementById('unban-modal').remove()"
+                    style="padding:9px 20px;border:1px solid var(--border,#e2e8f0);background:transparent;border-radius:8px;cursor:pointer;color:var(--text,#1e293b);">
+                    Annuler
+                </button>
+                <button onclick="unbanAttempt(${attemptId})"
+                    style="padding:9px 20px;background:#f59e0b;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;">
+                    <i class="fas fa-user-check"></i> Confirmer le débannissement
+                </button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+}
+
+async function unbanAttempt(attemptId) {
+    const reason = document.getElementById('unban-reason')?.value || '';
+    document.getElementById('unban-modal')?.remove();
+    try {
+        showLoader(true);
+        const res = await authenticatedFetch(`/api/exam_attempts/${attemptId}/unban`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            showAlert(data.message, 'success');
+            loadExamCorrections();
+        } else {
+            showAlert(data.error || 'Erreur lors du débannissement.', 'error');
+        }
+    } catch(e) {
+        showAlert('Erreur réseau.', 'error');
+    } finally {
+        showLoader(false);
+    }
+}
+
+async function exportExamResultsCSV(examId, examTitle) {
+    try {
+        showLoader(true);
+        const res = await authenticatedFetch(`/api/online_exams/${examId}/results/csv`);
+        if (!res.ok) { showAlert('Erreur lors de l\'export.', 'error'); return; }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `resultats_${(examTitle || examId).replace(/\s+/g, '_').substring(0, 40)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    } catch(e) {
+        showAlert('Erreur lors du téléchargement CSV.', 'error');
     } finally {
         showLoader(false);
     }

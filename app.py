@@ -41,6 +41,7 @@ from models import (
 from export_route import register_export_route
 from utils import (
     send_account_created_email, send_paper_corrected_email,
+    send_password_reset_email,
     extract_text_from_file,
     generate_pdf_report,
     generate_corrected_paper_pdf,
@@ -638,6 +639,85 @@ def change_password():
         return jsonify({'success': True, 'message': 'Mot de passe modifié avec succès'})
     except Exception as e:
         print(f"❌ Erreur change_password: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# ============================================================================
+# MOT DE PASSE OUBLIÉ — RÉINITIALISATION PAR EMAIL
+# ============================================================================
+
+@app.route('/api/auth/forgot-password', methods=['POST'])
+def forgot_password():
+    """Demander la réinitialisation de mot de passe — envoie un email avec un lien tokenisé."""
+    try:
+        import secrets as _secrets
+        data = request.get_json() or {}
+        email = (data.get('email') or '').strip().lower()
+        if not email:
+            return jsonify({'error': 'Email requis'}), 400
+
+        session = get_session()
+        user = session.query(User).filter_by(email=email).first()
+
+        # Réponse générique pour éviter l'énumération d'emails
+        if not user or not user.has_email:
+            session.close()
+            return jsonify({'success': True, 'message': 'Si cet email existe, un lien a été envoyé.'})
+
+        token = _secrets.token_urlsafe(32)
+        user.reset_token = token
+        user.reset_token_expires = utcnow() + timedelta(hours=1)
+        session.commit()
+
+        from flask import request as _req
+        base_url = _req.host_url.rstrip('/')
+        reset_link = f"{base_url}/app?reset_token={token}"
+
+        try:
+            send_password_reset_email(user.email, user.full_name, reset_link)
+        except Exception as mail_err:
+            print(f"⚠️ Erreur envoi email reset: {mail_err}")
+
+        session.close()
+        return jsonify({'success': True, 'message': 'Si cet email existe, un lien a été envoyé.'})
+    except Exception as e:
+        print(f"❌ Erreur forgot_password: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/auth/reset-password', methods=['POST'])
+def reset_password():
+    """Valider le token et appliquer le nouveau mot de passe."""
+    try:
+        data = request.get_json() or {}
+        token = (data.get('token') or '').strip()
+        new_password = data.get('new_password', '')
+
+        if not token or not new_password:
+            return jsonify({'error': 'Token et nouveau mot de passe requis'}), 400
+        if len(new_password) < 8:
+            return jsonify({'error': 'Le mot de passe doit contenir au moins 8 caractères'}), 400
+
+        session = get_session()
+        user = session.query(User).filter_by(reset_token=token).first()
+
+        if not user:
+            session.close()
+            return jsonify({'error': 'Lien invalide ou déjà utilisé'}), 400
+        if user.reset_token_expires and utcnow() > user.reset_token_expires:
+            user.reset_token = None
+            user.reset_token_expires = None
+            session.commit()
+            session.close()
+            return jsonify({'error': 'Ce lien a expiré. Faites une nouvelle demande.'}), 400
+
+        user.password_hash = bcrypt.generate_password_hash(new_password).decode('utf-8')
+        user.reset_token = None
+        user.reset_token_expires = None
+        session.commit()
+        session.close()
+        return jsonify({'success': True, 'message': 'Mot de passe mis à jour avec succès.'})
+    except Exception as e:
+        print(f"❌ Erreur reset_password: {e}")
         return jsonify({'error': str(e)}), 500
 
 # ============================================================================
@@ -4382,6 +4462,145 @@ def delete_transcript(transcript_id):
     except Exception as e:
         print(f"Erreur delete_transcript: {e}")
         return jsonify({'error': str(e)}), 500
+
+# ============================================================================
+# LEVÉE DE BANNISSEMENT — PROF / ADMIN
+# ============================================================================
+
+@app.route('/api/exam_attempts/<int:attempt_id>/unban', methods=['POST'])
+@jwt_required()
+def unban_exam_attempt(attempt_id):
+    """
+    Lever le bannissement d'un étudiant sur une tentative d'examen.
+    - Admin : peut unban n'importe quelle tentative
+    - Professeur : uniquement si l'examen lui appartient
+    """
+    try:
+        user_id = int(get_jwt_identity())
+        session = get_session()
+        user = session.query(User).filter_by(id=user_id).first()
+
+        if user.role not in [UserRole.ADMIN, UserRole.PROFESSOR]:
+            session.close()
+            return jsonify({'error': 'Accès non autorisé'}), 403
+
+        attempt = session.query(ExamAttempt).filter_by(id=attempt_id).first()
+        if not attempt:
+            session.close()
+            return jsonify({'error': 'Tentative introuvable'}), 404
+
+        if user.role == UserRole.PROFESSOR and attempt.exam.professor_id != user_id:
+            session.close()
+            return jsonify({'error': 'Vous ne pouvez lever que les bannissements de vos propres examens'}), 403
+
+        if attempt.status != AttemptStatus.BANNED:
+            session.close()
+            return jsonify({'error': "Cet étudiant n'est pas banni sur cette tentative"}), 400
+
+        data = request.get_json() or {}
+        reason = data.get('reason', '').strip()
+
+        attempt.status = AttemptStatus.IN_PROGRESS
+        attempt.banned_at = None
+        # Log the unban action
+        log = ExamActivityLog(
+            attempt_id=attempt.id,
+            event_type='unban',
+            details=f'Bannissement levé par {user.full_name}' + (f' — Motif : {reason}' if reason else ''),
+            risk_score=0
+        )
+        session.add(log)
+        session.commit()
+
+        student_name = attempt.student.full_name if attempt.student else 'Inconnu'
+        session.close()
+        return jsonify({'success': True, 'message': f'Bannissement de {student_name} levé avec succès.'})
+    except Exception as e:
+        print(f"❌ Erreur unban_exam_attempt: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# ============================================================================
+# EXPORT CSV DES RÉSULTATS D'UN EXAMEN EN LIGNE
+# ============================================================================
+
+@app.route('/api/online_exams/<int:exam_id>/results/csv', methods=['GET'])
+@jwt_required()
+def export_exam_results_csv(exam_id):
+    """Export CSV des résultats d'un examen en ligne (prof propriétaire ou admin)."""
+    try:
+        import csv, io
+        from flask import Response
+
+        user_id = int(get_jwt_identity())
+        session = get_session()
+        user = session.query(User).filter_by(id=user_id).first()
+
+        if user.role not in [UserRole.ADMIN, UserRole.PROFESSOR]:
+            session.close()
+            return jsonify({'error': 'Accès non autorisé'}), 403
+
+        exam = session.query(OnlineExam).filter_by(id=exam_id).first()
+        if not exam:
+            session.close()
+            return jsonify({'error': 'Examen introuvable'}), 404
+
+        if user.role == UserRole.PROFESSOR and exam.professor_id != user_id:
+            session.close()
+            return jsonify({'error': 'Accès réservé au professeur propriétaire de cet examen'}), 403
+
+        attempts = session.query(ExamAttempt).options(
+            joinedload(ExamAttempt.student)
+        ).filter_by(exam_id=exam_id).order_by(ExamAttempt.started_at).all()
+
+        output = io.StringIO()
+        writer = csv.writer(output, delimiter=';')
+        writer.writerow([
+            'Nom complet', 'Email', 'Statut', 'Note /20',
+            'Début', 'Soumission', 'Durée (min)', 'Incidents'
+        ])
+
+        for a in attempts:
+            status_labels = {
+                'submitted': 'Soumis', 'in_progress': 'En cours',
+                'banned': 'Banni', 'timed_out': 'Temps écoulé'
+            }
+            status_label = status_labels.get(a.status.value if a.status else '', str(a.status))
+
+            duration = ''
+            if a.started_at and a.submitted_at:
+                delta = a.submitted_at - a.started_at
+                duration = str(round(delta.total_seconds() / 60, 1))
+
+            incidents = session.query(ExamActivityLog).filter_by(
+                attempt_id=a.id
+            ).count()
+
+            writer.writerow([
+                a.student.full_name if a.student else 'Inconnu',
+                a.student.email if a.student else '',
+                status_label,
+                a.score if a.score is not None else '',
+                a.started_at.strftime('%d/%m/%Y %H:%M') if a.started_at else '',
+                a.submitted_at.strftime('%d/%m/%Y %H:%M') if a.submitted_at else '',
+                duration,
+                incidents
+            ])
+
+        csv_content = '﻿' + output.getvalue()  # BOM UTF-8 pour Excel
+        session.close()
+
+        safe_title = ''.join(c if c.isalnum() or c in ' -_' else '_' for c in (exam.title or 'examen'))
+        filename = f"resultats_{safe_title[:40]}.csv"
+        return Response(
+            csv_content,
+            mimetype='text/csv; charset=utf-8',
+            headers={'Content-Disposition': f'attachment; filename="{filename}"'}
+        )
+    except Exception as e:
+        print(f"❌ Erreur export_exam_results_csv: {e}")
+        return jsonify({'error': str(e)}), 500
+
 
 # ============================================================================
 # CORRECTION AUTOMATIQUE DES EXAMENS EN LIGNE AVEC IA
