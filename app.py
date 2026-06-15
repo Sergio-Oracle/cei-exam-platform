@@ -3147,6 +3147,54 @@ def professor_dashboard():
 # ROUTES ÉTUDIANT
 # ============================================================================
 
+@app.route('/api/student/online_results', methods=['GET'])
+@jwt_required()
+def get_student_online_results():
+    """Résultats des examens en ligne corrigés pour l'étudiant connecté."""
+    try:
+        user_id = int(get_jwt_identity())
+        session = get_session()
+        user = session.query(User).filter_by(id=user_id).first()
+        if not user or user.role != UserRole.STUDENT:
+            session.close()
+            return jsonify([])
+
+        attempts = session.query(ExamAttempt).options(
+            joinedload(ExamAttempt.exam).joinedload(OnlineExam.subject)
+        ).filter(
+            ExamAttempt.student_id == user_id,
+            ExamAttempt.corrected_at != None
+        ).order_by(desc(ExamAttempt.corrected_at)).all()
+
+        results = []
+        for att in attempts:
+            exam    = att.exam
+            subject = exam.subject if exam else None
+            # Vérifier s'il existe déjà une réclamation
+            existing_reclamation = session.query(Reclamation).filter_by(
+                attempt_id=att.id, student_id=user_id
+            ).first()
+            results.append({
+                'attempt_id':    att.id,
+                'exam_id':       att.exam_id,
+                'exam_title':    exam.title if exam else '—',
+                'subject_title': subject.title if subject else None,
+                'score':         att.score,
+                'feedback':      att.feedback,
+                'corrected_at':  att.corrected_at.isoformat() if att.corrected_at else None,
+                'submitted_at':  att.submitted_at.isoformat() if att.submitted_at else None,
+                'auto_correct':  exam.auto_correct if exam else False,
+                'has_reclamation': existing_reclamation is not None,
+                'reclamation_status': existing_reclamation.status.value if existing_reclamation else None
+            })
+
+        session.close()
+        return jsonify(results)
+    except Exception as e:
+        print(f"❌ get_student_online_results: {e}")
+        return jsonify([])
+
+
 @app.route('/api/student/papers', methods=['GET'])
 @jwt_required()
 def get_student_papers():
@@ -3163,7 +3211,25 @@ def get_student_papers():
             joinedload(StudentPaper.subject)
         ).filter_by(student_id=user_id).order_by(desc(StudentPaper.created_at)).all()
 
-        papers_list = [paper.to_dict() for paper in papers]
+        # Pré-charger les réclamations pour éviter N+1
+        paper_ids = [p.id for p in papers]
+        reclamations_by_paper = {}
+        if paper_ids:
+            recs = session.query(Reclamation).filter(
+                Reclamation.paper_id.in_(paper_ids),
+                Reclamation.student_id == user_id
+            ).all()
+            for r in recs:
+                reclamations_by_paper[r.paper_id] = r
+
+        papers_list = []
+        for paper in papers:
+            d = paper.to_dict()
+            rec = reclamations_by_paper.get(paper.id)
+            d['has_reclamation']     = rec is not None
+            d['reclamation_status']  = rec.status.value if rec else None
+            papers_list.append(d)
+
         session.close()
         return jsonify(papers_list)
     except Exception as e:

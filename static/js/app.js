@@ -675,83 +675,155 @@ async function loadAdminCorrectedPapers() {
 async function loadStudentDashboard() {
     showLoader(true);
     try {
-        const response = await authenticatedFetch('/api/student/papers');
-        if (!response.ok) {
-            throw new Error(await response.text());
-        }
-        const papers = await response.json();
+        const [papersRes, onlineRes] = await Promise.all([
+            authenticatedFetch('/api/student/papers'),
+            authenticatedFetch('/api/student/online_results')
+        ]);
+        const papers  = papersRes.ok  ? await papersRes.json()  : [];
+        const online  = onlineRes.ok  ? await onlineRes.json()  : [];
+
         const content = document.getElementById('main-content');
 
-        if (papers.length === 0) {
-            content.innerHTML = `
-                <div class="page-header">
-                    <h2><i class="fas fa-chart-bar"></i> ${t('section.student_dashboard')}</h2>
-                    <p>${t('section.welcome')} ${currentUser.full_name}</p>
-                </div>
-                <div class="alert alert-info">
-                    <i class="fas fa-info-circle"></i>
-                    <div>${t('section.no_copies_yet')}</div>
-                </div>
-            `;
-        } else {
-            const scores = papers.filter(p => p.score).map(p => p.score);
-            const average = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2) : 0;
+        // ── Stats ────────────────────────────────────────────────────────────
+        const paperScores  = papers.filter(p => p.score !== null && p.score !== undefined).map(p => p.score);
+        const onlineScores = online.filter(o => o.score !== null && o.score !== undefined).map(o => o.score);
+        const allScores    = [...paperScores, ...onlineScores];
+        const avgAll       = allScores.length ? (allScores.reduce((a,b) => a+b, 0) / allScores.length).toFixed(2) : '—';
+        const avgPaper     = paperScores.length ? (paperScores.reduce((a,b) => a+b, 0) / paperScores.length).toFixed(2) : '—';
+        const avgOnline    = onlineScores.length ? (onlineScores.reduce((a,b) => a+b, 0) / onlineScores.length).toFixed(2) : '—';
+        const admis        = allScores.filter(s => s >= 10).length;
+        const pending      = papers.filter(p => !p.score).length + online.filter(o => !o.score).length;
 
-            let papersHTML = papers.map(paper => {
-                const scoreClass = paper.score >= 10 ? 'success' : 'danger';
-                return `<tr>
-                    <td>${paper.subject_title}</td>
-                    <td><span class="status-badge ${scoreClass}">
-                        <i class="fas ${paper.score >= 10 ? 'fa-check' : 'fa-times'}"></i>
-                        ${paper.score ? paper.score + '/20' : t('section.awaiting')}
-                    </span></td>
-                    <td><i class="fas fa-calendar"></i> ${new Date(paper.created_at).toLocaleDateString(_locale())}</td>
-                    <td>
-                        ${paper.score ? `
-                            <button class="btn btn-sm btn-success" onclick="exportPaperPDF(${paper.id})">
-                                <i class="fas fa-file-pdf"></i> ${t('btn.export_pdf')}
-                            </button>
-                            <button class="btn btn-sm btn-warning" onclick="showCreateReclamationModal(${paper.id})">
-                                <i class="fas fa-exclamation-triangle"></i> ${t('btn.claim')}
-                            </button>
-                        ` : `<span style="color:#94a3b8;"><i class="fas fa-clock"></i> ${t('section.waiting_correction')}</span>`}
-                    </td>
-                </tr>`;
-            }).join('');
+        const scoreColor = s => s >= 10 ? '#10b981' : '#ef4444';
+        const scoreBadge = s => s !== null && s !== undefined
+            ? `<span style="font-weight:700;color:${scoreColor(s)};font-size:13px;">${Number(s).toFixed(2)}/20</span>`
+            : `<span style="color:#94a3b8;font-size:12px;"><i class="fas fa-clock"></i> En attente</span>`;
 
-            content.innerHTML = `
-                <div class="page-header">
-                    <h2><i class="fas fa-chart-bar"></i> ${t('section.student_dashboard')}</h2>
-                    <p>${t('section.welcome')} ${currentUser.full_name}</p>
+        const fmtDate = iso => iso ? new Date(iso).toLocaleDateString('fr-FR', {day:'2-digit',month:'short',year:'numeric'}) : '—';
+
+        const reclamBadge = (hasRec, recStatus) => {
+            if (!hasRec) return '';
+            const colors = { pending:'#f59e0b', accepted:'#10b981', rejected:'#ef4444' };
+            const labels = { pending:'En cours', accepted:'Acceptée', rejected:'Rejetée' };
+            const c = colors[recStatus] || '#94a3b8';
+            return `<span style="font-size:10px;font-weight:700;color:${c};background:${c}22;padding:2px 7px;border-radius:99px;margin-left:6px;">${labels[recStatus]||recStatus}</span>`;
+        };
+
+        // ── Rows copies papier ───────────────────────────────────────────────
+        const paperRows = papers.map(p => `
+            <tr>
+                <td style="font-size:13px;">
+                    <i class="fas fa-file-alt" style="color:#3b82f6;margin-right:6px;"></i>
+                    ${p.subject_title || '—'}
+                    ${reclamBadge(p.has_reclamation, p.reclamation_status)}
+                </td>
+                <td><span style="font-size:11px;background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:99px;">Copie</span></td>
+                <td>${scoreBadge(p.score)}</td>
+                <td style="font-size:12px;color:#64748b;">${fmtDate(p.corrected_at || p.created_at)}</td>
+                <td>
+                    ${p.score !== null && p.score !== undefined ? `
+                        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                            <button class="btn btn-sm" onclick="exportPaperPDF(${p.id})" style="font-size:11px;padding:5px 10px;background:#3b82f6;color:white;border:none;border-radius:6px;cursor:pointer;">
+                                <i class="fas fa-file-pdf"></i> PDF
+                            </button>
+                            ${!p.has_reclamation ? `
+                            <button class="btn btn-sm" onclick="showCreateReclamationModal(${p.id})" style="font-size:11px;padding:5px 10px;background:#f59e0b;color:white;border:none;border-radius:6px;cursor:pointer;">
+                                <i class="fas fa-exclamation-triangle"></i> Réclamer
+                            </button>` : ''}
+                        </div>
+                    ` : `<span style="color:#94a3b8;font-size:12px;">—</span>`}
+                </td>
+            </tr>`).join('');
+
+        // ── Rows examens en ligne ────────────────────────────────────────────
+        const onlineRows = online.map(o => `
+            <tr>
+                <td style="font-size:13px;">
+                    <i class="fas fa-laptop" style="color:#6366f1;margin-right:6px;"></i>
+                    ${o.exam_title || '—'}
+                    ${reclamBadge(o.has_reclamation, o.reclamation_status)}
+                </td>
+                <td><span style="font-size:11px;background:#ede9fe;color:#6d28d9;padding:2px 8px;border-radius:99px;">${o.auto_correct ? 'IA auto' : 'En ligne'}</span></td>
+                <td>${scoreBadge(o.score)}</td>
+                <td style="font-size:12px;color:#64748b;">${fmtDate(o.corrected_at)}</td>
+                <td>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                        <button class="btn btn-sm" onclick="viewMyExamResult(${o.attempt_id})" style="font-size:11px;padding:5px 10px;background:#6366f1;color:white;border:none;border-radius:6px;cursor:pointer;">
+                            <i class="fas fa-eye"></i> Voir
+                        </button>
+                        ${!o.has_reclamation ? `
+                        <button class="btn btn-sm" onclick="showReclamationModalForAttempt(${o.attempt_id},'${(o.exam_title||'').replace(/'/g,"\\'")}')" style="font-size:11px;padding:5px 10px;background:#f59e0b;color:white;border:none;border-radius:6px;cursor:pointer;">
+                            <i class="fas fa-exclamation-triangle"></i> Réclamer
+                        </button>` : ''}
+                    </div>
+                </td>
+            </tr>`).join('');
+
+        const totalCount = papers.length + online.length;
+
+        content.innerHTML = `
+            <div class="page-header">
+                <h2><i class="fas fa-chart-bar"></i> Mon tableau de bord</h2>
+                <p>Bienvenue, <strong>${currentUser.full_name}</strong></p>
+            </div>
+
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;margin-bottom:24px;">
+                <div class="stat-card" style="text-align:center;">
+                    <div style="font-size:28px;font-weight:800;color:#0f172a;">${totalCount}</div>
+                    <div style="font-size:12px;color:#64748b;margin-top:4px;"><i class="fas fa-file"></i> Évaluations</div>
                 </div>
-                <div class="grid">
-                    <div class="stat-card">
-                        <div class="stat-label"><i class="fas fa-file"></i> ${t('section.total_copies')}</div>
-                        <div class="stat-value">${papers.length}</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label"><i class="fas fa-star"></i> ${t('table.average')}</div>
-                        <div class="stat-value">${average}/20</div>
-                    </div>
+                <div class="stat-card" style="text-align:center;">
+                    <div style="font-size:28px;font-weight:800;color:${avgAll >= 10 ? '#10b981' : avgAll === '—' ? '#94a3b8' : '#ef4444'};">${avgAll}</div>
+                    <div style="font-size:12px;color:#64748b;margin-top:4px;"><i class="fas fa-star"></i> Moyenne générale /20</div>
                 </div>
-                <div class="card mt-3">
-                    <div class="card-header">
-                        <h3><i class="fas fa-file-alt"></i> ${t('section.my_copies')}</h3>
-                    </div>
-                    <table>
+                <div class="stat-card" style="text-align:center;">
+                    <div style="font-size:28px;font-weight:800;color:#10b981;">${admis}</div>
+                    <div style="font-size:12px;color:#64748b;margin-top:4px;"><i class="fas fa-check-circle"></i> Admis (≥ 10)</div>
+                </div>
+                <div class="stat-card" style="text-align:center;">
+                    <div style="font-size:28px;font-weight:800;color:#f59e0b;">${pending}</div>
+                    <div style="font-size:12px;color:#64748b;margin-top:4px;"><i class="fas fa-hourglass-half"></i> En attente</div>
+                </div>
+                ${paperScores.length && onlineScores.length ? `
+                <div class="stat-card" style="text-align:center;">
+                    <div style="font-size:20px;font-weight:800;color:#3b82f6;">${avgPaper}</div>
+                    <div style="font-size:11px;color:#64748b;margin-top:4px;"><i class="fas fa-file-alt"></i> Moy. copies /20</div>
+                </div>
+                <div class="stat-card" style="text-align:center;">
+                    <div style="font-size:20px;font-weight:800;color:#6366f1;">${avgOnline}</div>
+                    <div style="font-size:11px;color:#64748b;margin-top:4px;"><i class="fas fa-laptop"></i> Moy. en ligne /20</div>
+                </div>` : ''}
+            </div>
+
+            ${totalCount === 0 ? `
+            <div class="card" style="text-align:center;padding:40px;">
+                <i class="fas fa-inbox" style="font-size:48px;color:#cbd5e1;margin-bottom:16px;display:block;"></i>
+                <p style="color:#94a3b8;margin:0;">Aucune évaluation pour le moment.<br>Vos notes apparaîtront ici après correction.</p>
+            </div>` : `
+            <div class="card">
+                <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+                    <h3 style="margin:0;"><i class="fas fa-list-alt"></i> Historique de toutes mes notes</h3>
+                    <span style="font-size:12px;color:#94a3b8;">${totalCount} évaluation(s)</span>
+                </div>
+                <div style="overflow-x:auto;">
+                    <table style="width:100%;border-collapse:collapse;">
                         <thead>
-                            <tr>
-                                <th><i class="fas fa-book"></i> ${t('table.subjects')}</th>
-                                <th><i class="fas fa-star"></i> ${t('table.score')}</th>
-                                <th><i class="fas fa-calendar"></i> ${t('table.date')}</th>
-                                <th><i class="fas fa-cog"></i> ${t('table.actions')}</th>
+                            <tr style="background:#f8fafc;">
+                                <th style="padding:10px 14px;text-align:left;font-size:12px;color:#64748b;font-weight:600;">Intitulé</th>
+                                <th style="padding:10px 14px;text-align:left;font-size:12px;color:#64748b;font-weight:600;">Type</th>
+                                <th style="padding:10px 14px;text-align:left;font-size:12px;color:#64748b;font-weight:600;">Note</th>
+                                <th style="padding:10px 14px;text-align:left;font-size:12px;color:#64748b;font-weight:600;">Date</th>
+                                <th style="padding:10px 14px;text-align:left;font-size:12px;color:#64748b;font-weight:600;">Actions</th>
                             </tr>
                         </thead>
-                        <tbody>${papersHTML}</tbody>
+                        <tbody>
+                            ${paperRows}
+                            ${onlineRows}
+                        </tbody>
                     </table>
                 </div>
-            `;
-        }
+            </div>`}
+        `;
     } catch (error) {
         showAlert(humanError(error), 'error');
     } finally {
