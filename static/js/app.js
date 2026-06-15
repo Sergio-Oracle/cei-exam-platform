@@ -5022,22 +5022,36 @@ async function loadOnlineExams() {
                 // Action buttons
                 let actionsHTML = '';
                 if (currentUser.role === 'student') {
-                    if (canCompose) {
+                    const att = exam.my_attempt;
+                    if (att) {
+                        if (att.status === 'in_progress' && canCompose) {
+                            // Examen en cours — permettre de reprendre
+                            actionsHTML = `<button class="btn btn-sm" onclick="startOnlineExam(${exam.id})" style="flex:1;background:#f59e0b;color:white;border:none;"><i class="fas fa-redo"></i> Reprendre</button>`;
+                        } else if (att.corrected_at) {
+                            // Corrigé — afficher la note
+                            const scoreVal = att.score !== null ? att.score.toFixed(2) : '—';
+                            const scoreColor = att.score >= 10 ? '#10b981' : '#ef4444';
+                            actionsHTML = `
+                                <span style="font-size:13px;font-weight:700;color:${scoreColor};display:flex;align-items:center;gap:5px;">
+                                    <i class="fas fa-star"></i> ${scoreVal}/20
+                                </span>
+                                <button class="btn btn-sm btn-primary" onclick="viewMyExamResult(${att.id})" style="flex:1;">
+                                    <i class="fas fa-eye"></i> Voir ma note
+                                </button>`;
+                        } else if (att.status === 'banned') {
+                            actionsHTML = `<span style="color:#ef4444;font-size:13px;display:flex;align-items:center;gap:6px;"><i class="fas fa-ban"></i> Exclu de l'examen</span>`;
+                        } else if (att.submitted_at) {
+                            // Soumis, correction en attente
+                            actionsHTML = `<span style="color:#f59e0b;font-size:13px;display:flex;align-items:center;gap:6px;"><i class="fas fa-hourglass-half"></i> Correction en cours…</span>`;
+                        } else {
+                            // Tentative existante non soumise mais examen fermé — bouton grisé
+                            actionsHTML = `<button class="btn btn-sm" disabled style="flex:1;background:#f1f5f9;color:#94a3b8;cursor:not-allowed;border:1px solid #e2e8f0;opacity:0.8;"><i class="fas fa-check-circle"></i> Déjà composé</button>`;
+                        }
+                    } else if (canCompose) {
+                        // Aucune tentative — l'étudiant peut composer
                         actionsHTML = `<button class="btn btn-success btn-sm" onclick="startOnlineExam(${exam.id})" style="flex:1;"><i class="fas fa-play"></i> Composer</button>`;
                     } else if (now < startTime) {
                         actionsHTML = `<button class="btn btn-sm" style="flex:1;background:#fffbeb;color:#d97706;border:1px solid #fcd34d;cursor:pointer;" onclick="showExamNotStartedInfo('${exam.start_time}','${safeTitle}')"><i class="fas fa-clock"></i> Pas encore ouvert</button>`;
-                    } else if (exam.my_attempt && exam.my_attempt.corrected_at) {
-                        const scoreVal = exam.my_attempt.score !== null ? exam.my_attempt.score.toFixed(2) : '—';
-                        const scoreColor = exam.my_attempt.score >= 10 ? '#10b981' : '#ef4444';
-                        actionsHTML = `
-                            <span style="font-size:13px;font-weight:700;color:${scoreColor};display:flex;align-items:center;gap:5px;">
-                                <i class="fas fa-star"></i> ${scoreVal}/20
-                            </span>
-                            <button class="btn btn-sm btn-primary" onclick="viewMyExamResult(${exam.my_attempt.id})" style="flex:1;">
-                                <i class="fas fa-eye"></i> Voir ma note
-                            </button>`;
-                    } else if (exam.my_attempt) {
-                        actionsHTML = `<span style="color:#f59e0b;font-size:13px;display:flex;align-items:center;gap:6px;"><i class="fas fa-hourglass-half"></i> Correction en cours…</span>`;
                     } else {
                         actionsHTML = `<span style="color:#94a3b8;font-size:13px;display:flex;align-items:center;gap:6px;"><i class="fas fa-check"></i> Terminé</span>`;
                     }
