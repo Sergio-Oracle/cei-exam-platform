@@ -431,6 +431,9 @@ class OnlineExam(Base):
     max_no_face_count = Column(Integer, default=10)  # Seuil: nb fois sans visage (-1=désactivé)
     ban_on_devtools = Column(Boolean, default=True)  # Bannir immédiatement si outils dev détectés
     
+    # Correction automatique par IA après soumission (optionnel, configuré par le prof)
+    auto_correct = Column(Boolean, default=False)
+
     status = Column(SQLEnum(ExamStatus), default=ExamStatus.DRAFT)
     created_by_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -457,6 +460,7 @@ class OnlineExam(Base):
             'max_no_face_count': self.max_no_face_count if self.max_no_face_count is not None else 10,
             'ban_on_devtools': self.ban_on_devtools if self.ban_on_devtools is not None else True,
             'status': self.status.value,
+            'auto_correct': self.auto_correct if self.auto_correct is not None else False,
             'creator_name': self.creator.full_name if self.creator else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'is_active': self.status == ExamStatus.ACTIVE,

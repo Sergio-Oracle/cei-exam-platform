@@ -5129,6 +5129,7 @@ async function loadOnlineExams() {
                 if (exam.ban_on_devtools) secChips += `<span style="${chipStyle('#fdf4ff','#7c3aed')}" title="Bannissement si outils dev"><i class="fas fa-terminal"></i> Dev ban</span>`;
                 if (!exam.enable_copy_paste) secChips += `<span style="${chipStyle('#f1f5f9','#64748b')}" title="Copier/Coller interdit"><i class="fas fa-ban"></i> C/C</span>`;
                 if (!exam.enable_right_click) secChips += `<span style="${chipStyle('#f1f5f9','#64748b')}" title="Clic droit interdit"><i class="fas fa-ban"></i> Clic droit</span>`;
+                if (exam.auto_correct) secChips += `<span style="${chipStyle('#f0fdf4','#15803d')}" title="Correction automatique par IA activée"><i class="fas fa-robot"></i> IA auto</span>`;
                 if (isProfOrAdmin && exam.attempts_count > 0) {
                     secChips += `<span style="${chipStyle('rgba(99,102,241,.1)','#6366f1')}"><i class="fas fa-users"></i> ${exam.attempts_count}</span>`;
                 }
@@ -5390,6 +5391,21 @@ async function showCreateOnlineExamModal() {
                     </div>
                 </div>
 
+                <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px 18px;margin-bottom:20px;">
+                    <div style="display:flex;align-items:flex-start;gap:10px;">
+                        <input type="checkbox" id="exam-auto-correct" style="width:auto;margin-top:3px;flex-shrink:0;">
+                        <div>
+                            <label for="exam-auto-correct" style="font-size:13px;font-weight:600;color:#15803d;cursor:pointer;margin:0;display:block;">
+                                <i class="fas fa-robot"></i> Activer la correction automatique par IA
+                            </label>
+                            <small style="color:#64748b;line-height:1.5;display:block;margin-top:3px;">
+                                Dès qu'un étudiant soumet sa copie, l'IA la corrige automatiquement.<br>
+                                <strong>Désactivé par défaut</strong> — le professeur peut toujours réviser ou corriger manuellement après.
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
                 <div style="display:flex;gap:10px;justify-content:flex-end;">
                     <button type="button" class="btn btn-secondary" onclick="closeModal()">
                         <i class="fas fa-times"></i> Annuler
@@ -5450,7 +5466,8 @@ async function handleCreateOnlineExam(e) {
                 max_no_face_count: parseInt(document.getElementById('exam-max-no-face').value),
                 ban_on_devtools: document.getElementById('exam-ban-devtools').checked,
                 enable_copy_paste: document.getElementById('exam-copy-paste').checked,
-                enable_right_click: document.getElementById('exam-right-click').checked
+                enable_right_click: document.getElementById('exam-right-click').checked,
+                auto_correct: document.getElementById('exam-auto-correct').checked
             })
         });
        
@@ -6523,7 +6540,10 @@ async function _confirmSignatureAndSubmit() {
         if (data.success) {
             clearInterval(examAutoSaveInterval);
             _stopFaceDetection();
-            showAlert('Votre examen a été soumis avec succès. Votre note sera disponible après correction.', 'success');
+            const msg = data.auto_correct
+                ? 'Votre copie a été soumise. La correction par IA est en cours — votre note sera disponible dans quelques instants.'
+                : 'Votre examen a été soumis avec succès. Votre note sera disponible après correction par votre professeur.';
+            showAlert(msg, 'success');
             setTimeout(() => { loadOnlineExams(); }, 2000);
         } else {
             showAlert(data.error || 'Impossible de soumettre l\'examen.', 'error');

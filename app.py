@@ -27,6 +27,7 @@ import io
 import re
 import statistics
 import json
+import threading
 
 from models import (
     User, Subject, StudentPaper, Reclamation, CorrectionHistory,
@@ -3316,6 +3317,7 @@ def create_online_exam():
             randomize_questions=data.get('randomize_questions', False),
             max_no_face_count=data.get('max_no_face_count', 10),
             ban_on_devtools=data.get('ban_on_devtools', True),
+            auto_correct=data.get('auto_correct', False),
             status=ExamStatus.SCHEDULED,
             created_by_id=user_id
         )
@@ -3862,6 +3864,93 @@ def get_exam_attempt_subject(attempt_id):
         print(f"❌ Erreur get_exam_attempt_subject: {e}")
         return jsonify({'error': str(e)}), 500
 
+def _run_auto_correction(attempt_id: int):
+    """Correction IA automatique dans un thread séparé (session DB indépendante)."""
+    session = get_session()
+    try:
+        attempt = session.query(ExamAttempt).options(
+            joinedload(ExamAttempt.exam).joinedload(OnlineExam.subject),
+            joinedload(ExamAttempt.student)
+        ).filter_by(id=attempt_id).first()
+
+        if not attempt:
+            print(f"⚠️  Auto-correction : tentative {attempt_id} introuvable")
+            return
+
+        exam    = attempt.exam
+        subject = exam.subject
+
+        if not subject or not subject.content:
+            print(f"⚠️  Auto-correction {attempt_id} : sujet sans contenu, correction ignorée")
+            return
+
+        # Extraire les réponses
+        try:
+            answers_data   = json.loads(attempt.answers) if attempt.answers else {}
+            student_answers = (
+                answers_data.get('content') or answers_data.get('reponse') or
+                answers_data.get('answer')  or answers_data.get('text') or ''
+            )
+        except Exception:
+            student_answers = attempt.answers or ''
+
+        if not student_answers or not student_answers.strip():
+            print(f"⚠️  Auto-correction {attempt_id} : aucune réponse, correction ignorée")
+            return
+
+        system_prompt = _build_correction_system_prompt(
+            exam.title + (" — " + subject.title if subject.title else ""),
+            subject.content
+        )
+        user_message = f"""SUJET D'EXAMEN:
+{subject.content}
+
+BARÈME DE NOTATION:
+{subject.rubric or 'Barème standard sur 20 points'}
+
+COPIE À CORRIGER (Examen en ligne — correction automatique):
+Étudiant: {attempt.student.full_name}
+Durée de l'examen: {exam.duration_minutes} minutes
+
+RÉPONSES DE L'ÉTUDIANT:
+{student_answers}
+
+RAPPEL: Tu DOIS finir par "Note totale: XX.XX/20" """
+
+        print(f"🤖 Auto-correction tentative {attempt_id} ({attempt.student.full_name}) — en cours…")
+        result = call_claude(system_prompt, user_message, temperature=0.15)
+        score  = extract_score_from_correction(result)
+
+        attempt.score          = score
+        attempt.feedback       = result
+        attempt.corrected_at   = utcnow()
+        attempt.corrected_by_id = None  # None = correction automatique
+        session.commit()
+        print(f"✅ Auto-correction {attempt_id} terminée : {score}/20")
+
+        # Email à l'étudiant
+        try:
+            if attempt.student.email and '@temp.edu' not in attempt.student.email:
+                send_paper_corrected_email(
+                    student_email=attempt.student.email,
+                    student_name=attempt.student.full_name,
+                    subject_title=f"{exam.title} (Examen en ligne)",
+                    score=score,
+                    paper_id=attempt.id
+                )
+        except Exception as email_err:
+            print(f"⚠️  Email auto-correction : {email_err}")
+
+    except Exception as e:
+        print(f"❌ Erreur auto-correction tentative {attempt_id} : {e}")
+        try:
+            session.rollback()
+        except Exception:
+            pass
+    finally:
+        session.close()
+
+
 @app.route('/api/exam_attempts/<int:attempt_id>/submit', methods=['POST'])
 @jwt_required()
 def submit_exam_attempt(attempt_id):
@@ -3888,14 +3977,26 @@ def submit_exam_attempt(attempt_id):
 
         attempt.status = AttemptStatus.SUBMITTED
         attempt.submitted_at = utcnow()
-        
+
+        # Charger le flag auto_correct avant de fermer la session
+        exam = session.query(OnlineExam).filter_by(id=attempt.exam_id).first()
+        auto_correct = exam.auto_correct if exam else False
+        attempt_id_for_thread = attempt.id
+
         session.commit()
-        
-        # Correction automatique (basique - peut être améliorée)
-        # TODO: Implémenter correction IA si nécessaire
-        
         session.close()
-        return jsonify({'success': True, 'message': 'Examen soumis avec succès'})
+
+        # Lancer la correction IA en arrière-plan si activée par le prof
+        if auto_correct:
+            t = threading.Thread(
+                target=_run_auto_correction,
+                args=(attempt_id_for_thread,),
+                daemon=True
+            )
+            t.start()
+            return jsonify({'success': True, 'message': 'Examen soumis — correction automatique en cours', 'auto_correct': True})
+
+        return jsonify({'success': True, 'message': 'Examen soumis avec succès', 'auto_correct': False})
     except Exception as e:
         print(f"Erreur submit_exam_attempt: {e}")
         return jsonify({'error': str(e)}), 500
