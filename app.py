@@ -3212,14 +3212,17 @@ def get_online_exams():
             # Admin : tous
             exams = query.all()
 
+        # Pré-charger toutes les tentatives de l'étudiant en une seule requête (évite N+1)
+        attempts_by_exam = {}
+        if user.role == UserRole.STUDENT:
+            student_attempts = session.query(ExamAttempt).filter_by(student_id=user_id).all()
+            attempts_by_exam = {a.exam_id: a for a in student_attempts}
+
         exams_list = []
         for exam in exams:
             d = exam.to_dict()
-            # Pour les étudiants, inclure leur tentative si elle existe
             if user.role == UserRole.STUDENT:
-                attempt = session.query(ExamAttempt).filter_by(
-                    exam_id=exam.id, student_id=user_id
-                ).first()
+                attempt = attempts_by_exam.get(exam.id)
                 if attempt:
                     d['my_attempt'] = {
                         'id':           attempt.id,
@@ -3880,7 +3883,9 @@ def submit_exam_attempt(attempt_id):
         data = request.json
         if 'answers' in data:
             attempt.answers = data['answers']
-        
+        if 'signature_data' in data and data['signature_data']:
+            attempt.signature_data = data['signature_data']
+
         attempt.status = AttemptStatus.SUBMITTED
         attempt.submitted_at = utcnow()
         
@@ -4984,6 +4989,66 @@ Sois précis sur ce qui est attendu pour chaque point.
         session.close()
         print(f"❌ Erreur création sujet: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/notifications', methods=['GET'])
+@jwt_required()
+def get_notifications():
+    """Return unseen corrected exams and papers for the current student."""
+    user_id = int(get_jwt_identity())
+    session = Session()
+    try:
+        user = session.query(User).get(user_id)
+        if not user or user.role != UserRole.STUDENT:
+            return jsonify({'notifications': [], 'count': 0})
+
+        notifications = []
+
+        # Corrected online exam attempts
+        attempts = session.query(ExamAttempt).filter(
+            ExamAttempt.student_id == user_id,
+            ExamAttempt.corrected_at != None,
+            ExamAttempt.score != None
+        ).order_by(ExamAttempt.corrected_at.desc()).limit(20).all()
+
+        for att in attempts:
+            exam = att.exam
+            notifications.append({
+                'id': f'attempt_{att.id}',
+                'type': 'online_exam',
+                'title': exam.title if exam else 'Examen en ligne',
+                'message': f'Votre copie a été corrigée — note : {att.score:.2f}/20' if att.score is not None else 'Votre copie a été corrigée',
+                'corrected_at': att.corrected_at.isoformat() if att.corrected_at else None,
+                'attempt_id': att.id
+            })
+
+        # Corrected written papers
+        papers = session.query(StudentPaper).filter(
+            StudentPaper.student_id == user_id,
+            StudentPaper.corrected_at != None
+        ).order_by(StudentPaper.corrected_at.desc()).limit(20).all()
+
+        for p in papers:
+            subject = p.subject
+            notifications.append({
+                'id': f'paper_{p.id}',
+                'type': 'paper',
+                'title': subject.title if subject else 'Copie',
+                'message': f'Votre copie a été corrigée — note : {p.score:.2f}/20' if p.score is not None else 'Votre copie a été corrigée',
+                'corrected_at': p.corrected_at.isoformat() if p.corrected_at else None,
+                'paper_id': p.id
+            })
+
+        # Sort by most recent
+        notifications.sort(key=lambda x: x['corrected_at'] or '', reverse=True)
+
+        return jsonify({'notifications': notifications, 'count': len(notifications)})
+
+    except Exception as e:
+        session.rollback()
+        return jsonify({'notifications': [], 'count': 0, 'error': str(e)}), 500
+    finally:
+        session.close()
+
 
 if __name__ == '__main__':
     print("\n" + "="*60)

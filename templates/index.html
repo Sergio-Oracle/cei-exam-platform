@@ -289,6 +289,79 @@
         }
         .av-chevron.open { transform: rotate(180deg); }
 
+        /* Bell notification */
+        .notif-bell-wrapper {
+            position: relative;
+            display: none; /* shown via JS for students only */
+        }
+        .notif-bell-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #64748b;
+            font-size: 17px;
+            transition: background 0.18s, color 0.18s;
+        }
+        .notif-bell-btn:hover { background: #f1f5f9; color: #0f172a; }
+        .notif-badge {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            background: #ef4444;
+            color: white;
+            font-size: 10px;
+            font-weight: 700;
+            min-width: 16px;
+            height: 16px;
+            border-radius: 8px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 0 4px;
+            line-height: 1;
+        }
+        .notif-panel {
+            position: absolute;
+            top: calc(100% + 8px);
+            right: -60px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0,0,0,.15), 0 0 0 1px rgba(0,0,0,.06);
+            width: 320px;
+            max-height: 420px;
+            overflow-y: auto;
+            z-index: 998;
+            display: none;
+        }
+        .notif-panel-header {
+            padding: 14px 16px 10px;
+            font-weight: 700;
+            font-size: 14px;
+            color: #0f172a;
+            border-bottom: 1px solid #f1f5f9;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .notif-item {
+            padding: 12px 16px;
+            border-bottom: 1px solid #f8fafc;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .notif-item:hover { background: #f8fafc; }
+        .notif-item.unread { background: #eff6ff; }
+        .notif-item .notif-title { font-size: 13px; font-weight: 600; color: #0f172a; margin-bottom: 2px; }
+        .notif-item .notif-msg { font-size: 12px; color: #64748b; }
+        .notif-item .notif-time { font-size: 11px; color: #94a3b8; margin-top: 3px; }
+        .notif-empty { padding: 24px 16px; text-align: center; color: #94a3b8; font-size: 13px; }
+
         /* Dropdown menu */
         .user-dropdown {
             position: absolute;
@@ -628,6 +701,21 @@
             </div>
             <div class="navbar-user">
 
+                <!-- Cloche notifications (étudiants) -->
+                <div class="notif-bell-wrapper" id="notif-bell-wrapper">
+                    <button class="notif-bell-btn" onclick="toggleNotifPanel(event)" title="Notifications">
+                        <i class="fas fa-bell"></i>
+                    </button>
+                    <span class="notif-badge" id="notif-badge"></span>
+                    <div class="notif-panel" id="notif-panel">
+                        <div class="notif-panel-header">
+                            <span>Notifications</span>
+                            <button onclick="markAllNotifsRead(event)" style="font-size:11px;background:none;border:none;color:#6366f1;cursor:pointer;font-weight:600;">Tout marquer lu</button>
+                        </div>
+                        <div id="notif-list"><div class="notif-empty">Aucune notification</div></div>
+                    </div>
+                </div>
+
                 <!-- Sélecteur de langue -->
                 <div class="lang-switcher">
                     <button class="lang-btn" onclick="toggleLangMenu(event)">
@@ -704,7 +792,7 @@
     <script src="{{ url_for('static', filename='js/translations.js') }}?v=1"></script>
     <script src="{{ url_for('static', filename='js/site_translator.js') }}?v=7"></script>
     <script src="{{ url_for('static', filename='js/face_detector.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/app.js') }}?v=17"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=18"></script>
     <script>
         function closeModal() {
             document.getElementById('modal').style.display = 'none';

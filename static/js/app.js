@@ -192,6 +192,7 @@ function showApp() {
     refreshNavbarAvatar();
     loadNavigation();
     loadDashboard();
+    if (currentUser.role === 'student') startNotifPolling();
     // Rechargement complet quand la langue change
     const _origSetLang = window.setLang;
     window.setLang = function(code) {
@@ -227,6 +228,113 @@ function refreshNavbarAvatar() {
     const db = document.getElementById('dropdown-badge');
     if (db) { db.textContent = roleLabel; db.style.background = color; }
 }
+
+// ── Notification bell (students only) ────────────────────────────────────────
+
+let _notifData = [];
+let _notifInterval = null;
+
+function _notifReadKey() { return `notif_read_${currentUser?.id || 0}`; }
+
+function _getReadSet() {
+    try { return new Set(JSON.parse(localStorage.getItem(_notifReadKey()) || '[]')); }
+    catch { return new Set(); }
+}
+
+function _saveReadSet(set) {
+    localStorage.setItem(_notifReadKey(), JSON.stringify([...set]));
+}
+
+async function fetchNotifications() {
+    if (!currentUser || currentUser.role !== 'student') return;
+    try {
+        const data = await apiCall('/api/notifications');
+        _notifData = data.notifications || [];
+        renderNotifBadge();
+    } catch (_) {}
+}
+
+function renderNotifBadge() {
+    const wrapper = document.getElementById('notif-bell-wrapper');
+    const badge   = document.getElementById('notif-badge');
+    if (!wrapper) return;
+    wrapper.style.display = 'flex';
+    const read = _getReadSet();
+    const unseen = _notifData.filter(n => !read.has(n.id));
+    if (unseen.length > 0) {
+        badge.textContent = unseen.length > 9 ? '9+' : unseen.length;
+        badge.style.display = 'flex';
+    } else {
+        badge.style.display = 'none';
+    }
+}
+
+function renderNotifList() {
+    const list = document.getElementById('notif-list');
+    if (!list) return;
+    const read = _getReadSet();
+    if (_notifData.length === 0) {
+        list.innerHTML = '<div class="notif-empty"><i class="fas fa-check-circle" style="color:#10b981;margin-right:6px;"></i>Aucune notification</div>';
+        return;
+    }
+    const fmtDate = iso => {
+        if (!iso) return '';
+        const d = new Date(iso);
+        return d.toLocaleDateString('fr-FR', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
+    };
+    list.innerHTML = _notifData.map(n => {
+        const unread = !read.has(n.id);
+        return `<div class="notif-item${unread ? ' unread' : ''}" onclick="handleNotifClick('${n.id}','${n.type}',${n.attempt_id || n.paper_id || 0})">
+            <div class="notif-title"><i class="fas fa-${n.type === 'online_exam' ? 'laptop' : 'file-alt'}" style="color:#6366f1;margin-right:6px;"></i>${n.title}</div>
+            <div class="notif-msg">${n.message}</div>
+            <div class="notif-time">${fmtDate(n.corrected_at)}</div>
+        </div>`;
+    }).join('');
+}
+
+function toggleNotifPanel(e) {
+    if (e) e.stopPropagation();
+    const panel = document.getElementById('notif-panel');
+    if (!panel) return;
+    const open = panel.style.display === 'block';
+    panel.style.display = open ? 'none' : 'block';
+    if (!open) renderNotifList();
+}
+
+function closeNotifPanel() {
+    const panel = document.getElementById('notif-panel');
+    if (panel) panel.style.display = 'none';
+}
+
+function markAllNotifsRead(e) {
+    if (e) e.stopPropagation();
+    const read = _getReadSet();
+    _notifData.forEach(n => read.add(n.id));
+    _saveReadSet(read);
+    renderNotifBadge();
+    renderNotifList();
+}
+
+function handleNotifClick(id, type, resourceId) {
+    const read = _getReadSet();
+    read.add(id);
+    _saveReadSet(read);
+    renderNotifBadge();
+    closeNotifPanel();
+    if (type === 'online_exam' && resourceId) {
+        viewMyExamResult(resourceId);
+    } else if (type === 'paper' && resourceId) {
+        viewResult(resourceId);
+    }
+}
+
+function startNotifPolling() {
+    if (_notifInterval) clearInterval(_notifInterval);
+    fetchNotifications();
+    _notifInterval = setInterval(fetchNotifications, 60000);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 function toggleUserDropdown(e) {
     if (e) e.stopPropagation();
@@ -1352,6 +1460,12 @@ function closeModal() {
 window.onclick = function(event) {
     if (event.target == document.getElementById('modal')) {
         closeModal();
+    }
+    // Close notif panel when clicking outside
+    const wrapper = document.getElementById('notif-bell-wrapper');
+    const panel   = document.getElementById('notif-panel');
+    if (panel && panel.style.display === 'block' && wrapper && !wrapper.contains(event.target)) {
+        panel.style.display = 'none';
     }
 }
 
@@ -6316,36 +6430,103 @@ async function logExamActivity(attemptId, eventType, eventData = {}) {
     }
 }
 
-async function submitExamNow() {
+function submitExamNow() {
     if (!currentExamAttempt) return;
-    
-    if (!confirm('Êtes-vous sûr de vouloir soumettre votre examen? Cette action est irréversible.')) {
+    _showSignatureModal();
+}
+
+function _showSignatureModal() {
+    const overlay = document.createElement('div');
+    overlay.id = 'signature-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10000;display:flex;align-items:center;justify-content:center;';
+    overlay.innerHTML = `
+        <div style="background:#fff;border-radius:16px;padding:28px;width:420px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+            <h3 style="margin:0 0 6px;font-size:18px;color:#0f172a;"><i class="fas fa-pen-nib" style="color:#6366f1;margin-right:8px;"></i>Signature électronique</h3>
+            <p style="margin:0 0 16px;font-size:13px;color:#64748b;">Signez dans le cadre ci-dessous pour confirmer que vous avez composé cet examen seul et sans aide non autorisée.</p>
+            <canvas id="sig-canvas" width="360" height="140" style="border:2px solid #e2e8f0;border-radius:10px;display:block;cursor:crosshair;background:#f8fafc;touch-action:none;"></canvas>
+            <div style="display:flex;gap:8px;margin-top:14px;">
+                <button onclick="_clearSignature()" style="flex:1;padding:10px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;color:#64748b;cursor:pointer;font-size:13px;"><i class="fas fa-eraser"></i> Effacer</button>
+                <button onclick="_cancelSignature()" style="flex:1;padding:10px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;color:#64748b;cursor:pointer;font-size:13px;"><i class="fas fa-times"></i> Annuler</button>
+                <button onclick="_confirmSignatureAndSubmit()" style="flex:2;padding:10px;border:none;border-radius:8px;background:#6366f1;color:white;cursor:pointer;font-size:13px;font-weight:600;"><i class="fas fa-paper-plane"></i> Soumettre</button>
+            </div>
+        </div>`;
+    document.body.appendChild(overlay);
+    _initSignaturePad();
+}
+
+function _initSignaturePad() {
+    const canvas = document.getElementById('sig-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    let drawing = false;
+    let lastX = 0, lastY = 0;
+
+    function getPos(e) {
+        const r = canvas.getBoundingClientRect();
+        const src = e.touches ? e.touches[0] : e;
+        return [(src.clientX - r.left) * (canvas.width / r.width),
+                (src.clientY - r.top)  * (canvas.height / r.height)];
+    }
+    function start(e) { e.preventDefault(); drawing = true; [lastX, lastY] = getPos(e); }
+    function draw(e)  {
+        e.preventDefault();
+        if (!drawing) return;
+        const [x, y] = getPos(e);
+        ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(x, y);
+        ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+        ctx.stroke();
+        [lastX, lastY] = [x, y];
+    }
+    function stop() { drawing = false; }
+
+    canvas.addEventListener('mousedown',  start); canvas.addEventListener('mousemove',  draw); canvas.addEventListener('mouseup',   stop);
+    canvas.addEventListener('touchstart', start); canvas.addEventListener('touchmove',  draw); canvas.addEventListener('touchend',  stop);
+}
+
+function _clearSignature() {
+    const canvas = document.getElementById('sig-canvas');
+    if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function _cancelSignature() {
+    const el = document.getElementById('signature-overlay');
+    if (el) el.remove();
+}
+
+async function _confirmSignatureAndSubmit() {
+    const canvas = document.getElementById('sig-canvas');
+    if (!canvas) return;
+
+    // Check if canvas has any drawing
+    const ctx = canvas.getContext('2d');
+    const pixel = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    const hasDrawing = pixel.some(v => v !== 0);
+    if (!hasDrawing) {
+        alert('Veuillez signer avant de soumettre.');
         return;
     }
-    
+
+    const signatureData = canvas.toDataURL('image/png');
+    _cancelSignature();
+
     showLoader(true);
-    
     try {
-        const answers = document.getElementById('exam-answers').value;
-        
+        const answers = document.getElementById('exam-answers')?.value || '';
         const response = await authenticatedFetch(`/api/exam_attempts/${currentExamAttempt.id}/submit`, {
             method: 'POST',
             body: JSON.stringify({
-                answers: JSON.stringify({ content: answers })
+                answers: JSON.stringify({ content: answers }),
+                signature_data: signatureData
             })
         });
-        
         const data = await response.json();
-        
         if (data.success) {
             clearInterval(examAutoSaveInterval);
             _stopFaceDetection();
             showAlert('Votre examen a été soumis avec succès. Votre note sera disponible après correction.', 'success');
-            setTimeout(() => {
-                loadOnlineExams();
-            }, 2000);
+            setTimeout(() => { loadOnlineExams(); }, 2000);
         } else {
-            showAlert(data.error || 'Impossible de soumettre l\'examen. Le délai est peut-être dépassé ou l\'examen a été clôturé.', 'error');
+            showAlert(data.error || 'Impossible de soumettre l\'examen.', 'error');
         }
     } catch (error) {
         showAlert(humanError(error), 'error');
@@ -7243,11 +7424,22 @@ ${attempt.feedback}
                 </div>
             ` : ''}
             
+            ${attempt.signature_data ? `
+                <div class="card" style="margin-bottom: 20px;">
+                    <div class="card-header">
+                        <h4><i class="fas fa-pen-nib"></i> Signature électronique</h4>
+                    </div>
+                    <div style="padding: 15px;">
+                        <img src="${attempt.signature_data}" alt="Signature de l'étudiant" style="border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;max-width:360px;height:auto;display:block;">
+                    </div>
+                </div>
+            ` : ''}
+
             <button class="btn btn-secondary" onclick="closeModal()">
                 <i class="fas fa-times"></i> Fermer
             </button>
         `;
-        
+
         showModal(modalContent, '900px');
     } catch (error) {
         showAlert(humanError(error), 'error');

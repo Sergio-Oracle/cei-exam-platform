@@ -486,6 +486,9 @@ class ExamAttempt(Base):
     risk_score = Column(Integer, default=0)  # Score de risque 0-100
     current_egress_id = Column(String(255))  # LiveKit Egress ID actif (null si pas d'enregistrement)
 
+    # Signature électronique de l'étudiant (base64 PNG)
+    signature_data = Column(Text)
+
     # Réponses (JSON ou texte selon format)
     answers = Column(Text)  # JSON stockant les réponses
     
@@ -522,7 +525,8 @@ class ExamAttempt(Base):
             'score': self.score,
             'feedback': self.feedback,
             'corrected_at': self.corrected_at.isoformat() if self.corrected_at else None,
-            'corrector_name': self.corrector.full_name if self.corrector else None
+            'corrector_name': self.corrector.full_name if self.corrector else None,
+            'signature_data': self.signature_data
         }
 
 class ExamActivityLog(Base):
@@ -684,8 +688,11 @@ print(f"🔗 Connexion à: {DATABASE_URL.split('@')[1] if '@' in DATABASE_URL el
 engine = create_engine(
     DATABASE_URL,
     echo=False,
-    pool_pre_ping=True,    # Teste la connexion avant usage (évite "connection closed")
-    pool_recycle=1800,     # Recycle les connexions toutes les 30 min
+    pool_pre_ping=True,
+    pool_recycle=1800,
+    pool_size=10,
+    max_overflow=20,
+    pool_timeout=30,
     connect_args={'options': '-c timezone=UTC'}
 )
 SessionLocal = sessionmaker(bind=engine)
