@@ -4205,7 +4205,8 @@ def get_all_transcripts():
                 'total_credits': t.total_credits,
                 'obtained_credits': t.obtained_credits,
                 'validated': t.gpa >= 10,
-                'generated_by': generator_name,  # ✅ CORRIGÉ
+                'generated_by': generator_name,
+                'generated_by_id': t.generated_by_id,
                 'generated_at': t.generated_at.isoformat() if t.generated_at else None
             })
         
@@ -4338,6 +4339,48 @@ def export_transcript_pdf(transcript_id):
         return send_file(pdf_path, as_attachment=True, download_name=f"releve_notes_{transcript.student.full_name}.pdf")
     except Exception as e:
         print(f"Erreur export_transcript_pdf: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/transcripts/<int:transcript_id>', methods=['DELETE'])
+@jwt_required()
+def delete_transcript(transcript_id):
+    """
+    Suppression d'un relevé de notes.
+    - Admin  : peut supprimer n'importe quel relevé
+    - Professeur : uniquement les relevés qu'il a générés
+    - Étudiant : interdit (document officiel)
+    """
+    try:
+        user_id = int(get_jwt_identity())
+        session = get_session()
+
+        user = session.query(User).filter_by(id=user_id).first()
+        if user.role == UserRole.STUDENT:
+            session.close()
+            return jsonify({'error': 'Les étudiants ne peuvent pas supprimer un relevé de notes.'}), 403
+
+        transcript = session.query(GradeTranscript).filter_by(id=transcript_id).first()
+        if not transcript:
+            session.close()
+            return jsonify({'error': 'Relevé introuvable.'}), 404
+
+        if user.role == UserRole.PROFESSOR and transcript.generated_by_id != user_id:
+            session.close()
+            return jsonify({'error': 'Vous ne pouvez supprimer que les relevés que vous avez générés.'}), 403
+
+        student_name = transcript.student.full_name if transcript.student else 'Inconnu'
+        semester_name = transcript.semester.name if transcript.semester else 'Inconnu'
+
+        session.delete(transcript)
+        session.commit()
+        session.close()
+
+        return jsonify({
+            'success': True,
+            'message': f'Relevé de {student_name} ({semester_name}) supprimé avec succès.'
+        })
+    except Exception as e:
+        print(f"Erreur delete_transcript: {e}")
         return jsonify({'error': str(e)}), 500
 
 # ============================================================================

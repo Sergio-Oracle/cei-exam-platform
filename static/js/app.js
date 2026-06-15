@@ -3424,6 +3424,68 @@ async function downloadTranscriptPDF(transcriptId, label) {
     finally { showLoader(false); }
 }
 
+function confirmDeleteTranscript(transcriptId, studentName, semesterName) {
+    // Modale de confirmation avant suppression d'un relevé
+    const existing = document.getElementById('del-transcript-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'del-transcript-modal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.55);';
+    modal.innerHTML = `
+        <div style="background:var(--surface,#fff);border-radius:12px;padding:28px 32px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.22);">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+                <span style="background:#fee2e2;border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <i class="fas fa-exclamation-triangle" style="color:#dc2626;font-size:18px;"></i>
+                </span>
+                <h3 style="margin:0;font-size:1.1rem;color:var(--text,#1e293b);">Supprimer le relevé</h3>
+            </div>
+            <p style="color:var(--text-secondary,#475569);margin:0 0 8px;">Vous êtes sur le point de supprimer définitivement le relevé de :</p>
+            <div style="background:var(--background,#f8fafc);border-radius:8px;padding:12px 16px;margin-bottom:20px;">
+                <strong>${studentName}</strong><br>
+                <small style="color:#64748b;">${semesterName}</small>
+            </div>
+            <p style="color:#dc2626;font-size:0.88em;margin:0 0 22px;">
+                <i class="fas fa-info-circle"></i> Cette action est irréversible. L'étudiant n'aura plus accès à ce relevé.
+            </p>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button onclick="document.getElementById('del-transcript-modal').remove()"
+                    style="padding:9px 20px;border:1px solid var(--border,#e2e8f0);background:transparent;border-radius:8px;cursor:pointer;color:var(--text,#1e293b);">
+                    Annuler
+                </button>
+                <button onclick="deleteTranscript(${transcriptId})"
+                    style="padding:9px 20px;background:#dc2626;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;">
+                    <i class="fas fa-trash"></i> Supprimer
+                </button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    // Fermer en cliquant le voile
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+}
+
+async function deleteTranscript(transcriptId) {
+    const modal = document.getElementById('del-transcript-modal');
+    if (modal) modal.remove();
+    try {
+        showLoader(true);
+        const res = await authenticatedFetch(`/api/transcripts/${transcriptId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            showAlert(data.message || 'Relevé supprimé.', 'success');
+            // Recharger la vue courante
+            if (typeof loadAllTranscripts === 'function') await loadAllTranscripts();
+        } else {
+            showAlert(data.error || 'Erreur lors de la suppression.', 'error');
+        }
+    } catch(e) {
+        showAlert('Erreur réseau lors de la suppression.', 'error');
+    } finally {
+        showLoader(false);
+    }
+}
+
 function loadStudentHelp() {
     if (window.event && window.event.target) setActiveTab(window.event.target);
     window._currentView = loadStudentHelp;
@@ -7274,7 +7336,16 @@ async function loadAllTranscripts() {
             const statusClass = transcript.validated ? 'success' : 'danger';
             const statusLabel = transcript.validated ? '✅ VALIDÉ' : '❌ NON VALIDÉ';
             const gpaColor = transcript.gpa >= 10 ? '#10b981' : '#ef4444';
-            
+
+            // Droit de suppression : admin toujours, prof seulement si c'est lui qui a généré
+            const canDelete = currentUser && (
+                currentUser.role === 'admin'
+                || (currentUser.role === 'professor' && transcript.generated_by_id == currentUser.id)
+            );
+
+            const sName = (transcript.student_name || '').replace(/'/g, "\\'");
+            const semName = (transcript.semester_name || '').replace(/'/g, "\\'");
+
             html += `
                 <tr>
                     <td>
@@ -7286,14 +7357,20 @@ async function loadAllTranscripts() {
                     <td><strong style="color: ${gpaColor}; font-size: 16px;">${transcript.gpa}/20</strong></td>
                     <td>${transcript.obtained_credits}/${transcript.total_credits}</td>
                     <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
-                    <td>${new Date(transcript.generated_at).toLocaleDateString('fr-FR')}</td>
                     <td>
-                        <button class="btn btn-sm btn-primary" onclick="downloadTranscriptPDF(${transcript.id})" title="Télécharger PDF">
-                            <i class="fas fa-file-pdf"></i> PDF
-                        </button>
-                        <button class="btn btn-sm btn-info" onclick="viewTranscriptDetails(${transcript.id})" title="Voir détails">
-                            <i class="fas fa-eye"></i> Détails
-                        </button>
+                        <div style="font-size:12px;">${new Date(transcript.generated_at).toLocaleDateString('fr-FR')}</div>
+                        <small style="color:#64748b;">${transcript.generated_by || 'Système'}</small>
+                    </td>
+                    <td>
+                        <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                            <button class="btn btn-sm btn-primary" onclick="downloadTranscriptPDF(${transcript.id})" title="Télécharger PDF">
+                                <i class="fas fa-file-pdf"></i> PDF
+                            </button>
+                            ${canDelete ? `
+                            <button class="btn btn-sm btn-danger" onclick="confirmDeleteTranscript(${transcript.id}, '${sName}', '${semName}')" title="Supprimer ce relevé">
+                                <i class="fas fa-trash"></i>
+                            </button>` : ''}
+                        </div>
                     </td>
                 </tr>
             `;
