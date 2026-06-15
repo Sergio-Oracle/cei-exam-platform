@@ -5157,6 +5157,64 @@ Sois précis sur ce qui est attendu pour chaque point.
         print(f"❌ Erreur création sujet: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/admin/security_report', methods=['GET'])
+@jwt_required()
+def admin_security_report():
+    """Rapport de sécurité — incidents d'examens en ligne (admin/prof)."""
+    user_id = int(get_jwt_identity())
+    session = get_session()
+    try:
+        user = session.query(User).filter_by(id=user_id).first()
+        if not user or user.role not in [UserRole.ADMIN, UserRole.PROFESSOR]:
+            session.close()
+            return jsonify({'error': 'Accès non autorisé'}), 403
+
+        # Top événements
+        from sqlalchemy import func as sqlfunc
+        event_counts = session.query(
+            ExamActivityLog.event_type,
+            sqlfunc.count(ExamActivityLog.id).label('cnt')
+        ).group_by(ExamActivityLog.event_type).order_by(sqlfunc.count(ExamActivityLog.id).desc()).all()
+
+        # Tentatives à haut risque
+        risky = session.query(ExamAttempt).options(
+            joinedload(ExamAttempt.student),
+            joinedload(ExamAttempt.exam)
+        ).filter(ExamAttempt.risk_score >= 70).order_by(
+            ExamAttempt.risk_score.desc()
+        ).limit(20).all()
+
+        risky_list = [{
+            'attempt_id':     a.id,
+            'student_name':   a.student.full_name if a.student else '—',
+            'exam_title':     a.exam.title if a.exam else '—',
+            'risk_score':     a.risk_score,
+            'warnings_count': a.warnings_count,
+            'tab_switches':   a.tab_switches,
+            'no_face_count':  a.no_face_count or 0,
+            'status':         a.status.value,
+            'banned_at':      a.banned_at.isoformat() if a.banned_at else None,
+            'ban_reason':     a.ban_reason
+        } for a in risky]
+
+        # Tentatives bannies
+        banned_count = session.query(ExamAttempt).filter(
+            ExamAttempt.status == AttemptStatus.BANNED
+        ).count()
+
+        session.close()
+        return jsonify({
+            'event_summary':  [{'event': e, 'count': c} for e, c in event_counts],
+            'high_risk':      risky_list,
+            'banned_count':   banned_count,
+            'total_attempts': session.query(ExamAttempt).count() if False else None
+        })
+    except Exception as e:
+        try: session.rollback(); session.close()
+        except: pass
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/notifications', methods=['GET'])
 @jwt_required()
 def get_notifications():

@@ -1285,7 +1285,88 @@ tbody tr:last-child td {
         width: 100%;
         justify-content: flex-start;
     }
+
+    /* Exam cards on mobile */
+    .exam-card-actions {
+        flex-direction: column;
+    }
+
+    /* Tables: horizontal scroll on small screens */
+    .card table {
+        min-width: 500px;
+    }
+    .card {
+        overflow-x: auto;
+    }
+
+    /* Navbar on mobile: compact */
+    .navbar-brand {
+        font-size: 15px;
+    }
+    .user-avatar-info {
+        display: none;
+    }
+    .av-chevron {
+        display: none;
+    }
+    .notif-panel {
+        right: -10px;
+        width: calc(100vw - 20px);
+        max-width: 360px;
+    }
+
+    /* Signature modal on mobile */
+    #signature-overlay > div {
+        padding: 18px 14px;
+    }
+    #sig-canvas {
+        width: 100% !important;
+        height: 120px !important;
+    }
+
+    /* Exam composition textarea */
+    #exam-answers {
+        font-size: 16px; /* Évite le zoom auto sur iOS */
+        min-height: 200px;
+    }
+
+    /* Camera preview — smaller on mobile */
+    #camera-preview-container {
+        bottom: 10px !important;
+        right: 10px !important;
+    }
+    #exam-camera-preview {
+        width: 100px !important;
+        height: 75px !important;
+    }
+
+    /* Stat cards: 2 columns on small screens */
+    .stat-card {
+        min-width: 120px;
+    }
+
+    /* Button text: hide labels on very small screens */
+    @media (max-width: 400px) {
+        .btn-label-mobile {
+            display: none;
+        }
+    }
 }
+
+/* Small phones */
+@media (max-width: 480px) {
+    .page-header h2 {
+        font-size: 20px;
+    }
+    .main-content {
+        padding: 12px;
+    }
+    .nav-tab {
+        font-size: 12px;
+        padding: 10px 12px;
+    }
+}
+
 /* Notifications badge */
 #notif-badge {
     animation: pulse 2s infinite;

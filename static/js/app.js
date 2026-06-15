@@ -411,6 +411,9 @@ function loadNavigation() {
             <button class="nav-tab" onclick="loadReclamations()">
                 <i class="fas fa-exclamation-triangle"></i> ${t('nav.reclamations')}
             </button>
+            <button class="nav-tab" onclick="loadSecurityReport()">
+                <i class="fas fa-shield-alt"></i> Sécurité
+            </button>
             <button class="nav-tab" onclick="toggleTheme()" id="theme-toggle-btn" title="${t('nav.change_theme')}">
                 <i class="fas fa-moon"></i>
             </button>
@@ -450,6 +453,9 @@ function loadNavigation() {
         <button class="nav-tab" onclick="loadReclamations()">
             <i class="fas fa-exclamation-triangle"></i> ${t('nav.reclamations')}
         </button>
+        <button class="nav-tab" onclick="loadSecurityReport()">
+            <i class="fas fa-shield-alt"></i> Sécurité
+        </button>
         <button class="nav-tab" id="notif-tab" onclick="showProfessorNotifications()" style="position: relative;">
             <i class="fas fa-bell"></i> ${t('nav.notifications')}
             <span id="notif-badge" style="display: none; position: absolute; top: 5px; right: 5px; background: #ef4444; color: white; border-radius: 50%; width: 20px; height: 20px; font-size: 11px; line-height: 20px; text-align: center;"></span>
@@ -484,6 +490,9 @@ function loadNavigation() {
             </button>
             <button class="nav-tab" onclick="loadMyReclamations()">
                 <i class="fas fa-exclamation-circle"></i> ${t('nav.my_reclamations')}
+            </button>
+            <button class="nav-tab" onclick="loadStudentHelp()">
+                <i class="fas fa-question-circle"></i> Aide
             </button>
             <button class="nav-tab" onclick="toggleTheme()" id="theme-toggle-btn" title="${t('nav.change_theme')}">
                 <i class="fas fa-moon"></i>
@@ -3038,6 +3047,126 @@ async function handleBatchCorrection(e) {
 // ============================================================================
 // RÉCLAMATIONS
 // ============================================================================
+async function loadSecurityReport() {
+    if (window.event && window.event.target) setActiveTab(window.event.target);
+    window._currentView = loadSecurityReport;
+    showLoader(true);
+    try {
+        const res  = await authenticatedFetch('/api/admin/security_report');
+        const data = await res.json();
+        if (data.error) { showAlert(data.error, 'error'); return; }
+
+        const evtRows = (data.event_summary || []).map(e => {
+            const icons = {
+                no_face_detected:       'fa-eye-slash',
+                window_blur:            'fa-window-restore',
+                tab_switch:             'fa-exchange-alt',
+                copy_attempt:           'fa-copy',
+                paste_attempt:          'fa-paste',
+                right_click:            'fa-mouse-pointer',
+                multiple_faces:         'fa-users',
+                face_reference_captured:'fa-camera',
+                screen_share_stopped:   'fa-desktop',
+                student_message:        'fa-comment'
+            };
+            const riskColors = {
+                no_face_detected: '#f59e0b',
+                tab_switch: '#ef4444',
+                window_blur: '#f97316',
+                copy_attempt: '#ef4444',
+                paste_attempt: '#ef4444',
+                multiple_faces: '#dc2626'
+            };
+            const ic = icons[e.event] || 'fa-circle';
+            const cl = riskColors[e.event] || '#94a3b8';
+            return `<tr>
+                <td style="padding:10px 14px;font-size:13px;"><i class="fas ${ic}" style="color:${cl};margin-right:8px;"></i>${e.event}</td>
+                <td style="padding:10px 14px;font-size:13px;font-weight:700;">${e.count}</td>
+            </tr>`;
+        }).join('');
+
+        const riskRows = (data.high_risk || []).map(a => {
+            const statusColor = a.status === 'banned' ? '#ef4444' : '#f59e0b';
+            return `<tr>
+                <td style="padding:10px 14px;font-size:13px;">${a.student_name}</td>
+                <td style="padding:10px 14px;font-size:12px;color:#64748b;">${a.exam_title}</td>
+                <td style="padding:10px 14px;text-align:center;">
+                    <span style="font-weight:800;color:${a.risk_score >= 90 ? '#ef4444' : '#f59e0b'};font-size:14px;">${a.risk_score}</span>
+                </td>
+                <td style="padding:10px 14px;font-size:12px;text-align:center;">${a.warnings_count}</td>
+                <td style="padding:10px 14px;font-size:12px;text-align:center;">${a.tab_switches}</td>
+                <td style="padding:10px 14px;font-size:12px;text-align:center;">${a.no_face_count}</td>
+                <td style="padding:10px 14px;">
+                    <span style="font-size:11px;font-weight:700;color:${statusColor};background:${statusColor}18;padding:3px 8px;border-radius:99px;">
+                        ${a.status === 'banned' ? 'Banni' : a.status}
+                    </span>
+                    ${a.ban_reason ? `<div style="font-size:10px;color:#94a3b8;margin-top:2px;">${a.ban_reason}</div>` : ''}
+                </td>
+            </tr>`;
+        }).join('');
+
+        document.getElementById('main-content').innerHTML = `
+            <div class="page-header">
+                <h2><i class="fas fa-shield-alt"></i> Rapport de sécurité</h2>
+                <p>Incidents et comportements suspects lors des examens en ligne</p>
+            </div>
+
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:24px;">
+                <div class="stat-card" style="text-align:center;border-left:4px solid #ef4444;">
+                    <div style="font-size:28px;font-weight:800;color:#ef4444;">${data.banned_count || 0}</div>
+                    <div style="font-size:12px;color:#64748b;margin-top:4px;"><i class="fas fa-ban"></i> Étudiants bannis</div>
+                </div>
+                <div class="stat-card" style="text-align:center;border-left:4px solid #f59e0b;">
+                    <div style="font-size:28px;font-weight:800;color:#f59e0b;">${data.high_risk?.length || 0}</div>
+                    <div style="font-size:12px;color:#64748b;margin-top:4px;"><i class="fas fa-exclamation-triangle"></i> À haut risque (≥70)</div>
+                </div>
+                <div class="stat-card" style="text-align:center;border-left:4px solid #6366f1;">
+                    <div style="font-size:28px;font-weight:800;color:#6366f1;">${data.event_summary?.reduce((a,e)=>a+e.count,0)||0}</div>
+                    <div style="font-size:12px;color:#64748b;margin-top:4px;"><i class="fas fa-list"></i> Incidents totaux</div>
+                </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 2fr;gap:16px;flex-wrap:wrap;">
+                <div class="card">
+                    <div class="card-header"><h3 style="margin:0;"><i class="fas fa-chart-bar"></i> Types d'incidents</h3></div>
+                    <table style="width:100%;border-collapse:collapse;">
+                        <thead><tr style="background:#f8fafc;">
+                            <th style="padding:8px 14px;text-align:left;font-size:12px;color:#64748b;">Événement</th>
+                            <th style="padding:8px 14px;text-align:left;font-size:12px;color:#64748b;">Nb</th>
+                        </tr></thead>
+                        <tbody>${evtRows || '<tr><td colspan="2" style="padding:16px;text-align:center;color:#94a3b8;">Aucun incident</td></tr>'}</tbody>
+                    </table>
+                </div>
+                <div class="card">
+                    <div class="card-header"><h3 style="margin:0;"><i class="fas fa-user-shield"></i> Tentatives à haut risque (score ≥ 70)</h3></div>
+                    ${data.high_risk?.length ? `
+                    <div style="overflow-x:auto;">
+                    <table style="width:100%;border-collapse:collapse;">
+                        <thead><tr style="background:#f8fafc;">
+                            <th style="padding:8px 14px;text-align:left;font-size:12px;color:#64748b;">Étudiant</th>
+                            <th style="padding:8px 14px;text-align:left;font-size:12px;color:#64748b;">Examen</th>
+                            <th style="padding:8px 14px;text-align:center;font-size:12px;color:#64748b;">Score</th>
+                            <th style="padding:8px 14px;text-align:center;font-size:12px;color:#64748b;">Avert.</th>
+                            <th style="padding:8px 14px;text-align:center;font-size:12px;color:#64748b;">Onglets</th>
+                            <th style="padding:8px 14px;text-align:center;font-size:12px;color:#64748b;">Sans visage</th>
+                            <th style="padding:8px 14px;text-align:left;font-size:12px;color:#64748b;">Statut</th>
+                        </tr></thead>
+                        <tbody>${riskRows}</tbody>
+                    </table>
+                    </div>` : '<p style="padding:20px;text-align:center;color:#94a3b8;">Aucune tentative à haut risque</p>'}
+                </div>
+            </div>
+
+            <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:16px 18px;margin-top:16px;font-size:13px;color:#0369a1;line-height:1.7;">
+                <strong><i class="fas fa-info-circle"></i> Interprétation du score de risque :</strong><br>
+                Le score est calculé à partir du nombre d'avertissements, de changements d'onglet, de détections sans visage et d'autres incidents.
+                <strong>0–30 : Normal · 30–70 : Attention · 70–100 : Risque élevé</strong>
+            </div>
+        `;
+    } catch(e) { showAlert(humanError(e), 'error'); }
+    finally { showLoader(false); }
+}
+
 async function loadReclamations() {
     if (window.event && window.event.target) setActiveTab(window.event.target);
     showLoader(true);
@@ -3107,35 +3236,79 @@ function loadMyReclamations() {
 
 async function loadMyTranscripts() {
     if (window.event && window.event.target) setActiveTab(window.event.target);
-    await loadTranscripts();
-}
-    
+    window._currentView = loadMyTranscripts;
+    showLoader(true);
     try {
-        // TODO: Implémenter endpoint backend pour récupérer les relevés de l'étudiant connecté
-        // Pour l'instant, afficher un message
-        
-        document.getElementById('main-content').innerHTML = `
+        const res = await authenticatedFetch('/api/student/transcripts');
+        const transcripts = res.ok ? await res.json() : [];
+        const content = document.getElementById('main-content');
+
+        const fmtDate = iso => iso
+            ? new Date(iso).toLocaleDateString('fr-FR', {day:'2-digit', month:'long', year:'numeric'})
+            : '—';
+
+        const gpaColor = gpa => gpa >= 16 ? '#7c3aed' : gpa >= 14 ? '#2563eb' : gpa >= 10 ? '#10b981' : '#ef4444';
+        const mention  = gpa => gpa >= 16 ? 'Très bien' : gpa >= 14 ? 'Bien' : gpa >= 12 ? 'Assez bien' : gpa >= 10 ? 'Passable' : 'Ajourné';
+
+        const rows = transcripts.map(t => {
+            const color = gpaColor(t.gpa);
+            const cred  = t.obtained_credits !== null ? `${t.obtained_credits}/${t.total_credits}` : '—';
+            return `
+            <div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:20px 22px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:12px;">
+                <div style="display:flex;align-items:center;gap:16px;flex:1;min-width:220px;">
+                    <div style="width:52px;height:52px;border-radius:12px;background:${color}18;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class="fas fa-graduation-cap" style="color:${color};font-size:20px;"></i>
+                    </div>
+                    <div>
+                        <div style="font-weight:700;color:#0f172a;font-size:15px;">${t.formation_name}</div>
+                        <div style="font-size:13px;color:#64748b;margin-top:2px;">Semestre ${t.semester_number || ''} — ${t.semester_name}</div>
+                        <div style="font-size:11px;color:#94a3b8;margin-top:3px;">Généré le ${fmtDate(t.generated_at)}</div>
+                    </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
+                    <div style="text-align:center;">
+                        <div style="font-size:28px;font-weight:800;color:${color};line-height:1;">${t.gpa ? Number(t.gpa).toFixed(2) : '—'}</div>
+                        <div style="font-size:10px;color:#94a3b8;">/20 — Moy. générale</div>
+                    </div>
+                    <div style="text-align:center;">
+                        <div style="font-size:16px;font-weight:700;color:${color};">${cred}</div>
+                        <div style="font-size:10px;color:#94a3b8;">Crédits</div>
+                    </div>
+                    <div style="text-align:center;">
+                        <span style="background:${color}18;color:${color};font-size:11px;font-weight:700;padding:4px 10px;border-radius:99px;">${mention(t.gpa)}</span>
+                    </div>
+                    <button onclick="downloadTranscriptPDF(${t.id}, '${(t.formation_name||'').replace(/'/g,"\\'")} S${t.semester_number||''}')"
+                        style="background:#3b82f6;color:white;border:none;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;">
+                        <i class="fas fa-file-pdf"></i> Télécharger PDF
+                    </button>
+                </div>
+            </div>`;
+        }).join('');
+
+        content.innerHTML = `
             <div class="page-header">
-                <h2><i class="fas fa-file-alt"></i> Mes Relevés de Notes</h2>
-                <p>Consultez et téléchargez vos relevés de notes officiels</p>
+                <h2><i class="fas fa-file-alt"></i> Mes relevés de notes</h2>
+                <p>Relevés officiels générés par vos professeurs ou l'administration</p>
             </div>
-            
-            <div class="alert alert-info">
-                <i class="fas fa-info-circle"></i>
-                <div>
-                    <strong>Information:</strong> Les relevés de notes sont générés par vos professeurs ou l'administration.
-                    Ils apparaîtront ici dès qu'ils seront disponibles.
-                </div>
-            </div>
-            
-            <div class="card">
-                <div class="card-header">
-                    <h3><i class="fas fa-history"></i> Historique</h3>
-                </div>
-                <p style="padding: 20px; color: #94a3b8; text-align: center;">
-                    <i class="fas fa-inbox" style="font-size: 48px; margin-bottom: 12px;"></i><br>
-                    Aucun relevé disponible pour le moment
+
+            ${transcripts.length === 0 ? `
+            <div style="background:white;border:1px solid #e2e8f0;border-radius:12px;padding:48px;text-align:center;">
+                <i class="fas fa-file-alt" style="font-size:52px;color:#cbd5e1;margin-bottom:16px;display:block;"></i>
+                <p style="color:#64748b;margin:0;font-size:15px;">Aucun relevé disponible pour le moment.</p>
+                <p style="color:#94a3b8;margin:8px 0 0;font-size:13px;">
+                    Les relevés sont générés par vos professeurs ou l'administration après la fin d'un semestre.
                 </p>
+            </div>` : `
+            <div style="margin-bottom:8px;font-size:13px;color:#64748b;">${transcripts.length} relevé(s) disponible(s)</div>
+            ${rows}`}
+
+            <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:16px 18px;margin-top:20px;display:flex;align-items:flex-start;gap:12px;">
+                <i class="fas fa-info-circle" style="color:#d97706;margin-top:2px;flex-shrink:0;"></i>
+                <div style="font-size:13px;color:#92400e;line-height:1.6;">
+                    <strong>Vous ne trouvez pas un relevé ?</strong><br>
+                    Les relevés sont générés manuellement par l'administration ou vos professeurs.
+                    Si un semestre est terminé et que vous n'avez pas reçu votre relevé, contactez votre administration.
+                </div>
             </div>
         `;
     } catch (error) {
@@ -3143,6 +3316,136 @@ async function loadMyTranscripts() {
     } finally {
         showLoader(false);
     }
+}
+
+async function downloadTranscriptPDF(transcriptId, label) {
+    try {
+        showLoader(true);
+        const res = await fetch(`/api/transcripts/${transcriptId}/pdf`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        if (!res.ok) { showAlert('Impossible de générer le PDF.', 'error'); return; }
+        const blob = await res.blob();
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = `releve_${(label||transcriptId).replace(/\s+/g,'_')}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+    } catch(e) { showAlert('Erreur lors du téléchargement.', 'error'); }
+    finally { showLoader(false); }
+}
+
+function loadStudentHelp() {
+    if (window.event && window.event.target) setActiveTab(window.event.target);
+    window._currentView = loadStudentHelp;
+    const faq = [
+        {
+            q: 'Pourquoi est-ce que je vois des avertissements pendant l\'examen ?',
+            a: `Le système de surveillance détecte automatiquement certains comportements :<br>
+                <ul style="margin:8px 0 0 16px;line-height:1.9;">
+                    <li><strong>Changement de fenêtre / onglet</strong> — chaque fois que vous quittez la page de composition, même brièvement, cela est enregistré.</li>
+                    <li><strong>Visage absent de la caméra</strong> — si votre visage n'est pas visible dans la caméra (tête baissée, éloignement, mauvais éclairage).</li>
+                    <li><strong>Plusieurs visages détectés</strong> — si une autre personne passe dans le champ de la caméra.</li>
+                    <li><strong>Tentative de copier/coller</strong> — si cette option est désactivée pour l'examen.</li>
+                    <li><strong>Clic droit</strong> — si cette option est désactivée pour l'examen.</li>
+                    <li><strong>Outils développeur (F12)</strong> — leur ouverture entraîne un bannissement immédiat si activée.</li>
+                </ul>`
+        },
+        {
+            q: 'Que se passe-t-il si je suis banni ?',
+            a: 'Si vous dépassez le seuil d\'avertissements configuré par votre professeur, vous êtes exclu de l\'examen. Votre copie est automatiquement soumise avec les réponses déjà enregistrées. Vous pouvez contacter votre administration si vous estimez que le bannissement est injustifié.'
+        },
+        {
+            q: 'Mon examen s\'est soumis automatiquement, est-ce normal ?',
+            a: 'Oui. Quand le temps imparti est écoulé, l\'examen se soumet automatiquement avec tout ce que vous avez rédigé. Vérifiez l\'heure de fin indiquée dans la carte de l\'examen.'
+        },
+        {
+            q: 'Pourquoi le bouton "Composer" est grisé ?',
+            a: 'Plusieurs raisons possibles : (1) l\'examen n\'a pas encore été activé par votre professeur, (2) la période est terminée, (3) vous avez déjà composé cet examen.'
+        },
+        {
+            q: 'Comment fonctionne la correction automatique par IA ?',
+            a: 'Certains examens sont configurés pour être corrigés automatiquement par l\'intelligence artificielle (badge vert "IA auto"). La correction a lieu dès que vous soumettez. Votre professeur peut ensuite réviser la note. Pour les autres examens, la correction est effectuée manuellement par votre professeur.'
+        },
+        {
+            q: 'Comment contester une note ?',
+            a: 'Vous avez 7 jours après la correction pour soumettre une réclamation. Cliquez sur "Réclamer" dans votre tableau de bord (section "Mes notes") ou depuis la page "Voir ma note". Votre professeur recevra la réclamation et pourra réviser la correction avec l\'aide de l\'IA.'
+        },
+        {
+            q: 'Je n\'arrive pas à télécharger mon relevé de notes.',
+            a: 'Les relevés sont générés par l\'administration ou vos professeurs après la fin d\'un semestre. Si votre semestre est terminé et qu\'aucun relevé n\'apparaît dans "Mes relevés", contactez votre administration. Si le fichier ne se télécharge pas, vérifiez que votre navigateur autorise les téléchargements.'
+        },
+        {
+            q: 'La caméra ne fonctionne pas, que faire ?',
+            a: 'Vérifiez que vous avez accordé la permission d\'accès à la caméra dans votre navigateur (icône cadenas dans la barre d\'adresse). Rechargez la page et réessayez. Si le problème persiste, essayez avec Chrome ou Firefox. Sur mobile, assurez-vous d\'utiliser un navigateur récent.'
+        }
+    ];
+
+    const faqHtml = faq.map((item, i) => `
+        <div style="border:1px solid #e2e8f0;border-radius:10px;margin-bottom:10px;overflow:hidden;">
+            <button onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'; this.querySelector('.faq-chevron').classList.toggle('open')"
+                style="width:100%;background:#f8fafc;border:none;padding:14px 18px;text-align:left;cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-size:14px;font-weight:600;color:#0f172a;">
+                <span><i class="fas fa-question-circle" style="color:#6366f1;margin-right:8px;"></i>${item.q}</span>
+                <i class="fas fa-chevron-down faq-chevron" style="color:#94a3b8;font-size:12px;transition:transform 0.2s;flex-shrink:0;margin-left:10px;"></i>
+            </button>
+            <div style="display:none;padding:14px 18px;font-size:13px;color:#475569;line-height:1.7;border-top:1px solid #f1f5f9;">
+                ${item.a}
+            </div>
+        </div>`).join('');
+
+    document.getElementById('main-content').innerHTML = `
+        <div class="page-header">
+            <h2><i class="fas fa-question-circle"></i> Centre d'aide</h2>
+            <p>Réponses aux questions fréquentes sur l'utilisation de la plateforme</p>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:28px;">
+            <div style="background:linear-gradient(135deg,#6366f1,#4f46e5);color:white;border-radius:12px;padding:18px;display:flex;align-items:center;gap:14px;">
+                <i class="fas fa-shield-alt" style="font-size:28px;opacity:.85;"></i>
+                <div>
+                    <div style="font-size:13px;opacity:.8;">Intégrité académique</div>
+                    <div style="font-weight:700;font-size:15px;">Surveillance active</div>
+                </div>
+            </div>
+            <div style="background:linear-gradient(135deg,#10b981,#059669);color:white;border-radius:12px;padding:18px;display:flex;align-items:center;gap:14px;">
+                <i class="fas fa-robot" style="font-size:28px;opacity:.85;"></i>
+                <div>
+                    <div style="font-size:13px;opacity:.8;">Correction</div>
+                    <div style="font-weight:700;font-size:15px;">IA + Professeur</div>
+                </div>
+            </div>
+            <div style="background:linear-gradient(135deg,#f59e0b,#d97706);color:white;border-radius:12px;padding:18px;display:flex;align-items:center;gap:14px;">
+                <i class="fas fa-exclamation-triangle" style="font-size:28px;opacity:.85;"></i>
+                <div>
+                    <div style="font-size:13px;opacity:.8;">Réclamation</div>
+                    <div style="font-weight:700;font-size:15px;">7 jours après correction</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="padding:20px;">
+            <h3 style="margin:0 0 18px;font-size:16px;color:#0f172a;"><i class="fas fa-list" style="color:#6366f1;margin-right:8px;"></i>Questions fréquentes</h3>
+            ${faqHtml}
+        </div>
+
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px 18px;margin-top:16px;display:flex;align-items:flex-start;gap:12px;">
+            <i class="fas fa-envelope" style="color:#10b981;margin-top:2px;flex-shrink:0;"></i>
+            <div style="font-size:13px;color:#166534;line-height:1.6;">
+                <strong>Vous ne trouvez pas la réponse à votre question ?</strong><br>
+                Contactez votre administration ou votre professeur directement. En cas de problème technique urgent pendant un examen, signalez-le au surveillant présent.
+            </div>
+        </div>
+    `;
+
+    // Add chevron rotation style if not already present
+    if (!document.getElementById('faq-chevron-style')) {
+        const s = document.createElement('style');
+        s.id = 'faq-chevron-style';
+        s.textContent = '.faq-chevron.open { transform: rotate(180deg); }';
+        document.head.appendChild(s);
+    }
+}
 
 function showCreateReclamationModal(paperId) {
     const modalContent = `
