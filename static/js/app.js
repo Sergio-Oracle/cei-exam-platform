@@ -137,101 +137,155 @@ function showForgotPasswordModal() {
 
     const modal = document.createElement('div');
     modal.id = 'forgot-pw-modal';
-    modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.55);';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);padding:16px;';
     modal.innerHTML = `
-        <div style="background:#fff;border-radius:14px;padding:32px;max-width:400px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
-            <div style="text-align:center;margin-bottom:20px;">
-                <span style="background:#eff6ff;border-radius:50%;width:52px;height:52px;display:inline-flex;align-items:center;justify-content:center;margin-bottom:10px;">
-                    <i class="fas fa-key" style="color:#3b82f6;font-size:22px;"></i>
-                </span>
-                <h3 style="margin:0;font-size:18px;color:#0f172a;">Mot de passe oublié</h3>
-                <p style="margin:6px 0 0;font-size:13px;color:#64748b;">Entrez votre email — vous recevrez un lien de réinitialisation valable 1 heure.</p>
-            </div>
-            <div style="margin-bottom:16px;">
-                <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:6px;">
-                    <i class="fas fa-envelope"></i> Adresse email
-                </label>
-                <input id="forgot-pw-email" type="email" placeholder="votre@email.com"
-                    style="width:100%;padding:10px 14px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;">
-            </div>
-            <div id="forgot-pw-msg" style="display:none;margin-bottom:12px;"></div>
-            <div style="display:flex;gap:10px;">
+        <div id="forgot-pw-box" style="background:#fff;border-radius:16px;padding:36px 32px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.18);">
+            <!-- Étape 1 : saisie email -->
+            <div id="forgot-step-1">
+                <div style="text-align:center;margin-bottom:24px;">
+                    <div style="background:#eff6ff;border-radius:50%;width:60px;height:60px;display:inline-flex;align-items:center;justify-content:center;margin-bottom:14px;">
+                        <i class="fas fa-lock" style="color:#3b82f6;font-size:26px;"></i>
+                    </div>
+                    <h3 style="margin:0 0 6px;font-size:20px;font-weight:700;color:#0f172a;">Mot de passe oublié ?</h3>
+                    <p style="margin:0;font-size:14px;color:#64748b;line-height:1.6;">Pas de problème. Entrez votre adresse email et nous vous enverrons un lien pour réinitialiser votre mot de passe.</p>
+                </div>
+                <div style="margin-bottom:20px;">
+                    <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:8px;">Adresse email</label>
+                    <input id="forgot-pw-email" type="email" placeholder="votre@email.com" autocomplete="email"
+                        style="width:100%;padding:12px 14px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:15px;box-sizing:border-box;outline:none;transition:border-color .15s;"
+                        onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e2e8f0'"
+                        onkeydown="if(event.key==='Enter') submitForgotPassword()">
+                </div>
+                <div id="forgot-pw-err" style="display:none;background:#fef2f2;border:1px solid #fecaca;color:#dc2626;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px;"></div>
+                <button id="forgot-pw-send-btn" onclick="submitForgotPassword()"
+                    style="width:100%;padding:13px;background:#3b82f6;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:15px;font-weight:700;letter-spacing:.01em;transition:background .15s;"
+                    onmouseover="this.style.background='#2563eb'" onmouseout="this.style.background='#3b82f6'">
+                    Envoyer le lien de réinitialisation
+                </button>
                 <button onclick="document.getElementById('forgot-pw-modal').remove()"
-                    style="flex:1;padding:10px;border:1px solid #e2e8f0;background:transparent;border-radius:8px;cursor:pointer;font-size:14px;color:#374151;">
+                    style="width:100%;padding:10px;background:transparent;border:none;cursor:pointer;font-size:14px;color:#64748b;margin-top:10px;">
                     Annuler
                 </button>
-                <button onclick="submitForgotPassword()"
-                    style="flex:1;padding:10px;background:#3b82f6;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">
-                    <i class="fas fa-paper-plane"></i> Envoyer
+            </div>
+
+            <!-- Étape 2 : confirmation (affichée après envoi) -->
+            <div id="forgot-step-2" style="display:none;text-align:center;">
+                <div style="background:#f0fdf4;border-radius:50%;width:70px;height:70px;display:inline-flex;align-items:center;justify-content:center;margin-bottom:18px;">
+                    <i class="fas fa-envelope-open-text" style="color:#16a34a;font-size:30px;"></i>
+                </div>
+                <h3 style="margin:0 0 8px;font-size:20px;font-weight:700;color:#0f172a;">Email envoyé !</h3>
+                <p id="forgot-sent-msg" style="margin:0 0 20px;font-size:14px;color:#475569;line-height:1.7;"></p>
+                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px;text-align:left;margin-bottom:20px;">
+                    <p style="margin:0;font-size:13px;color:#64748b;line-height:1.9;">
+                        <strong style="color:#0f172a;">Vous ne le trouvez pas ?</strong><br>
+                        • L'email arrive dans votre <strong>boîte de réception</strong> en quelques minutes<br>
+                        • Le lien est valable <strong>1 heure</strong><br>
+                        • Expéditeur : <strong>CEI — Centre d'Examen Intelligent</strong><br>
+                        • Absent après 5 min ? Consultez aussi les <strong>Spams / Indésirables</strong>
+                    </p>
+                </div>
+                <button id="forgot-resend-btn" onclick="showForgotPasswordModal()"
+                    style="width:100%;padding:12px;background:transparent;border:1.5px solid #3b82f6;color:#3b82f6;border-radius:10px;cursor:pointer;font-size:14px;font-weight:600;margin-bottom:8px;">
+                    <i class="fas fa-redo"></i> Renvoyer un lien
+                </button>
+                <button onclick="document.getElementById('forgot-pw-modal').remove()"
+                    style="width:100%;padding:10px;background:transparent;border:none;cursor:pointer;font-size:14px;color:#64748b;">
+                    Retour à la connexion
                 </button>
             </div>
         </div>
     `;
     document.body.appendChild(modal);
     modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
-    setTimeout(() => document.getElementById('forgot-pw-email')?.focus(), 100);
+    setTimeout(() => document.getElementById('forgot-pw-email')?.focus(), 80);
 }
 
 async function submitForgotPassword() {
-    const email = document.getElementById('forgot-pw-email')?.value?.trim();
-    const msgEl = document.getElementById('forgot-pw-msg');
-    if (!email) {
-        if (msgEl) { msgEl.style.display='block'; msgEl.innerHTML='<div style="background:#fee2e2;color:#dc2626;padding:10px 14px;border-radius:8px;font-size:13px;">Veuillez entrer votre email.</div>'; }
-        return;
-    }
+    const emailInput = document.getElementById('forgot-pw-email');
+    const email = emailInput?.value?.trim() || '';
+    const errEl = document.getElementById('forgot-pw-err');
+    const sendBtn = document.getElementById('forgot-pw-send-btn');
+
+    const showErr = msg => {
+        if (errEl) { errEl.style.display = 'block'; errEl.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${msg}`; }
+        if (emailInput) emailInput.style.borderColor = '#fca5a5';
+    };
+
+    if (!email) return showErr('Veuillez entrer votre adresse email.');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showErr('Format d\'email invalide.');
+
+    if (errEl) errEl.style.display = 'none';
+    if (emailInput) emailInput.style.borderColor = '#e2e8f0';
+    if (sendBtn) { sendBtn.disabled = true; sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Envoi en cours...'; }
+
     try {
         const res = await fetch('/api/auth/forgot-password', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email })
         });
-        if (msgEl) {
-            msgEl.style.display = 'block';
-            msgEl.innerHTML = '<div style="background:#ecfdf5;color:#059669;padding:10px 14px;border-radius:8px;font-size:13px;"><i class="fas fa-check-circle"></i> Si cet email existe dans notre système, un lien vous a été envoyé.</div>';
+        const data = await res.json();
+
+        // Afficher l'étape 2 — confirmation
+        document.getElementById('forgot-step-1').style.display = 'none';
+        document.getElementById('forgot-step-2').style.display = 'block';
+
+        const sentMsg = document.getElementById('forgot-sent-msg');
+        if (sentMsg) {
+            if (data.masked_email) {
+                sentMsg.innerHTML = `Nous avons envoyé un lien de réinitialisation à <strong>${data.masked_email}</strong>.<br>Cliquez sur le lien dans l'email pour définir un nouveau mot de passe.`;
+            } else {
+                sentMsg.innerHTML = `Si cette adresse <strong>${email}</strong> est associée à un compte, vous recevrez un email sous quelques minutes.`;
+            }
         }
-        // Désactiver le bouton pour éviter le double envoi
-        const btn = document.querySelector('#forgot-pw-modal button:last-child');
-        if (btn) { btn.disabled = true; btn.textContent = 'Email envoyé'; }
     } catch(e) {
-        if (msgEl) { msgEl.style.display='block'; msgEl.innerHTML='<div style="background:#fee2e2;color:#dc2626;padding:10px 14px;border-radius:8px;font-size:13px;">Erreur réseau. Réessayez.</div>'; }
+        if (sendBtn) { sendBtn.disabled = false; sendBtn.innerHTML = 'Envoyer le lien de réinitialisation'; }
+        showErr('Erreur de connexion. Vérifiez votre réseau et réessayez.');
     }
 }
 
 function showResetPasswordScreen(token) {
-    // Cacher l'écran de connexion et afficher le formulaire de réinitialisation
     const loginScreen = document.getElementById('login-screen');
     if (loginScreen) loginScreen.style.display = 'none';
 
     const wrap = document.createElement('div');
     wrap.id = 'reset-pw-screen';
-    wrap.className = 'auth-screen';
-    wrap.style.cssText = 'display:flex;min-height:100vh;align-items:center;justify-content:center;background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);';
+    // position:fixed + z-index élevé pour ne pas être bloqué par les overlays existants
+    wrap.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);padding:20px;box-sizing:border-box;';
     wrap.innerHTML = `
-        <div style="background:#fff;border-radius:16px;padding:36px;max-width:420px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,0.18);">
-            <div style="text-align:center;margin-bottom:24px;">
-                <span style="background:#eff6ff;border-radius:50%;width:60px;height:60px;display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px;">
-                    <i class="fas fa-lock" style="color:#3b82f6;font-size:26px;"></i>
-                </span>
-                <h2 style="margin:0;font-size:20px;color:#0f172a;">Nouveau mot de passe</h2>
-                <p style="margin:6px 0 0;font-size:13px;color:#64748b;">Choisissez un mot de passe sécurisé (min. 8 caractères).</p>
+        <div style="background:#fff;border-radius:16px;padding:36px 32px;max-width:440px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.25);position:relative;z-index:1;">
+            <div style="text-align:center;margin-bottom:28px;">
+                <div style="background:#eff6ff;border-radius:50%;width:64px;height:64px;display:inline-flex;align-items:center;justify-content:center;margin-bottom:14px;">
+                    <i class="fas fa-lock" style="color:#3b82f6;font-size:28px;"></i>
+                </div>
+                <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#0f172a;">Nouveau mot de passe</h2>
+                <p style="margin:0;font-size:14px;color:#64748b;line-height:1.5;">Choisissez un mot de passe sécurisé (min. 8 caractères).</p>
             </div>
-            <div style="margin-bottom:14px;">
-                <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:6px;"><i class="fas fa-lock"></i> Nouveau mot de passe</label>
-                <input id="reset-pw-new" type="password" placeholder="••••••••"
-                    style="width:100%;padding:10px 14px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;">
+            <div style="margin-bottom:16px;">
+                <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:7px;">
+                    <i class="fas fa-lock" style="color:#3b82f6;"></i> Nouveau mot de passe
+                </label>
+                <input id="reset-pw-new" type="password" placeholder="••••••••" autocomplete="new-password"
+                    style="width:100%;padding:12px 14px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:15px;box-sizing:border-box;outline:none;font-family:inherit;"
+                    onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e2e8f0'">
             </div>
-            <div style="margin-bottom:20px;">
-                <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:6px;"><i class="fas fa-lock"></i> Confirmer le mot de passe</label>
-                <input id="reset-pw-confirm" type="password" placeholder="••••••••"
-                    style="width:100%;padding:10px 14px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;">
+            <div style="margin-bottom:22px;">
+                <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:7px;">
+                    <i class="fas fa-lock" style="color:#3b82f6;"></i> Confirmer le mot de passe
+                </label>
+                <input id="reset-pw-confirm" type="password" placeholder="••••••••" autocomplete="new-password"
+                    style="width:100%;padding:12px 14px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:15px;box-sizing:border-box;outline:none;font-family:inherit;"
+                    onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e2e8f0'"
+                    onkeydown="if(event.key==='Enter') submitResetPassword('${token}')">
             </div>
-            <div id="reset-pw-msg" style="display:none;margin-bottom:14px;"></div>
+            <div id="reset-pw-msg" style="display:none;margin-bottom:16px;"></div>
             <button onclick="submitResetPassword('${token}')"
-                style="width:100%;padding:12px;background:#3b82f6;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:15px;font-weight:700;">
+                style="width:100%;padding:13px;background:#3b82f6;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:15px;font-weight:700;letter-spacing:.01em;"
+                onmouseover="this.style.background='#2563eb'" onmouseout="this.style.background='#3b82f6'">
                 <i class="fas fa-check"></i> Enregistrer le nouveau mot de passe
             </button>
-            <p style="text-align:center;margin:14px 0 0;">
-                <a href="/app" style="font-size:13px;color:#64748b;text-decoration:none;">
+            <p style="text-align:center;margin:16px 0 0;">
+                <a href="/app" style="font-size:14px;color:#64748b;text-decoration:none;">
                     <i class="fas fa-arrow-left"></i> Retour à la connexion
                 </a>
             </p>
@@ -349,7 +403,7 @@ function showApp() {
     loadNavigation();
     initSidebar();
     loadDashboard();
-    if (currentUser.role === 'student') startNotifPolling();
+    startNotifPolling();
     // Rechargement complet quand la langue change
     const _origSetLang = window.setLang;
     window.setLang = function(code) {
@@ -484,7 +538,7 @@ function _saveReadSet(set) {
 }
 
 async function fetchNotifications() {
-    if (!currentUser || currentUser.role !== 'student') return;
+    if (!currentUser) return;
     try {
         const data = await apiCall('/api/notifications');
         _notifData = data.notifications || [];
@@ -497,10 +551,9 @@ function renderNotifBadge() {
     const badge   = document.getElementById('notif-badge');
     if (!wrapper) return;
     wrapper.style.display = 'flex';
-    const read = _getReadSet();
-    const unseen = _notifData.filter(n => !read.has(n.id));
-    if (unseen.length > 0) {
-        badge.textContent = unseen.length > 9 ? '9+' : unseen.length;
+    const unread = _notifData.filter(n => !n.is_read);
+    if (unread.length > 0) {
+        badge.textContent = unread.length > 9 ? '9+' : unread.length;
         badge.style.display = 'flex';
     } else {
         badge.style.display = 'none';
@@ -510,7 +563,6 @@ function renderNotifBadge() {
 function renderNotifList() {
     const list = document.getElementById('notif-list');
     if (!list) return;
-    const read = _getReadSet();
     if (_notifData.length === 0) {
         list.innerHTML = '<div class="notif-empty"><i class="fas fa-check-circle" style="color:#10b981;margin-right:6px;"></i>Aucune notification</div>';
         return;
@@ -521,8 +573,7 @@ function renderNotifList() {
         return d.toLocaleDateString('fr-FR', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
     };
     list.innerHTML = _notifData.map(n => {
-        const unread = !read.has(n.id);
-        return `<div class="notif-item${unread ? ' unread' : ''}" onclick="handleNotifClick('${n.id}','${n.type}',${n.attempt_id || n.paper_id || 0})">
+        return `<div class="notif-item${!n.is_read ? ' unread' : ''}" onclick="handleNotifClick('${n.id}','${n.type}',${n.attempt_id || n.paper_id || 0})">
             <div class="notif-title"><i class="fas fa-${n.type === 'online_exam' ? 'laptop' : 'file-alt'}" style="color:#6366f1;margin-right:6px;"></i>${n.title}</div>
             <div class="notif-msg">${n.message}</div>
             <div class="notif-time">${fmtDate(n.corrected_at)}</div>
@@ -544,19 +595,17 @@ function closeNotifPanel() {
     if (panel) panel.style.display = 'none';
 }
 
-function markAllNotifsRead(e) {
+async function markAllNotifsRead(e) {
     if (e) e.stopPropagation();
-    const read = _getReadSet();
-    _notifData.forEach(n => read.add(n.id));
-    _saveReadSet(read);
+    // Persiste en base de données
+    try { await apiCall('/api/notifications/mark-read', { method: 'PUT' }); } catch (_) {}
+    // Mise à jour locale immédiate
+    _notifData.forEach(n => { n.is_read = true; });
     renderNotifBadge();
     renderNotifList();
 }
 
 function handleNotifClick(id, type, resourceId) {
-    const read = _getReadSet();
-    read.add(id);
-    _saveReadSet(read);
     renderNotifBadge();
     closeNotifPanel();
     if (type === 'online_exam' && resourceId) {
@@ -643,6 +692,12 @@ function loadNavigation() {
             <button class="nav-tab" onclick="loadExamsHistory()">
                 <i class="fas fa-history"></i> ${t('nav.exam_history')}
             </button>
+            <button class="nav-tab" onclick="loadExamCalendar()">
+                <i class="fas fa-calendar-alt"></i> Calendrier
+            </button>
+            <button class="nav-tab" onclick="loadProfessorAnalytics()">
+                <i class="fas fa-chart-line"></i> Analytique
+            </button>
             <button class="nav-tab" onclick="loadTranscripts()">
                 <i class="fas fa-file-alt"></i> ${t('nav.transcripts')}
             </button>
@@ -706,10 +761,10 @@ function loadNavigation() {
     } else if (currentUser.role === 'surveillant') {
         tabs = `<div class="nav-tabs">
             <button class="nav-tab active" onclick="loadDashboard()">
-                <i class="fas fa-chart-line"></i> ${t('nav.dashboard')}
+                <i class="fas fa-tachometer-alt"></i> Dashboard
             </button>
             <button class="nav-tab" onclick="loadSurveillantExams()">
-                <i class="fas fa-laptop-code"></i> ${t('nav.my_exams_surv')}
+                <i class="fas fa-clipboard-list"></i> Mes Examens
             </button>
             <button class="nav-tab" onclick="toggleTheme()" id="theme-toggle-btn" title="${t('nav.change_theme')}">
                 <i class="fas fa-moon"></i>
@@ -5840,7 +5895,11 @@ async function loadOnlineExams() {
                 <button class="btn btn-primary" onclick="showCreateOnlineExamModal()"
                     style="display:inline-flex;align-items:center;gap:8px;padding:11px 20px;">
                     <i class="fas fa-plus"></i> Créer un Examen
-                </button>` : ''}
+                </button>` : `
+                <button onclick="showStudentExamHistory()"
+                    style="display:inline-flex;align-items:center;gap:8px;padding:9px 18px;background:#ede9fe;color:#6366f1;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
+                    <i class="fas fa-history"></i> Mon historique
+                </button>`}
             </div>
         `;
 
@@ -6424,8 +6483,9 @@ async function submitReclamationForAttempt(attemptId) {
         } else {
             showAlert(data.error || 'Erreur lors de la soumission.', 'error');
         }
-    } catch(e) { showAlert('Erreur réseau.', 'error'); }
-    finally { showLoader(false); }
+    } catch(e) {
+        if (!e.alreadyHandled) showAlert(e.serverMessage || e.message || 'Erreur réseau. Vérifiez votre connexion et réessayez.', 'error');
+    } finally { showLoader(false); }
 }
 
 async function viewOnlineExamDetails(examId) {
@@ -6764,14 +6824,18 @@ async function startOnlineExam(examId) {
     showProctoringConsentModal(examId);
 }
 
-async function _doStartOnlineExam(examId) {
+async function _doStartOnlineExam(examId, preExamSignature = null, preExamSignatureMeta = null) {
     showLoader(true);
 
     try {
         // Utiliser fetch directement pour contrôler finement chaque code d'erreur
         const headers = { 'Content-Type': 'application/json' };
         if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
-        const response = await fetch(`/api/online_exams/${examId}/start`, { method: 'POST', headers });
+        const payload = {};
+        if (preExamSignature)     payload.pre_exam_signature      = preExamSignature;
+        if (preExamSignatureMeta) payload.pre_exam_signature_meta = preExamSignatureMeta;
+        const body = Object.keys(payload).length > 0 ? JSON.stringify(payload) : undefined;
+        const response = await fetch(`/api/online_exams/${examId}/start`, { method: 'POST', headers, body });
         const data = await response.json().catch(() => ({}));
 
         showLoader(false);
@@ -6849,58 +6913,230 @@ function openProctoringDashboard(examId) {
 
 function showProctoringConsentModal(examId) {
     const modalContent = `
-        <div style="text-align:center; padding: 8px 0 16px;">
-            <div style="width:72px;height:72px;background:rgba(37,99,235,.1);border-radius:50%;
-                        display:flex;align-items:center;justify-content:center;
-                        margin:0 auto 20px;font-size:32px;color:#2563eb;">
-                <i class="fas fa-shield-alt"></i>
+        <div style="padding: 4px 0 8px;">
+            <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px;">
+                <div style="width:52px;height:52px;background:rgba(37,99,235,.1);border-radius:50%;
+                            display:flex;align-items:center;justify-content:center;
+                            font-size:24px;color:#2563eb;flex-shrink:0;">
+                    <i class="fas fa-shield-alt"></i>
+                </div>
+                <div>
+                    <h2 style="margin:0 0 4px;font-size:18px;color:#1e293b;">Examen Surveillé — Attestation d'honneur</h2>
+                    <p style="margin:0;color:#64748b;font-size:13px;">Lisez les conditions et signez avant de démarrer</p>
+                </div>
             </div>
-            <h2 style="margin:0 0 10px;font-size:20px;color:#1e293b;">
-                Examen Surveillé par Caméra
-            </h2>
-            <p style="color:#64748b;font-size:14px;line-height:1.6;margin-bottom:24px;">
-                Cet examen est surveillé en temps réel via votre webcam et microphone.<br>
-                <strong>Vous devez autoriser l'accès à la caméra et au microphone</strong>
-                pour pouvoir composer.
-            </p>
 
             <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;
-                        padding:16px;text-align:left;margin-bottom:24px;">
-                <div style="display:flex;flex-direction:column;gap:10px;">
+                        padding:14px 16px;margin-bottom:18px;">
+                <div style="display:flex;flex-direction:column;gap:9px;">
                     <div style="display:flex;align-items:center;gap:10px;font-size:13px;">
-                        <i class="fas fa-video" style="color:#2563eb;width:18px;text-align:center"></i>
-                        <span>Votre caméra sera activée pendant toute la durée de l'examen</span>
+                        <i class="fas fa-video" style="color:#2563eb;width:16px;text-align:center;flex-shrink:0;"></i>
+                        <span>Caméra et microphone activés pendant toute la durée</span>
                     </div>
                     <div style="display:flex;align-items:center;gap:10px;font-size:13px;">
-                        <i class="fas fa-microphone" style="color:#2563eb;width:18px;text-align:center"></i>
-                        <span>Votre microphone sera activé pour la détection audio</span>
+                        <i class="fas fa-user-check" style="color:#10b981;width:16px;text-align:center;flex-shrink:0;"></i>
+                        <span>Visage visible en permanence (détection faciale IA)</span>
                     </div>
                     <div style="display:flex;align-items:center;gap:10px;font-size:13px;">
-                        <i class="fas fa-user-check" style="color:#10b981;width:18px;text-align:center"></i>
-                        <span>Détection faciale automatique (votre visage doit être visible)</span>
+                        <i class="fas fa-expand" style="color:#f59e0b;width:16px;text-align:center;flex-shrink:0;"></i>
+                        <span>Plein écran obligatoire — tout changement d'onglet est enregistré</span>
                     </div>
                     <div style="display:flex;align-items:center;gap:10px;font-size:13px;">
-                        <i class="fas fa-expand" style="color:#f59e0b;width:18px;text-align:center"></i>
-                        <span>Mode plein écran obligatoire (tout changement sera signalé)</span>
-                    </div>
-                    <div style="display:flex;align-items:center;gap:10px;font-size:13px;">
-                        <i class="fas fa-ban" style="color:#ef4444;width:18px;text-align:center"></i>
-                        <span>Tentatives de tricherie → bannissement immédiat</span>
+                        <i class="fas fa-ban" style="color:#ef4444;width:16px;text-align:center;flex-shrink:0;"></i>
+                        <span>Toute fraude entraîne un bannissement immédiat et définitif</span>
                     </div>
                 </div>
             </div>
 
-            <div style="display:flex;gap:10px;justify-content:center;">
-                <button class="btn btn-secondary" onclick="closeModal()">
+            <!-- Attestation d'honneur -->
+            <div style="background:#fff8ed;border:1px solid #f59e0b;border-radius:10px;padding:14px 16px;margin-bottom:16px;">
+                <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:#92400e;">
+                    <i class="fas fa-file-signature" style="margin-right:6px;"></i>Attestation sur l'honneur
+                </p>
+                <p style="margin:0;font-size:12px;color:#78350f;line-height:1.6;">
+                    Je soussigné(e) <strong>${currentUser ? currentUser.full_name : ''}</strong>,
+                    certifie que je composerai cet examen seul(e), sans aide extérieure, sans document non autorisé,
+                    et sans aucun outil d'intelligence artificielle. Je reconnais que tout manquement à ces règles
+                    constitue une fraude académique passible de sanctions.
+                </p>
+            </div>
+
+            <!-- Zone de signature -->
+            <div style="margin-bottom:16px;">
+                <label style="font-size:12px;font-weight:700;color:#334155;display:block;margin-bottom:8px;">
+                    <i class="fas fa-pen-nib" style="color:#6366f1;margin-right:5px;"></i>
+                    Signez ci-dessous pour confirmer votre engagement <span style="color:#ef4444;">*</span>
+                </label>
+                <canvas id="pre-sig-canvas" width="480" height="120"
+                    style="border:2px solid #e2e8f0;border-radius:8px;display:block;cursor:crosshair;
+                           background:#fafafa;touch-action:none;width:100%;max-width:100%;"></canvas>
+                <div style="display:flex;justify-content:flex-end;margin-top:6px;">
+                    <button onclick="_clearPreSig()"
+                        style="background:none;border:none;color:#94a3b8;font-size:12px;cursor:pointer;padding:0;">
+                        <i class="fas fa-eraser"></i> Effacer
+                    </button>
+                </div>
+            </div>
+
+            <div style="display:flex;gap:10px;">
+                <button class="btn btn-secondary" onclick="closeModal()" style="flex:1;">
                     <i class="fas fa-times"></i> Annuler
                 </button>
-                <button class="btn btn-primary" onclick="closeModal(); _doStartOnlineExam(${examId})">
-                    <i class="fas fa-check"></i> J'accepte — Démarrer l'examen
+                <button class="btn btn-primary" id="pre-sig-start-btn" onclick="_validateAndStartExam(${examId})" style="flex:2;">
+                    <i class="fas fa-pen-nib"></i> Signer et démarrer l'examen
                 </button>
             </div>
         </div>
     `;
-    showModal(modalContent, '560px');
+    showModal(modalContent, '580px');
+
+    // Initialiser le pad de signature pré-examen après rendu du DOM
+    requestAnimationFrame(() => _initPreSigPad());
+}
+
+function _drawPreSigWatermark(ctx, w, h) {
+    // Filigrane diagonal central
+    ctx.save();
+    ctx.globalAlpha = 0.06;
+    ctx.font = `bold ${Math.max(14, Math.floor(h / 4))}px Arial`;
+    ctx.fillStyle = '#1e293b';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.translate(w / 2, h / 2);
+    ctx.rotate(-18 * Math.PI / 180);
+    ctx.fillText('CEI — ATTESTATION', 0, 0);
+    ctx.restore();
+
+    // Nom étudiant en haut à gauche (watermark léger)
+    const name = currentUser ? currentUser.full_name.toUpperCase() : '';
+    const dateStr = new Date().toLocaleDateString('fr-FR');
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+    ctx.font = '9px monospace';
+    ctx.fillStyle = '#475569';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(name, 8, 5);
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(dateStr, w - 8, h - 5);
+    ctx.restore();
+
+    // Ligne de base en pointillés
+    ctx.save();
+    ctx.globalAlpha = 0.15;
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 6]);
+    const y = h * 0.72;
+    ctx.beginPath(); ctx.moveTo(10, y); ctx.lineTo(w - 10, y); ctx.stroke();
+    ctx.restore();
+}
+
+function _initPreSigPad() {
+    const canvas = document.getElementById('pre-sig-canvas');
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width  = Math.round(rect.width) || 480;
+    canvas.height = 130;
+    const ctx = canvas.getContext('2d');
+
+    // Dessiner le filigrane non-effaçable
+    _drawPreSigWatermark(ctx, canvas.width, canvas.height);
+
+    // Initialiser le tracker de sécurité
+    canvas._sigMeta = { strokes: 0, pathLength: 0, startTime: null, endTime: null };
+
+    let drawing = false, lastX = 0, lastY = 0;
+
+    function pos(e) {
+        const r = canvas.getBoundingClientRect();
+        const src = e.touches ? e.touches[0] : e;
+        return [
+            (src.clientX - r.left) * (canvas.width / r.width),
+            (src.clientY - r.top)  * (canvas.height / r.height)
+        ];
+    }
+    function start(e) {
+        e.preventDefault();
+        drawing = true;
+        [lastX, lastY] = pos(e);
+        if (!canvas._sigMeta.startTime) canvas._sigMeta.startTime = Date.now();
+        canvas._sigMeta.strokes++;
+    }
+    function draw(e) {
+        e.preventDefault();
+        if (!drawing) return;
+        const [x, y] = pos(e);
+        ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(x, y);
+        ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 2.2; ctx.lineCap = 'round'; ctx.stroke();
+        const dx = x - lastX, dy = y - lastY;
+        canvas._sigMeta.pathLength += Math.sqrt(dx * dx + dy * dy);
+        canvas._sigMeta.endTime = Date.now();
+        [lastX, lastY] = [x, y];
+    }
+    function stop() { drawing = false; }
+
+    canvas.addEventListener('mousedown',  start); canvas.addEventListener('mousemove',  draw); canvas.addEventListener('mouseup',    stop);
+    canvas.addEventListener('touchstart', start); canvas.addEventListener('touchmove',  draw); canvas.addEventListener('touchend',   stop);
+    canvas.addEventListener('mouseleave', stop);
+}
+
+function _clearPreSig() {
+    const canvas = document.getElementById('pre-sig-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Re-dessiner le filigrane après effacement
+    _drawPreSigWatermark(ctx, canvas.width, canvas.height);
+    canvas._sigMeta = { strokes: 0, pathLength: 0, startTime: null, endTime: null };
+    canvas.style.border = '2px solid #e2e8f0';
+    canvas.style.background = '#fafafa';
+}
+
+function _validateAndStartExam(examId) {
+    const canvas = document.getElementById('pre-sig-canvas');
+    if (!canvas) return;
+
+    const meta     = canvas._sigMeta || {};
+    const strokes  = meta.strokes    || 0;
+    const pathLen  = Math.round(meta.pathLength || 0);
+    const duration = (meta.startTime && meta.endTime) ? (meta.endTime - meta.startTime) : 0;
+
+    // ── Verrou 1 : signature vide ──────────────────────────
+    if (strokes === 0) {
+        canvas.style.border = '2px solid #ef4444';
+        canvas.style.background = '#fef2f2';
+        showAlert('Vous devez signer l\'attestation avant de démarrer l\'examen.', 'error');
+        return;
+    }
+    // ── Verrou 2 : trop peu de traits (clic unique = suspect) ──
+    if (strokes < 2) {
+        showAlert('Signature insuffisante — tracez une signature complète avec plusieurs traits.', 'error');
+        return;
+    }
+    // ── Verrou 3 : longueur de tracé insuffisante ──────────
+    if (pathLen < 100) {
+        showAlert('Signature trop courte — veuillez tracer votre signature complète.', 'error');
+        return;
+    }
+    // ── Verrou 4 : durée trop courte (signature automatisée) ─
+    if (duration < 800) {
+        showAlert('Signature réalisée trop rapidement — veuillez signer normalement.', 'error');
+        return;
+    }
+
+    const signatureData = canvas.toDataURL('image/png');
+    const signatureMeta = {
+        strokes,
+        path_length: pathLen,
+        duration_ms: duration,
+        signed_at: new Date().toISOString()
+    };
+
+    canvas.style.border = '2px solid #10b981';
+    closeModal();
+    _doStartOnlineExam(examId, signatureData, signatureMeta);
 }
 
 async function showExamCompositionInterface(examId, attempt) {
@@ -7341,26 +7577,19 @@ async function _confirmSignatureAndSubmit() {
 }
 
 async function autoSubmitExam(attemptId) {
+    clearInterval(examAutoSaveInterval);
+    _stopFaceDetection();
     showLoader(true);
-    
     try {
         const answers = document.getElementById('exam-answers')?.value || '';
-        
         await authenticatedFetch(`/api/exam_attempts/${attemptId}/submit`, {
             method: 'POST',
-            body: JSON.stringify({
-                answers: JSON.stringify({ content: answers })
-            })
+            body: JSON.stringify({ answers: JSON.stringify({ content: answers }) })
         });
-        
-        clearInterval(examAutoSaveInterval);
-        _stopFaceDetection();
-        showAlert('Examen soumis automatiquement (temps écoulé)', 'info');
-        setTimeout(() => {
-            loadOnlineExams();
-        }, 3000);
-    } catch (error) {
-        console.error('Erreur auto-submit:', error);
+        showAlert('Temps écoulé — votre examen a été soumis automatiquement.', 'info');
+        setTimeout(() => { loadOnlineExams(); }, 3000);
+    } catch(error) {
+        if (!error.alreadyHandled) showAlert(error.serverMessage || error.message || 'Erreur lors de la soumission automatique.', 'error');
     } finally {
         showLoader(false);
     }
@@ -7544,6 +7773,25 @@ async function loadAllTranscripts() {
 
     let semestersOptions = '<option value="">-- D\'abord sélectionner un étudiant --</option>';
 
+    // Build unique semesters list for bulk ZIP selector
+    const semesterMap = {};
+    existingTranscripts.forEach(tr => {
+        if (tr.semester_id && !semesterMap[tr.semester_id]) {
+            semesterMap[tr.semester_id] = tr.semester_name || `Semestre ${tr.semester_id}`;
+        }
+    });
+    const semesterEntries = Object.entries(semesterMap);
+
+    const bulkBtn = semesterEntries.length > 0 ? `
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <select id="bulk-semester-select" style="padding:6px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;background:#fff;">
+                ${semesterEntries.map(([id, name]) => `<option value="${id}">${name}</option>`).join('')}
+            </select>
+            <button class="btn btn-sm btn-success" onclick="downloadBulkTranscripts()" title="Télécharger tous les relevés du semestre en ZIP">
+                <i class="fas fa-file-archive"></i> Télécharger tout (ZIP)
+            </button>
+        </div>` : '';
+
     let html = `
         <div class="page-header">
             <h2><i class="fas fa-file-alt"></i> Relevés de Notes</h2>
@@ -7552,8 +7800,9 @@ async function loadAllTranscripts() {
 
         <!-- SECTION : Relevés Existants -->
         <div class="card" style="margin-bottom: 24px;">
-            <div class="card-header">
-                <h3><i class="fas fa-list"></i> Relevés Générés (${existingTranscripts.length})</h3>
+            <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+                <h3 style="margin:0;"><i class="fas fa-list"></i> Relevés Générés (${existingTranscripts.length})</h3>
+                ${bulkBtn}
             </div>
     `;
 
@@ -8014,6 +8263,10 @@ async function loadExamCorrections() {
                             ${needsCorrection.length > 0 ? `
                                 <button class="btn btn-success" onclick="correctAllExamAttempts(${exam.id})">
                                     <i class="fas fa-magic"></i> Tout Corriger avec IA
+                                </button>
+                                <button class="btn btn-sm" onclick="startChainCorrection(${exam.id})"
+                                    style="background:#6366f1;color:white;">
+                                    <i class="fas fa-forward"></i> Correction en chaîne
                                 </button>
                             ` : ''}
                             <button class="btn btn-sm" onclick="exportExamResultsCSV(${exam.id}, '${(exam.title||'').replace(/'/g,"\\'")}')"
@@ -8597,6 +8850,7 @@ ${exam.instructions}
 }
 
 async function viewExamSubmissions(examId) {
+    window._currentViewedExamId = examId;
     showLoader(true);
     try {
         const [examsResp, attemptsResp] = await Promise.all([
@@ -8606,60 +8860,246 @@ async function viewExamSubmissions(examId) {
         const exams    = await examsResp.json();
         const attempts = await attemptsResp.json();
         const exam     = exams.find(e => e.id === examId);
-
         if (!exam) { showAlert('Examen introuvable.', 'error'); showLoader(false); return; }
 
-        const submitted = attempts.filter(a => a.status === 'submitted' || a.status === 'auto_submitted');
-        const statusLabel = { submitted: 'Soumis', auto_submitted: 'Auto-soumis', banned: 'Banni', in_progress: 'En cours' };
+        const inProgress = attempts.filter(a => a.status === 'in_progress');
+        const done       = attempts.filter(a => ['submitted','auto_submitted'].includes(a.status));
+        const banned     = attempts.filter(a => a.status === 'banned');
 
-        let rows = submitted.length === 0
-            ? `<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:32px;">Aucune copie soumise</td></tr>`
-            : submitted.map(a => `
+        const th = (label) => `<th style="padding:9px 12px;text-align:left;border-bottom:2px solid #e2e8f0;font-size:11px;text-transform:uppercase;color:#64748b;font-weight:600;">${label}</th>`;
+        const tdStyle = 'padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:13px;vertical-align:middle;';
+
+        // ── Section En cours ────────────────────────────────
+        const inProgressRows = inProgress.length === 0
+            ? `<tr><td colspan="5" style="${tdStyle}text-align:center;color:#94a3b8;">Aucun étudiant en cours</td></tr>`
+            : inProgress.map(a => `
                 <tr>
-                    <td><strong>${a.student_name || 'N/A'}</strong><br><small style="color:#64748b;">${a.student_email || ''}</small></td>
-                    <td>${a.submitted_at ? new Date(a.submitted_at).toLocaleString('fr-FR') : 'N/A'}</td>
-                    <td>${a.warnings_count > 0 ? `<span style="color:#ef4444;"><i class="fas fa-exclamation-circle"></i> ${a.warnings_count}</span>` : '<span style="color:#10b981;"><i class="fas fa-check"></i> Aucun</span>'}</td>
-                    <td>${a.score !== null ? `<strong style="color:${a.score>=10?'#10b981':'#ef4444'};font-size:16px;">${a.score}/20</strong>` : '<span style="color:#94a3b8;">Non corrigé</span>'}</td>
-                    <td>
-                        ${a.needs_correction
-                            ? `<button class="btn btn-sm btn-primary" onclick="closeModal();correctSingleAttempt(${a.id})"><i class="fas fa-magic"></i> Corriger</button>`
-                            : `<button class="btn btn-sm" onclick="closeModal();viewAttemptDetails(${a.id})" style="background:#f1f5f9;color:#475569;"><i class="fas fa-eye"></i> Voir</button>`}
+                    <td style="${tdStyle}"><strong>${a.student_name||'N/A'}</strong><br><small style="color:#64748b;">${a.student_email||''}</small></td>
+                    <td style="${tdStyle}">${a.started_at ? new Date(a.started_at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}) : '—'}</td>
+                    <td style="${tdStyle}">${a.warnings_count > 0
+                        ? `<span style="color:#ef4444;font-weight:600;"><i class="fas fa-exclamation-circle"></i> ${a.warnings_count}</span>`
+                        : `<span style="color:#10b981;"><i class="fas fa-check"></i> 0</span>`}</td>
+                    <td style="${tdStyle}">
+                        <span style="background:rgba(16,185,129,.1);color:#059669;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700;">
+                            <i class="fas fa-circle" style="font-size:7px;margin-right:4px;"></i>En cours
+                        </span>
+                    </td>
+                    <td style="${tdStyle}">
+                        <div style="display:flex;gap:5px;">
+                            <button class="btn btn-sm" onclick="grantExtraTime(${a.id},'${(a.student_name||'').replace(/'/g,"\\'")}') "
+                                style="background:#dcfce7;color:#16a34a;font-size:10px;padding:4px 9px;" title="Accorder du temps supplémentaire">
+                                <i class="fas fa-clock"></i> +temps
+                            </button>
+                            <button class="btn btn-sm" onclick="addProctorNote(${a.id},'${(a.student_name||'').replace(/'/g,"\\'")}') "
+                                style="background:#e0f2fe;color:#0284c7;font-size:10px;padding:4px 9px;" title="Note de surveillance">
+                                <i class="fas fa-sticky-note"></i> Note
+                            </button>
+                        </div>
                     </td>
                 </tr>`).join('');
 
-        const modalContent = `
-            <h2 style="margin-bottom:8px;"><i class="fas fa-file-alt"></i> Copies soumises — ${exam.title}</h2>
-            <p style="color:#64748b;margin-bottom:20px;">${submitted.length} copie(s) sur ${attempts.length} participant(s)</p>
-            ${submitted.length > 0 && submitted.some(a => a.needs_correction) ? `
-                <div style="margin-bottom:16px;">
-                    <button class="btn btn-success" onclick="closeModal();correctAllExamAttempts(${examId})">
-                        <i class="fas fa-magic"></i> Tout corriger avec IA
+        // ── Section Terminés ────────────────────────────────
+        const doneRows = done.length === 0
+            ? `<tr><td colspan="6" style="${tdStyle}text-align:center;color:#94a3b8;">Aucune copie soumise</td></tr>`
+            : done.map(a => {
+                const isAuto = a.status === 'auto_submitted';
+                // Signature pré-examen
+                let preMeta = null;
+                try { preMeta = a.pre_exam_signature_meta ? JSON.parse(a.pre_exam_signature_meta) : null; } catch(e) {}
+                const preQuality = preMeta
+                    ? `traits:${preMeta.strokes} dur:${Math.round((preMeta.duration_ms||0)/1000)}s`
+                    : '';
+                const preSign = a.pre_exam_signature_data
+                    ? `<button onclick="showSignatureImage('${encodeURIComponent(a.pre_exam_signature_data)}','Attestation pré-examen — ${(a.student_name||'').replace(/'/g,"\\'")}','${preQuality}')"
+                        style="background:rgba(16,185,129,.1);color:#059669;border:1px solid rgba(16,185,129,.3);border-radius:5px;padding:2px 8px;font-size:10px;cursor:pointer;font-weight:600;" title="Voir la signature pré-examen">
+                        <i class="fas fa-check-circle"></i> Pré ↗
+                      </button>`
+                    : `<span style="color:#94a3b8;font-size:10px;"><i class="fas fa-times-circle"></i> Pré absent</span>`;
+                const postSign = a.signature_data
+                    ? `<button onclick="showSignatureImage('${encodeURIComponent(a.signature_data)}','Signature de soumission — ${(a.student_name||'').replace(/'/g,"\\'")}','')"
+                        style="background:rgba(99,102,241,.1);color:#6366f1;border:1px solid rgba(99,102,241,.3);border-radius:5px;padding:2px 8px;font-size:10px;cursor:pointer;font-weight:600;" title="Voir la signature post-examen">
+                        <i class="fas fa-check-circle"></i> Post ↗
+                      </button>`
+                    : `<span style="color:${isAuto ? '#f59e0b' : '#94a3b8'};font-size:10px;"><i class="fas fa-${isAuto ? 'clock' : 'times-circle'}"></i> ${isAuto ? 'Auto' : 'Post absent'}</span>`;
+                return `
+                <tr>
+                    <td style="${tdStyle}"><strong>${a.student_name||'N/A'}</strong><br><small style="color:#64748b;">${a.student_email||''}</small></td>
+                    <td style="${tdStyle}">
+                        ${isAuto
+                            ? `<span style="background:rgba(245,158,11,.1);color:#d97706;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;"><i class="fas fa-clock"></i> Auto-soumis</span>`
+                            : `<span style="background:rgba(16,185,129,.1);color:#059669;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;"><i class="fas fa-check"></i> Soumis</span>`}
+                    </td>
+                    <td style="${tdStyle}">${a.submitted_at ? new Date(a.submitted_at).toLocaleString('fr-FR') : '—'}</td>
+                    <td style="${tdStyle}">
+                        <div style="display:flex;gap:8px;align-items:center;">${preSign}${postSign}</div>
+                    </td>
+                    <td style="${tdStyle}">${a.score !== null && a.score !== undefined
+                        ? `<strong style="color:${a.score>=10?'#10b981':'#ef4444'};font-size:15px;">${a.score}/20</strong>`
+                        : `<span style="color:#94a3b8;font-size:12px;">Non corrigé</span>`}</td>
+                    <td style="${tdStyle}">
+                        <div style="display:flex;gap:5px;flex-wrap:wrap;">
+                            ${a.needs_correction
+                                ? `<button class="btn btn-sm btn-primary" onclick="closeModal();correctSingleAttempt(${a.id})" style="font-size:10px;padding:4px 8px;"><i class="fas fa-magic"></i> Corriger</button>`
+                                : `<button class="btn btn-sm" onclick="closeModal();viewAttemptDetails(${a.id})" style="background:#f1f5f9;color:#475569;font-size:10px;padding:4px 8px;"><i class="fas fa-eye"></i> Voir</button>`}
+                            <button class="btn btn-sm" onclick="showManualGradingModal(${a.id},'${(a.student_name||'').replace(/'/g,"\\'")}',${a.score !== null && a.score !== undefined ? a.score : 'null'})"
+                                style="background:#ede9fe;color:#6366f1;font-size:10px;padding:4px 8px;" title="Correction manuelle">
+                                <i class="fas fa-pen"></i>
+                            </button>
+                            <button class="btn btn-sm" onclick="downloadIntegrityReport(${a.id},'${(a.student_name||'etudiant').replace(/'/g,'').replace(/\s+/g,'_')}')"
+                                style="background:#fef3c7;color:#d97706;font-size:10px;padding:4px 8px;" title="Rapport intégrité PDF">
+                                <i class="fas fa-file-pdf"></i>
+                            </button>
+                            <button class="btn btn-sm" onclick="viewProctorNotes(${a.id},'${(a.student_name||'').replace(/'/g,"\\'")}') "
+                                style="background:#e0f2fe;color:#0284c7;font-size:10px;padding:4px 8px;" title="Voir les notes de surveillance">
+                                <i class="fas fa-sticky-note"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>`;
+            }).join('');
+
+        // ── Section Bannis ───────────────────────────────────
+        const bannedRows = banned.length === 0 ? '' : banned.map(a => `
+            <tr>
+                <td style="${tdStyle}"><strong>${a.student_name||'N/A'}</strong><br><small style="color:#64748b;">${a.student_email||''}</small></td>
+                <td style="${tdStyle};color:#ef4444;">${a.ban_reason || 'Fraude détectée'}</td>
+                <td style="${tdStyle}">
+                    <button class="btn btn-sm" onclick="closeModal();unbanStudent(${a.id})" style="background:rgba(239,68,68,.1);color:#ef4444;font-size:11px;padding:5px 10px;">
+                        <i class="fas fa-user-check"></i> Débannir
                     </button>
-                </div>` : ''}
-            <div style="overflow-x:auto;">
-                <table style="width:100%;border-collapse:collapse;">
-                    <thead>
-                        <tr style="background:#f8fafc;">
-                            <th style="padding:10px;text-align:left;border-bottom:2px solid #e2e8f0;">Étudiant</th>
-                            <th style="padding:10px;text-align:left;border-bottom:2px solid #e2e8f0;">Soumis le</th>
-                            <th style="padding:10px;text-align:left;border-bottom:2px solid #e2e8f0;">Incidents</th>
-                            <th style="padding:10px;text-align:left;border-bottom:2px solid #e2e8f0;">Note</th>
-                            <th style="padding:10px;text-align:left;border-bottom:2px solid #e2e8f0;">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>${rows}</tbody>
-                </table>
+                </td>
+            </tr>`).join('');
+
+        const hasToCorrected = done.some(a => a.needs_correction);
+
+        const modalContent = `
+            <div style="margin-bottom:16px;">
+                <h2 style="margin:0 0 4px;font-size:18px;"><i class="fas fa-file-alt"></i> ${exam.title}</h2>
+                <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;">
+                    <span style="background:rgba(16,185,129,.1);color:#059669;padding:4px 12px;border-radius:99px;font-size:12px;font-weight:600;">
+                        <i class="fas fa-circle" style="font-size:8px;"></i> ${inProgress.length} en cours
+                    </span>
+                    <span style="background:rgba(99,102,241,.1);color:#6366f1;padding:4px 12px;border-radius:99px;font-size:12px;font-weight:600;">
+                        <i class="fas fa-check-circle"></i> ${done.length} terminé(s)
+                    </span>
+                    ${banned.length > 0 ? `<span style="background:rgba(239,68,68,.1);color:#ef4444;padding:4px 12px;border-radius:99px;font-size:12px;font-weight:600;">
+                        <i class="fas fa-ban"></i> ${banned.length} banni(s)
+                    </span>` : ''}
+                    ${hasToCorrected ? `<button class="btn btn-success btn-sm" onclick="closeModal();correctAllExamAttempts(${examId})" style="margin-left:auto;">
+                        <i class="fas fa-magic"></i> Tout corriger (IA)
+                    </button>` : ''}
+                </div>
+                <!-- Barre d'outils examen -->
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid #f1f5f9;">
+                    <button class="btn btn-sm" onclick="showExamStats(${examId})"
+                        style="background:#ede9fe;color:#6366f1;font-size:12px;padding:6px 12px;">
+                        <i class="fas fa-chart-bar"></i> Statistiques
+                    </button>
+                    <button class="btn btn-sm" onclick="exportExamCSV(${examId},'${(exam.title||'').replace(/'/g,'').replace(/"/g,'')}')"
+                        style="background:#d1fae5;color:#059669;font-size:12px;padding:6px 12px;">
+                        <i class="fas fa-file-csv"></i> Export CSV
+                    </button>
+                    <button class="btn btn-sm" onclick="showPlagiarismReport(${examId},'${(exam.title||'').replace(/'/g,'').replace(/"/g,'')}')"
+                        style="background:#fee2e2;color:#ef4444;font-size:12px;padding:6px 12px;">
+                        <i class="fas fa-search"></i> Plagiat
+                    </button>
+                    <button class="btn btn-sm" onclick="showExamQRCode(${examId},'${(exam.title||'').replace(/'/g,'').replace(/"/g,'')}')"
+                        style="background:#fef3c7;color:#d97706;font-size:12px;padding:6px 12px;">
+                        <i class="fas fa-qrcode"></i> QR Code
+                    </button>
+                    <button class="btn btn-sm" onclick="showExamBilan(${examId},'${(exam.title||'').replace(/'/g,'').replace(/"/g,'')}')"
+                        style="background:#e0f2fe;color:#0369a1;font-size:12px;padding:6px 12px;">
+                        <i class="fas fa-list-alt"></i> Bilan
+                    </button>
+                </div>
             </div>
-            <div style="margin-top:20px;text-align:right;">
+
+            <!-- EN COURS -->
+            <div style="margin-bottom:20px;">
+                <div style="font-size:12px;font-weight:700;color:#059669;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+                    <span style="display:inline-block;width:8px;height:8px;background:#10b981;border-radius:50%;animation:pulse 1.5s infinite;"></span>
+                    En cours (${inProgress.length})
+                </div>
+                <div style="overflow-x:auto;border:1px solid #e2e8f0;border-radius:8px;">
+                    <table style="width:100%;border-collapse:collapse;">
+                        <thead><tr style="background:#f8fafc;">${th('Étudiant')}${th('Démarré')}${th('Alertes')}${th('Statut')}${th('Actions surveillant')}</tr></thead>
+                        <tbody>${inProgressRows}</tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- TERMINÉS -->
+            <div style="margin-bottom:20px;">
+                <div style="font-size:12px;font-weight:700;color:#6366f1;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">
+                    <i class="fas fa-check-circle"></i> Terminés (${done.length})
+                    <span style="font-weight:400;color:#64748b;font-size:11px;margin-left:8px;text-transform:none;">
+                        Pré = signature avant exam · Post = signature à la soumission
+                    </span>
+                </div>
+                <div style="overflow-x:auto;border:1px solid #e2e8f0;border-radius:8px;">
+                    <table style="width:100%;border-collapse:collapse;">
+                        <thead><tr style="background:#f8fafc;">${th('Étudiant')}${th('Statut')}${th('Soumis le')}${th('Signatures')}${th('Note')}${th('Action')}</tr></thead>
+                        <tbody>${doneRows}</tbody>
+                    </table>
+                </div>
+            </div>
+
+            ${banned.length > 0 ? `
+            <!-- BANNIS -->
+            <div style="margin-bottom:20px;">
+                <div style="font-size:12px;font-weight:700;color:#ef4444;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">
+                    <i class="fas fa-ban"></i> Exclus (${banned.length})
+                </div>
+                <div style="overflow-x:auto;border:1px solid #fee2e2;border-radius:8px;background:#fff5f5;">
+                    <table style="width:100%;border-collapse:collapse;">
+                        <thead><tr style="background:#fef2f2;">${th('Étudiant')}${th('Raison')}${th('Action')}</tr></thead>
+                        <tbody>${bannedRows}</tbody>
+                    </table>
+                </div>
+            </div>` : ''}
+
+            <div style="text-align:right;">
                 <button class="btn btn-secondary" onclick="closeModal()"><i class="fas fa-times"></i> Fermer</button>
             </div>`;
 
-        showModal(modalContent, '900px');
+        showModal(modalContent, '960px');
     } catch(e) {
         showAlert(humanError(e), 'error');
     } finally {
         showLoader(false);
     }
+}
+
+// ============================================================================
+// VISIONNEUSE DE SIGNATURE
+// ============================================================================
+
+function showSignatureImage(encodedData, title, metaStr) {
+    const data = decodeURIComponent(encodedData);
+    const metaHtml = metaStr ? `
+        <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-top:10px;">
+            ${metaStr.split(' ').map(part => {
+                const [k, v] = part.split(':');
+                const labels = { traits: 'Traits', dur: 'Durée', lon: 'Longueur' };
+                return `<span style="background:#f1f5f9;padding:3px 10px;border-radius:6px;font-size:12px;color:#475569;">
+                    <strong>${labels[k] || k}</strong> : ${v}
+                </span>`;
+            }).join('')}
+        </div>` : '';
+
+    showModal(`
+        <div style="text-align:center;">
+            <h3 style="margin:0 0 14px;font-size:15px;color:#0f172a;">
+                <i class="fas fa-signature" style="color:#6366f1;margin-right:8px;"></i>${title}
+            </h3>
+            <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;background:#f8fafc;display:inline-block;max-width:100%;">
+                <img src="${data}" alt="Signature" style="display:block;max-width:480px;width:100%;height:auto;">
+            </div>
+            ${metaHtml}
+            <div style="margin-top:16px;">
+                <button class="btn btn-secondary btn-sm" onclick="closeModal()">Fermer</button>
+            </div>
+        </div>`, '560px');
 }
 
 // ============================================================================
@@ -9044,6 +9484,40 @@ async function downloadTranscriptPDF(transcriptId) {
                 </div>
             </div>
         `);
+    } finally {
+        showLoader(false);
+    }
+}
+
+async function downloadBulkTranscripts() {
+    const select = document.getElementById('bulk-semester-select');
+    if (!select) return;
+    const semesterId = select.value;
+    const semesterName = select.options[select.selectedIndex]?.text || semesterId;
+    if (!semesterId) { showAlert('Veuillez sélectionner un semestre.', 'warning'); return; }
+
+    showLoader(true);
+    try {
+        const response = await fetch(`/api/transcripts/bulk-pdf?semester_id=${semesterId}`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `releves_${semesterName.replace(/\s+/g,'_')}.zip`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            showAlert(`ZIP téléchargé — relevés du semestre ${semesterName}`, 'success');
+        } else {
+            const data = await response.json().catch(() => ({}));
+            showAlert(data.error || `Erreur ${response.status} lors de la génération du ZIP.`, 'danger');
+        }
+    } catch (err) {
+        showAlert('Impossible de contacter le serveur. Vérifiez votre connexion.', 'danger');
     } finally {
         showLoader(false);
     }
@@ -10265,6 +10739,7 @@ async function _confirmSaveGeneratedSubject(title, content, rubric, ecId) {
 // ============================================================================
 
 async function loadSurveillantDashboard() {
+    if (window.event && window.event.target) setActiveTab(window.event.target);
     showLoader(true);
     try {
         const response = await authenticatedFetch('/api/surveillant/exams');
@@ -10274,103 +10749,119 @@ async function loadSurveillantDashboard() {
         const activeExams   = exams.filter(e => e.status === 'active');
         const totalStudents = exams.reduce((s, e) => s + (e.my_student_count || 0), 0);
 
+        const statusBadge = s => {
+            const cfg = {
+                in_progress:   ['En cours',    '#6366f1', '#ede9fe'],
+                submitted:     ['Soumis',       '#10b981', '#dcfce7'],
+                auto_submitted:['Auto-soumis',  '#8b5cf6', '#f3e8ff'],
+                banned:        ['Exclu',         '#ef4444', '#fef2f2'],
+                not_started:   ['Absent/Attente','#94a3b8', '#f1f5f9'],
+            };
+            const [label, col, bg] = cfg[s] || ['—', '#94a3b8', '#f1f5f9'];
+            return `<span style="background:${bg};color:${col};font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;">${label}</span>`;
+        };
+
+        // Student list per exam (for dashboard overview)
+        const studentListHtml = exams.map(exam => {
+            if (!exam.my_students || exam.my_students.length === 0) return '';
+            const rows = exam.my_students.map(s => {
+                const riskColor = s.risk_score >= 70 ? '#ef4444' : s.risk_score >= 40 ? '#f59e0b' : '#10b981';
+                return `<tr>
+                    <td style="padding:7px 12px;font-size:13px;font-weight:500;color:#0f172a;">
+                        <i class="fas fa-user-circle" style="color:#94a3b8;margin-right:6px;"></i>${escHtml(s.student_name)}
+                    </td>
+                    <td style="padding:7px 12px;">${statusBadge(s.status)}</td>
+                    <td style="padding:7px 12px;font-size:12px;font-weight:600;color:${riskColor};">
+                        ${exam.status === 'active' ? s.risk_score + '%' : '—'}
+                    </td>
+                </tr>`;
+            }).join('');
+            const sc = {active:'#10b981',scheduled:'#3b82f6',closed:'#94a3b8',draft:'#f59e0b'}[exam.status]||'#94a3b8';
+            return `<div style="background:white;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;margin-bottom:14px;">
+                <div style="padding:12px 16px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <span style="width:8px;height:8px;background:${sc};border-radius:50%;flex-shrink:0;"></span>
+                        <span style="font-size:14px;font-weight:700;color:#0f172a;">${escHtml(exam.title)}</span>
+                        <span style="font-size:12px;color:#64748b;">${exam.my_students.length} étudiant(s)</span>
+                    </div>
+                    ${exam.status === 'active' ? `<button onclick="openSurveillantDashboard(${exam.id})"
+                        style="display:inline-flex;align-items:center;gap:5px;padding:6px 14px;background:#7c3aed;color:white;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;">
+                        <i class="fas fa-shield-alt"></i> Surveiller
+                    </button>` : ''}
+                </div>
+                <table style="width:100%;border-collapse:collapse;">
+                    <thead><tr style="background:#f8fafc;">
+                        <th style="padding:6px 12px;text-align:left;font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;">Étudiant</th>
+                        <th style="padding:6px 12px;text-align:left;font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;">Statut</th>
+                        <th style="padding:6px 12px;text-align:left;font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;">Risque</th>
+                    </tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>`;
+        }).join('') || '';
+
         document.getElementById('main-content').innerHTML = `
-            <div style="margin-bottom:28px;">
-                <h2 style="font-size:22px;font-weight:700;color:#0f172a;margin:0 0 4px;display:flex;align-items:center;gap:12px;">
-                    <span style="background:#f59e0b;width:44px;height:44px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;">
-                        <i class="fas fa-eye" style="color:white;font-size:18px;"></i>
+            <div style="margin-bottom:24px;">
+                <h2 style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 4px;display:flex;align-items:center;gap:12px;">
+                    <span style="background:#f59e0b;width:40px;height:40px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class="fas fa-tachometer-alt" style="color:white;font-size:16px;"></i>
                     </span>
-                    ${t('section.surveillant_dashboard')}
+                    Tableau de Bord Surveillant
                 </h2>
-                <p style="color:#64748b;margin:0 0 0 56px;font-size:13px;">${t('section.welcome')}, ${currentUser.full_name}</p>
+                <p style="color:#64748b;margin:0 0 0 52px;font-size:13px;">Bienvenue, ${escHtml(currentUser.full_name)}</p>
             </div>
 
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:28px;">
-                <div style="background:white;border-radius:12px;padding:20px;border:1px solid #e2e8f0;display:flex;align-items:center;gap:14px;">
-                    <div style="background:rgba(16,185,129,.1);width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                        <i class="fas fa-play-circle" style="color:#10b981;font-size:18px;"></i>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:24px;">
+                <div style="background:white;border-radius:12px;padding:18px;border:1px solid #e2e8f0;display:flex;align-items:center;gap:12px;">
+                    <div style="background:rgba(16,185,129,.12);width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class="fas fa-play-circle" style="color:#10b981;font-size:16px;"></i>
                     </div>
-                    <div><div style="font-size:28px;font-weight:800;color:#0f172a;">${activeExams.length}</div>
-                    <div style="font-size:12px;color:#64748b;font-weight:500;">${t('section.exams_in_progress')}</div></div>
+                    <div><div style="font-size:26px;font-weight:800;color:#0f172a;">${activeExams.length}</div>
+                    <div style="font-size:11px;color:#64748b;">En cours</div></div>
                 </div>
-                <div style="background:white;border-radius:12px;padding:20px;border:1px solid #e2e8f0;display:flex;align-items:center;gap:14px;">
-                    <div style="background:rgba(59,130,246,.1);width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                        <i class="fas fa-laptop-code" style="color:#3b82f6;font-size:18px;"></i>
+                <div style="background:white;border-radius:12px;padding:18px;border:1px solid #e2e8f0;display:flex;align-items:center;gap:12px;">
+                    <div style="background:rgba(59,130,246,.12);width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class="fas fa-laptop-code" style="color:#3b82f6;font-size:16px;"></i>
                     </div>
-                    <div><div style="font-size:28px;font-weight:800;color:#0f172a;">${exams.length}</div>
-                    <div style="font-size:12px;color:#64748b;font-weight:500;">${t('section.exams_assigned')}</div></div>
+                    <div><div style="font-size:26px;font-weight:800;color:#0f172a;">${exams.length}</div>
+                    <div style="font-size:11px;color:#64748b;">Examens assignés</div></div>
                 </div>
-                <div style="background:white;border-radius:12px;padding:20px;border:1px solid #e2e8f0;display:flex;align-items:center;gap:14px;">
-                    <div style="background:rgba(124,58,237,.1);width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                        <i class="fas fa-user-graduate" style="color:#7c3aed;font-size:18px;"></i>
+                <div style="background:white;border-radius:12px;padding:18px;border:1px solid #e2e8f0;display:flex;align-items:center;gap:12px;">
+                    <div style="background:rgba(124,58,237,.12);width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class="fas fa-user-graduate" style="color:#7c3aed;font-size:16px;"></i>
                     </div>
-                    <div><div style="font-size:28px;font-weight:800;color:#0f172a;">${totalStudents}</div>
-                    <div style="font-size:12px;color:#64748b;font-weight:500;">${t('section.students_to_monitor')}</div></div>
+                    <div><div style="font-size:26px;font-weight:800;color:#0f172a;">${totalStudents}</div>
+                    <div style="font-size:11px;color:#64748b;">Étudiants à surveiller</div></div>
                 </div>
             </div>
 
             ${activeExams.length > 0 ? `
-            <div style="background:white;border:1px solid #a7f3d0;border-left:4px solid #10b981;border-radius:12px;padding:20px;margin-bottom:24px;">
-                <h3 style="margin:0 0 14px;font-size:15px;color:#065f46;font-weight:700;display:flex;align-items:center;gap:8px;">
-                    <i class="fas fa-play-circle"></i> ${t('section.active_exams_action')}
+            <div style="background:white;border:1px solid #a7f3d0;border-left:4px solid #10b981;border-radius:12px;padding:16px 20px;margin-bottom:20px;">
+                <h3 style="margin:0 0 10px;font-size:14px;color:#065f46;font-weight:700;display:flex;align-items:center;gap:8px;">
+                    <i class="fas fa-play-circle"></i> Examens en cours — Action requise
                 </h3>
                 ${activeExams.map(e => `
-                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:12px 0;border-bottom:1px solid #f0fdf4;">
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:10px 0;${activeExams.indexOf(e)<activeExams.length-1?'border-bottom:1px solid #f0fdf4;':''}">
                     <div>
-                        <div style="font-weight:600;color:#0f172a;font-size:14px;">${e.title}</div>
+                        <div style="font-weight:600;color:#0f172a;font-size:14px;">${escHtml(e.title)}</div>
                         <div style="font-size:12px;color:#64748b;margin-top:2px;">
-                            <i class="fas fa-user-graduate"></i> ${e.my_student_count || 0} ${t('section.my_students_group')}
+                            <i class="fas fa-user-graduate"></i> ${e.my_student_count || 0} étudiant(s) dans votre groupe
                         </div>
                     </div>
                     <button onclick="openSurveillantDashboard(${e.id})"
                         style="display:inline-flex;align-items:center;gap:6px;padding:9px 18px;background:#7c3aed;color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
-                        <i class="fas fa-shield-alt"></i> ${t('btn.monitor_now')}
+                        <i class="fas fa-shield-alt"></i> Surveiller maintenant
                     </button>
                 </div>`).join('')}
             </div>` : ''}
 
-            ${exams.length > 0 ? `
-            <div style="background:white;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;">
-                <div style="padding:16px 20px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:10px;">
-                    <i class="fas fa-list" style="color:#64748b;"></i>
-                    <h3 style="margin:0;font-size:14px;font-weight:700;color:#0f172a;">${t('section.all_my_exams')}</h3>
-                </div>
-                <div style="overflow-x:auto;">
-                    <table style="width:100%;border-collapse:collapse;">
-                        <thead><tr style="background:#f8fafc;">
-                            <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Examen</th>
-                            <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Statut</th>
-                            <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Mes étudiants</th>
-                            <th style="padding:10px 16px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Action</th>
-                        </tr></thead>
-                        <tbody>
-                        ${exams.map(e => {
-                            const sc = {active:'#059669;background:#ecfdf5', scheduled:'#d97706;background:#fffbeb', closed:'#dc2626;background:#fff1f2', draft:'#64748b;background:#f1f5f9'};
-                            const [col, bg] = (sc[e.status]||'#64748b;background:#f1f5f9').split(';background:');
-                            const statusLabel = {active:'En cours', scheduled:'Planifié', closed:'Terminé', draft:'Brouillon'}[e.status] || e.status;
-                            return `<tr>
-                                <td style="padding:12px 16px;border-bottom:1px solid #f1f5f9;font-size:13px;font-weight:600;color:#0f172a;">${e.title}</td>
-                                <td style="padding:12px 16px;border-bottom:1px solid #f1f5f9;">
-                                    <span style="background:${bg};color:${col};padding:3px 9px;border-radius:99px;font-size:11px;font-weight:700;">${statusLabel}</span>
-                                </td>
-                                <td style="padding:12px 16px;border-bottom:1px solid #f1f5f9;font-size:13px;color:#64748b;">${e.my_student_count || 0}</td>
-                                <td style="padding:12px 16px;border-bottom:1px solid #f1f5f9;">
-                                    ${e.status === 'active' ? `
-                                    <button onclick="openSurveillantDashboard(${e.id})"
-                                        style="display:inline-flex;align-items:center;gap:5px;padding:6px 12px;background:#7c3aed;color:white;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">
-                                        <i class="fas fa-shield-alt"></i> Surveiller
-                                    </button>` : '<span style="color:#94a3b8;font-size:12px;">—</span>'}
-                                </td>
-                            </tr>`;
-                        }).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            </div>` : `
-            <div style="text-align:center;padding:64px 24px;background:white;border-radius:16px;border:1px solid #e2e8f0;">
-                <i class="fas fa-eye" style="font-size:48px;color:#cbd5e1;display:block;margin-bottom:16px;"></i>
-                <h3 style="color:#475569;font-size:18px;font-weight:600;margin:0 0 8px;">Aucun examen assigné</h3>
-                <p style="color:#94a3b8;font-size:14px;margin:0;">L'enseignant vous assignera des examens à surveiller.</p>
+            <h3 style="font-size:13px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin:0 0 12px;display:flex;align-items:center;gap:8px;">
+                <i class="fas fa-users" style="color:#7c3aed;"></i> Mes étudiants par examen
+            </h3>
+            ${studentListHtml || `<div style="text-align:center;padding:40px 24px;background:white;border-radius:12px;border:1px solid #e2e8f0;">
+                <i class="fas fa-eye" style="font-size:40px;color:#cbd5e1;display:block;margin-bottom:12px;"></i>
+                <h3 style="color:#475569;font-size:16px;font-weight:600;margin:0 0 6px;">Aucun examen assigné</h3>
+                <p style="color:#94a3b8;font-size:13px;margin:0;">L'enseignant vous assignera des examens à surveiller.</p>
             </div>`}
         `;
     } catch (error) {
@@ -10380,9 +10871,112 @@ async function loadSurveillantDashboard() {
     }
 }
 
+// ─── Onglet "Mes Examens" — vue différente axée planning ─────────────────────
+
 async function loadSurveillantExams() {
     if (window.event && window.event.target) setActiveTab(window.event.target);
-    await loadSurveillantDashboard();
+    showLoader(true);
+    try {
+        const response = await authenticatedFetch('/api/surveillant/exams');
+        const data = await response.json();
+        const exams = data.exams || [];
+
+        const statusCfg = {
+            active:    { label: 'En cours',  col: '#059669', bg: '#ecfdf5' },
+            scheduled: { label: 'Planifié',  col: '#d97706', bg: '#fffbeb' },
+            closed:    { label: 'Terminé',   col: '#dc2626', bg: '#fff1f2' },
+            draft:     { label: 'Brouillon', col: '#64748b', bg: '#f1f5f9' },
+        };
+
+        const examCards = exams.map(e => {
+            const sc    = statusCfg[e.status] || statusCfg.draft;
+            const dt    = e.start_time ? new Date(e.start_time).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+            const dur   = e.duration_minutes ? e.duration_minutes + ' min' : '—';
+            const total = e.my_students ? e.my_students.length : 0;
+            const inProgress  = (e.my_students||[]).filter(s => s.status === 'in_progress').length;
+            const submitted   = (e.my_students||[]).filter(s => ['submitted','auto_submitted'].includes(s.status)).length;
+            const notStarted  = (e.my_students||[]).filter(s => s.status === 'not_started').length;
+            const banned      = (e.my_students||[]).filter(s => s.status === 'banned').length;
+
+            const studentRows = (e.my_students || []).map((s, idx) => {
+                const stCfg = {
+                    in_progress:   ['En cours',     '#6366f1','#ede9fe'],
+                    submitted:     ['Soumis',        '#10b981','#dcfce7'],
+                    auto_submitted:['Auto-soumis',   '#8b5cf6','#f3e8ff'],
+                    banned:        ['Exclu',          '#ef4444','#fef2f2'],
+                    not_started:   ['Pas commencé',  '#94a3b8','#f1f5f9'],
+                };
+                const [sl, sc2, sbg] = stCfg[s.status] || ['—','#94a3b8','#f1f5f9'];
+                const riskColor = s.risk_score >= 70 ? '#ef4444' : s.risk_score >= 40 ? '#f59e0b' : '#10b981';
+                return `<tr style="${idx % 2 === 0 ? 'background:#fafafa;' : ''}">
+                    <td style="padding:8px 14px;font-size:13px;color:#0f172a;">${idx + 1}. ${escHtml(s.student_name)}</td>
+                    <td style="padding:8px 14px;">
+                        <span style="background:${sbg};color:${sc2};font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;">${sl}</span>
+                    </td>
+                    <td style="padding:8px 14px;font-size:12px;font-weight:700;color:${riskColor};">
+                        ${e.status === 'active' || e.status === 'closed' ? s.risk_score + '%' : '—'}
+                    </td>
+                </tr>`;
+            }).join('');
+
+            return `<div style="background:white;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;margin-bottom:16px;">
+                <!-- Card header -->
+                <div style="padding:16px 20px;border-bottom:1px solid #f1f5f9;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+                    <div>
+                        <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
+                            <span style="background:${sc.bg};color:${sc.col};font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;">${sc.label}</span>
+                            <span style="font-size:15px;font-weight:700;color:#0f172a;">${escHtml(e.title)}</span>
+                        </div>
+                        <div style="font-size:12px;color:#64748b;display:flex;gap:16px;flex-wrap:wrap;">
+                            <span><i class="fas fa-calendar" style="color:#94a3b8;margin-right:4px;"></i>${dt}</span>
+                            <span><i class="fas fa-clock" style="color:#94a3b8;margin-right:4px;"></i>${dur}</span>
+                            <span><i class="fas fa-users" style="color:#94a3b8;margin-right:4px;"></i>${total} étudiant(s)</span>
+                        </div>
+                    </div>
+                    ${e.status === 'active' ? `<button onclick="openSurveillantDashboard(${e.id})"
+                        style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:#7c3aed;color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0;">
+                        <i class="fas fa-shield-alt"></i> Surveiller
+                    </button>` : ''}
+                </div>
+                <!-- Progress mini-stats -->
+                <div style="padding:10px 20px;background:#f8fafc;border-bottom:1px solid #f1f5f9;display:flex;gap:18px;flex-wrap:wrap;">
+                    <span style="font-size:12px;color:#6366f1;font-weight:600;"><b>${inProgress}</b> en cours</span>
+                    <span style="font-size:12px;color:#10b981;font-weight:600;"><b>${submitted}</b> soumis</span>
+                    <span style="font-size:12px;color:#94a3b8;font-weight:600;"><b>${notStarted}</b> pas commencé</span>
+                    ${banned ? `<span style="font-size:12px;color:#ef4444;font-weight:600;"><b>${banned}</b> exclu(s)</span>` : ''}
+                </div>
+                <!-- Student list -->
+                ${total > 0 ? `<table style="width:100%;border-collapse:collapse;">
+                    <thead><tr style="background:#f8fafc;">
+                        <th style="padding:7px 14px;text-align:left;font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Étudiant</th>
+                        <th style="padding:7px 14px;text-align:left;font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Statut</th>
+                        <th style="padding:7px 14px;text-align:left;font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;border-bottom:1px solid #e2e8f0;">Risque</th>
+                    </tr></thead>
+                    <tbody>${studentRows}</tbody>
+                </table>` : '<p style="padding:16px 20px;color:#94a3b8;font-size:13px;">Aucun étudiant assigné.</p>'}
+            </div>`;
+        }).join('') || `<div style="text-align:center;padding:48px 24px;background:white;border-radius:14px;border:1px solid #e2e8f0;">
+            <i class="fas fa-clipboard-list" style="font-size:40px;color:#cbd5e1;display:block;margin-bottom:12px;"></i>
+            <h3 style="color:#475569;font-size:16px;margin:0 0 6px;">Aucun examen</h3>
+            <p style="color:#94a3b8;font-size:13px;margin:0;">Vos examens assignés apparaîtront ici.</p>
+        </div>`;
+
+        document.getElementById('main-content').innerHTML = `
+            <div style="margin-bottom:20px;display:flex;align-items:center;gap:12px;">
+                <span style="background:#3b82f6;width:40px;height:40px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <i class="fas fa-clipboard-list" style="color:white;font-size:16px;"></i>
+                </span>
+                <div>
+                    <h2 style="font-size:19px;font-weight:700;color:#0f172a;margin:0;">Mes Examens</h2>
+                    <p style="color:#64748b;margin:0;font-size:13px;">${exams.length} examen(s) assigné(s) — liste complète avec étudiants</p>
+                </div>
+            </div>
+            ${examCards}`;
+    } catch (error) {
+        showAlert(humanError(error), 'error');
+    } finally {
+        showLoader(false);
+    }
 }
 
 function openSurveillantDashboard(examId) {
@@ -10718,6 +11312,338 @@ async function saveProfileInfo() {
     } catch (e) { showAlert('Erreur de connexion.', 'error'); }
 }
 
+// ============================================================================
+// EXPORT CSV DES NOTES
+// ============================================================================
+
+async function exportExamCSV(examId, examTitle) {
+    try {
+        const resp = await fetch(`/api/online_exams/${examId}/export-csv`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        if (!resp.ok) { showAlert('Erreur lors de l\'export CSV.', 'error'); return; }
+        const blob = await resp.blob();
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = `notes_${(examTitle||examId).replace(/\s+/g,'_')}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        URL.revokeObjectURL(url);
+        a.remove();
+    } catch(e) { showAlert('Erreur export CSV : ' + (e.serverMessage || e.message), 'error'); }
+}
+
+// ============================================================================
+// STATISTIQUES PAR EXAMEN
+// ============================================================================
+
+async function showExamStats(examId) {
+    showLoader(true);
+    try {
+        const resp = await authenticatedFetch(`/api/online_exams/${examId}/stats`);
+        const s    = await resp.json();
+        const bar  = (pct, color) => `<div style="height:8px;background:#e2e8f0;border-radius:4px;overflow:hidden;margin-top:3px;">
+            <div style="width:${Math.min(pct,100)}%;height:100%;background:${color};border-radius:4px;"></div></div>`;
+        const distLabels  = ['0–4', '5–9', '10–13', '14–16', '17–20'];
+        const distColors  = ['#ef4444','#f97316','#10b981','#3b82f6','#6366f1'];
+        const maxDist     = Math.max(...(s.distribution||[0]));
+        const distRows    = (s.distribution||[]).map((n,i) => `
+            <tr>
+                <td style="padding:5px 8px;font-size:12px;color:#475569;width:50px;">${distLabels[i]}</td>
+                <td style="padding:5px 8px;">
+                    ${bar(maxDist ? n/maxDist*100 : 0, distColors[i])}
+                </td>
+                <td style="padding:5px 8px;font-size:12px;font-weight:700;color:#1e293b;width:30px;">${n}</td>
+            </tr>`).join('');
+        const kpi = (label, val, color='#1e293b') =>
+            `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 14px;flex:1;min-width:110px;">
+                <div style="font-size:18px;font-weight:700;color:${color};">${val ?? '—'}</div>
+                <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;">${label}</div>
+             </div>`;
+        showModal(`
+            <div style="max-width:640px;">
+                <h2 style="margin:0 0 4px;font-size:17px;"><i class="fas fa-chart-bar" style="color:#6366f1;margin-right:8px;"></i>Statistiques</h2>
+                <p style="color:#64748b;margin:0 0 16px;font-size:13px;">${s.exam_title||''}</p>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
+                    ${kpi('Total inscrits', s.total)}
+                    ${kpi('Soumis', s.submitted, '#6366f1')}
+                    ${kpi('Corrigés', s.corrected, '#0ea5e9')}
+                    ${kpi('Bannis', s.banned, '#ef4444')}
+                </div>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;">
+                    ${kpi('Moyenne', s.avg_score!=null ? s.avg_score+'/20' : '—', s.avg_score>=10?'#10b981':'#ef4444')}
+                    ${kpi('Médiane', s.median_score!=null ? s.median_score+'/20' : '—')}
+                    ${kpi('Min', s.min_score!=null ? s.min_score+'/20' : '—', '#ef4444')}
+                    ${kpi('Max', s.max_score!=null ? s.max_score+'/20' : '—', '#10b981')}
+                    ${kpi('Taux réussite', s.pass_rate!=null ? s.pass_rate+'%' : '—', s.pass_rate>=50?'#10b981':'#ef4444')}
+                </div>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;">
+                    ${kpi('Durée moy.', s.avg_duration_min ? s.avg_duration_min+' min' : '—')}
+                    ${kpi('Risque moy.', s.avg_risk+'%', s.avg_risk>=40?'#f59e0b':'#10b981')}
+                    ${kpi('Haut risque', s.high_risk_count, s.high_risk_count>0?'#ef4444':'#10b981')}
+                    ${kpi('Sig. pré', s.pre_sig_rate+'%', '#6366f1')}
+                </div>
+                <div style="font-size:12px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Distribution des notes</div>
+                <table style="width:100%;">${distRows}</table>
+                <div style="margin-top:20px;text-align:right;">
+                    <button class="btn btn-secondary btn-sm" onclick="closeModal()">Fermer</button>
+                    <button class="btn btn-primary btn-sm" onclick="closeModal();exportExamCSV(${examId},'${(s.exam_title||'').replace(/'/g,'')}')" style="margin-left:8px;">
+                        <i class="fas fa-file-csv"></i> Export CSV
+                    </button>
+                </div>
+            </div>`, '680px');
+    } catch(e) {
+        showAlert('Erreur statistiques : ' + (e.serverMessage || e.message), 'error');
+    } finally { showLoader(false); }
+}
+
+// ============================================================================
+// CORRECTION MANUELLE
+// ============================================================================
+
+async function showManualGradingModal(attemptId, studentName, currentScore) {
+    const scoreVal = currentScore !== null && currentScore !== undefined ? currentScore : '';
+    showModal(`
+        <div style="max-width:460px;">
+            <h2 style="margin:0 0 4px;font-size:16px;"><i class="fas fa-pen" style="color:#6366f1;margin-right:8px;"></i>Correction manuelle</h2>
+            <p style="color:#64748b;font-size:13px;margin:0 0 18px;">${studentName||'Étudiant'}</p>
+            <label style="font-size:12px;font-weight:600;color:#475569;display:block;margin-bottom:4px;">Note /20 <span style="color:#ef4444;">*</span></label>
+            <input id="manual-score" type="number" min="0" max="20" step="0.25" value="${scoreVal}"
+                style="width:100%;padding:10px;border:2px solid #e2e8f0;border-radius:8px;font-size:15px;margin-bottom:14px;outline:none;box-sizing:border-box;"
+                placeholder="Ex : 14.5">
+            <label style="font-size:12px;font-weight:600;color:#475569;display:block;margin-bottom:4px;">Commentaire / feedback</label>
+            <textarea id="manual-feedback" rows="4"
+                style="width:100%;padding:10px;border:2px solid #e2e8f0;border-radius:8px;font-size:13px;resize:vertical;box-sizing:border-box;outline:none;"
+                placeholder="Points forts, points faibles, conseils…"></textarea>
+            <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;">
+                <button class="btn btn-secondary btn-sm" onclick="closeModal()">Annuler</button>
+                <button class="btn btn-success btn-sm" onclick="submitManualGrade(${attemptId})">
+                    <i class="fas fa-save"></i> Enregistrer la note
+                </button>
+            </div>
+        </div>`, '500px');
+    setTimeout(() => document.getElementById('manual-score')?.focus(), 100);
+}
+
+async function submitManualGrade(attemptId) {
+    const scoreEl    = document.getElementById('manual-score');
+    const feedbackEl = document.getElementById('manual-feedback');
+    const score      = parseFloat(scoreEl?.value);
+    if (isNaN(score) || score < 0 || score > 20) {
+        showAlert('Veuillez saisir une note valide entre 0 et 20.', 'error'); return;
+    }
+    try {
+        await authenticatedFetch(`/api/exam_attempts/${attemptId}/manual-grade`, {
+            method: 'PUT',
+            body: JSON.stringify({ score, feedback: feedbackEl?.value || '' })
+        });
+        closeModal();
+        showAlert(`Note ${score}/20 enregistrée avec succès.`, 'success');
+        // Rafraîchir la liste
+        const examId = window._currentViewedExamId;
+        if (examId) setTimeout(() => viewExamSubmissions(examId), 600);
+    } catch(e) { showAlert(e.serverMessage || e.message || 'Erreur lors de l\'enregistrement.', 'error'); }
+}
+
+// ============================================================================
+// HISTORIQUE EXAMENS ÉTUDIANT
+// ============================================================================
+
+async function showStudentExamHistory() {
+    showLoader(true);
+    try {
+        const resp = await authenticatedFetch('/api/student/exam-history');
+        const d    = await resp.json();
+        const history = d.history || [];
+        const statusBadge = (s, corrected_at) => {
+            // Si l'examen a été corrigé (score défini), on le signale peu importe le statut
+            if (corrected_at) return `<span style="color:#10b981;background:#d1fae5;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;">Corrigé</span>`;
+            const map = {
+                in_progress:   ['#f59e0b', '#fef3c7', 'En cours'],
+                submitted:     ['#6366f1', '#ede9fe', 'Soumis'],
+                auto_submitted:['#8b5cf6', '#ede9fe', 'Auto-soumis'],
+                banned:        ['#ef4444', '#fee2e2', 'Exclu'],
+            };
+            const [tc, bg, label] = map[s] || ['#64748b','#f1f5f9', s];
+            return `<span style="color:${tc};background:${bg};padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;">${label}</span>`;
+        };
+        const rows = history.length === 0
+            ? '<tr><td colspan="6" style="text-align:center;padding:24px;color:#94a3b8;">Aucun examen passé</td></tr>'
+            : history.map(h => {
+                const score = h.score !== null && h.score !== undefined
+                    ? `<strong style="color:${h.score>=10?'#10b981':'#ef4444'};font-size:14px;">${h.score}/20</strong>`
+                    : '<span style="color:#94a3b8;font-size:11px;">—</span>';
+                const date = h.started_at ? new Date(h.started_at).toLocaleDateString('fr-FR') : '—';
+                const dur  = h.duration_min ? `${h.duration_min} min` : '—';
+                const riskColor = h.risk_score >= 70 ? '#ef4444' : h.risk_score >= 40 ? '#f59e0b' : '#10b981';
+                return `<tr style="border-bottom:1px solid #f1f5f9;">
+                    <td style="padding:10px 12px;font-size:13px;"><strong>${h.exam_title}</strong><br>
+                        <span style="font-size:10px;color:#94a3b8;">${date}</span></td>
+                    <td style="padding:10px 12px;">${statusBadge(h.status, h.corrected_at)}</td>
+                    <td style="padding:10px 12px;text-align:center;">${score}</td>
+                    <td style="padding:10px 12px;text-align:center;font-size:12px;">${dur}</td>
+                    <td style="padding:10px 12px;text-align:center;">
+                        <span style="color:${riskColor};font-weight:700;font-size:12px;">${h.risk_score}%</span>
+                    </td>
+                    <td style="padding:10px 12px;">
+                        ${h.feedback ? `<button class="btn btn-sm" onclick="showFeedbackModal('${encodeURIComponent(h.exam_title)}','${encodeURIComponent(h.feedback||'')}')"
+                            style="background:#f1f5f9;color:#475569;font-size:11px;padding:4px 10px;">
+                            <i class="fas fa-comment"></i> Feedback
+                        </button>` : '<span style="color:#94a3b8;font-size:11px;">—</span>'}
+                    </td>
+                </tr>`;
+            }).join('');
+        showModal(`
+            <div style="max-width:760px;">
+                <h2 style="margin:0 0 4px;font-size:16px;"><i class="fas fa-history" style="color:#6366f1;margin-right:8px;"></i>Historique de mes examens</h2>
+                <p style="color:#64748b;font-size:12px;margin:0 0 16px;">${history.length} examen(s) au total</p>
+                <div style="overflow-x:auto;border:1px solid #e2e8f0;border-radius:10px;">
+                    <table style="width:100%;border-collapse:collapse;">
+                        <thead><tr style="background:#f8fafc;">
+                            <th style="padding:9px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#64748b;border-bottom:2px solid #e2e8f0;">Examen</th>
+                            <th style="padding:9px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#64748b;border-bottom:2px solid #e2e8f0;">Statut</th>
+                            <th style="padding:9px 12px;text-align:center;font-size:11px;text-transform:uppercase;color:#64748b;border-bottom:2px solid #e2e8f0;">Note</th>
+                            <th style="padding:9px 12px;text-align:center;font-size:11px;text-transform:uppercase;color:#64748b;border-bottom:2px solid #e2e8f0;">Durée</th>
+                            <th style="padding:9px 12px;text-align:center;font-size:11px;text-transform:uppercase;color:#64748b;border-bottom:2px solid #e2e8f0;">Risque</th>
+                            <th style="padding:9px 12px;font-size:11px;text-transform:uppercase;color:#64748b;border-bottom:2px solid #e2e8f0;"></th>
+                        </tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
+                <div style="margin-top:14px;text-align:right;">
+                    <button class="btn btn-secondary btn-sm" onclick="closeModal()">Fermer</button>
+                </div>
+            </div>`, '800px');
+    } catch(e) {
+        showAlert('Erreur chargement historique : ' + (e.serverMessage || e.message), 'error');
+    } finally { showLoader(false); }
+}
+
+function showFeedbackModal(encodedTitle, encodedFeedback) {
+    const title    = decodeURIComponent(encodedTitle);
+    const feedback = decodeURIComponent(encodedFeedback);
+    showModal(`
+        <div style="max-width:520px;">
+            <h2 style="font-size:15px;margin:0 0 4px;"><i class="fas fa-comment" style="color:#6366f1;margin-right:8px;"></i>Feedback — ${title}</h2>
+            <div style="margin-top:14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px;font-size:13px;line-height:1.6;white-space:pre-wrap;color:#374151;">${feedback}</div>
+            <div style="margin-top:14px;text-align:right;">
+                <button class="btn btn-secondary btn-sm" onclick="closeModal()">Fermer</button>
+            </div>
+        </div>`, '560px');
+}
+
+// ============================================================================
+// DÉTECTION DE PLAGIAT
+// ============================================================================
+
+async function showPlagiarismReport(examId, examTitle) {
+    showLoader(true);
+    try {
+        const resp = await authenticatedFetch(`/api/online_exams/${examId}/plagiarism-check?threshold=0.7`);
+        const d    = await resp.json();
+        const pairs = d.suspicious || [];
+        const levelBadge = (l) => l === 'CRITIQUE'
+            ? `<span style="background:#fee2e2;color:#ef4444;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;">🔴 CRITIQUE</span>`
+            : `<span style="background:#fef3c7;color:#d97706;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;">⚠️ SUSPECT</span>`;
+        const rows = pairs.length === 0
+            ? `<tr><td colspan="4" style="text-align:center;padding:28px;color:#10b981;">
+                <i class="fas fa-shield-check" style="font-size:24px;display:block;margin-bottom:8px;"></i>
+                Aucune similarité suspecte détectée (seuil : ${d.threshold_pct}%)
+               </td></tr>`
+            : pairs.map(p => `<tr style="border-bottom:1px solid #f1f5f9;">
+                <td style="padding:10px 12px;font-size:12px;">
+                    <strong>${p.student1_name}</strong><br>
+                    <span style="color:#94a3b8;font-size:10px;">Tentative #${p.attempt1_id}</span>
+                </td>
+                <td style="padding:10px 12px;font-size:12px;">
+                    <strong>${p.student2_name}</strong><br>
+                    <span style="color:#94a3b8;font-size:10px;">Tentative #${p.attempt2_id}</span>
+                </td>
+                <td style="padding:10px 12px;text-align:center;">
+                    <strong style="font-size:16px;color:${p.similarity>=90?'#ef4444':'#f59e0b'};">${p.similarity}%</strong>
+                </td>
+                <td style="padding:10px 12px;text-align:center;">${levelBadge(p.level)}</td>
+              </tr>`).join('');
+        showModal(`
+            <div style="max-width:700px;">
+                <h2 style="margin:0 0 4px;font-size:16px;"><i class="fas fa-search" style="color:#ef4444;margin-right:8px;"></i>Rapport de plagiat</h2>
+                <p style="color:#64748b;font-size:12px;margin:0 0 4px;">${examTitle||d.exam_title||''}</p>
+                <p style="font-size:11px;color:#94a3b8;margin:0 0 16px;">${d.total_checked} copies analysées · seuil ${d.threshold_pct}% · ${pairs.length} paire(s) suspecte(s)</p>
+                <div style="overflow-x:auto;border:1px solid #e2e8f0;border-radius:10px;">
+                    <table style="width:100%;border-collapse:collapse;">
+                        <thead><tr style="background:#f8fafc;">
+                            <th style="padding:9px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#64748b;border-bottom:2px solid #e2e8f0;">Étudiant A</th>
+                            <th style="padding:9px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#64748b;border-bottom:2px solid #e2e8f0;">Étudiant B</th>
+                            <th style="padding:9px 12px;text-align:center;font-size:11px;text-transform:uppercase;color:#64748b;border-bottom:2px solid #e2e8f0;">Similarité</th>
+                            <th style="padding:9px 12px;text-align:center;font-size:11px;text-transform:uppercase;color:#64748b;border-bottom:2px solid #e2e8f0;">Niveau</th>
+                        </tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
+                <div style="margin-top:14px;text-align:right;">
+                    <button class="btn btn-secondary btn-sm" onclick="closeModal()">Fermer</button>
+                </div>
+            </div>`, '740px');
+    } catch(e) {
+        showAlert('Erreur analyse plagiat : ' + (e.serverMessage || e.message), 'error');
+    } finally { showLoader(false); }
+}
+
+// ============================================================================
+// RAPPORT D'INTÉGRITÉ PDF
+// ============================================================================
+
+async function downloadIntegrityReport(attemptId, studentName) {
+    showLoader(true);
+    try {
+        const resp = await fetch(`/api/exam_attempts/${attemptId}/integrity-report`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            showAlert(err.error || 'Erreur rapport intégrité.', 'error');
+            return;
+        }
+        const blob = await resp.blob();
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = `rapport_integrite_${(studentName||'etudiant').replace(/\s+/g,'_')}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        URL.revokeObjectURL(url);
+        a.remove();
+    } catch(e) {
+        showAlert('Erreur téléchargement rapport : ' + (e.message || ''), 'error');
+    } finally { showLoader(false); }
+}
+
+// ============================================================================
+// RÉCLAMATION — STATUT EN COURS D'EXAMEN (IN_REVIEW)
+// ============================================================================
+
+function reclamStatusLabel(status) {
+    const map = {
+        pending:   { label: '⏳ En attente',       color: '#f59e0b', bg: '#fef3c7' },
+        in_review: { label: '🔍 En cours d\'examen', color: '#3b82f6', bg: '#dbeafe' },
+        resolved:  { label: '✅ Acceptée',          color: '#10b981', bg: '#d1fae5' },
+        rejected:  { label: '❌ Rejetée',           color: '#ef4444', bg: '#fee2e2' },
+    };
+    const m = map[status] || { label: status, color: '#64748b', bg: '#f1f5f9' };
+    return `<span style="background:${m.bg};color:${m.color};padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700;">${m.label}</span>`;
+}
+
+async function setReclamationInReview(reclamationId) {
+    try {
+        await authenticatedFetch(`/api/reclamations/${reclamationId}`, {
+            method: 'PUT',
+            body: JSON.stringify({ status: 'in_review', response: 'Réclamation en cours d\'examen.' })
+        });
+        showAlert('Statut mis à jour : En cours d\'examen.', 'success');
+    } catch(e) { showAlert(e.serverMessage || e.message, 'error'); }
+}
+
 async function saveProfilePassword() {
     const current_password = document.getElementById('prof-pw-current').value;
     const new_password     = document.getElementById('prof-pw-new').value;
@@ -10735,4 +11661,781 @@ async function saveProfilePassword() {
             showAlert(d.error || 'Erreur lors du changement.', 'error');
         }
     } catch (e) { showAlert('Erreur de connexion.', 'error'); }
+}
+
+// ─── TEMPS SUPPLÉMENTAIRE ─────────────────────────────────────────────────────
+async function grantExtraTime(attemptId, studentName) {
+    const minutes = parseInt(prompt(`Combien de minutes supplémentaires pour ${studentName} ? (1-60)`, '10'), 10);
+    if (!minutes || minutes < 1 || minutes > 60) { showAlert('Valeur invalide (1-60 min).', 'error'); return; }
+    try {
+        const r = await authenticatedFetch(`/api/exam_attempts/${attemptId}/extra-time`, {
+            method: 'PUT',
+            body: JSON.stringify({ minutes })
+        });
+        const d = await r.json();
+        showAlert(`+${d.added} min accordées à ${studentName} (total : ${d.total_extra} min).`, 'success');
+        if (window._currentViewedExamId) viewExamSubmissions(window._currentViewedExamId);
+    } catch (e) { showAlert(e.serverMessage || 'Erreur lors de l\'attribution du temps.', 'error'); }
+}
+
+// ─── NOTES SURVEILLANT ────────────────────────────────────────────────────────
+async function addProctorNote(attemptId, studentName) {
+    const note = prompt(`Note de surveillance pour ${studentName} :`);
+    if (!note || !note.trim()) return;
+    try {
+        await authenticatedFetch(`/api/exam_attempts/${attemptId}/proctor-note`, {
+            method: 'POST',
+            body: JSON.stringify({ note: note.trim() })
+        });
+        showAlert('Note enregistrée.', 'success');
+    } catch (e) { showAlert(e.serverMessage || 'Erreur lors de l\'enregistrement de la note.', 'error'); }
+}
+
+async function viewProctorNotes(attemptId, studentName) {
+    try {
+        const r = await authenticatedFetch(`/api/exam_attempts/${attemptId}/proctor-notes`);
+        const d = await r.json();
+        const notes = d.notes || [];
+        if (!notes.length) { showAlert(`Aucune note de surveillance pour ${studentName}.`, 'info'); return; }
+        const rows = notes.map(n => {
+            const ts = new Date(n.timestamp).toLocaleString('fr-FR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+            return `<tr>
+              <td style="padding:6px 10px;color:#64748b;font-size:12px;white-space:nowrap">${ts}</td>
+              <td style="padding:6px 10px;color:#64748b;font-size:12px">${escapeHtml(n.author || '—')}</td>
+              <td style="padding:6px 10px">${escapeHtml(n.note)}</td>
+            </tr>`;
+        }).join('');
+        const html = `<div style="max-height:380px;overflow-y:auto">
+          <table style="width:100%;border-collapse:collapse">
+            <thead><tr style="background:#f8fafc;font-size:11px;color:#94a3b8;text-transform:uppercase">
+              <th style="padding:6px 10px;text-align:left">Heure</th>
+              <th style="padding:6px 10px;text-align:left">Auteur</th>
+              <th style="padding:6px 10px;text-align:left">Note</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table></div>`;
+        showModal(html);
+    } catch (e) { showAlert('Erreur lors de la récupération des notes.', 'error'); }
+}
+
+function escapeHtml(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─── QR CODE EXAMEN ───────────────────────────────────────────────────────────
+async function showExamQRCode(examId, examTitle) {
+    try {
+        const r = await authenticatedFetch(`/api/online_exams/${examId}/qrcode`);
+        const d = await r.json();
+        const html = `<div style="text-align:center;padding:16px">
+          <p style="color:#64748b;font-size:13px;margin-bottom:12px">Scannez ce QR code pour accéder à l'examen :</p>
+          <img src="${d.qrcode_b64}" alt="QR Code" style="width:220px;height:220px;border:1px solid #e2e8f0;border-radius:8px"/>
+          <p style="margin-top:12px;font-size:11px;color:#94a3b8;word-break:break-all">${d.url || ''}</p>
+          <button onclick="
+            const a=document.createElement('a');
+            a.href='${d.qrcode_b64}';
+            a.download='qrcode-examen-${examId}.png';
+            a.click();
+          " style="margin-top:12px;padding:8px 18px;background:#6366f1;color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px">
+            Télécharger
+          </button>
+        </div>`;
+        showModal(html);
+    } catch (e) { showAlert(e.serverMessage || 'Erreur lors de la génération du QR code.', 'error'); }
+}
+
+
+// ============================================================================
+// BILAN D'EXAMEN PAR ÉTUDIANT
+// ============================================================================
+
+async function showExamBilan(examId, examTitle) {
+    showLoader(true);
+    try {
+        const r = await authenticatedFetch(`/api/online_exams/${examId}/bilan`);
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Erreur');
+
+        const statusLabel = { submitted: 'Soumis', auto_submitted: 'Auto-soumis', in_progress: 'En cours', banned: 'Exclu', not_started: 'Absent' };
+        const statusColor = { submitted: '#6366f1', auto_submitted: '#8b5cf6', in_progress: '#f59e0b', banned: '#ef4444', not_started: '#94a3b8' };
+        const riskColor   = s => s >= 70 ? '#ef4444' : s >= 40 ? '#f59e0b' : '#10b981';
+        const scoreColor  = s => s === null ? '#94a3b8' : s >= 10 ? '#10b981' : '#ef4444';
+
+        const rows = (d.attempts || []).map(a => {
+            const sc       = statusColor[a.status] || '#94a3b8';
+            const sl       = statusLabel[a.status]  || a.status;
+            const safeName = (a.student_name || '').replace(/'/g, "\\'");
+            return `<tr style="border-bottom:1px solid #f1f5f9;">
+                <td style="padding:8px 10px;font-size:13px;font-weight:500;color:#0f172a">${escHtml(a.student_name)}</td>
+                <td style="padding:8px 10px;text-align:center;">
+                    <span style="background:${sc}22;color:${sc};font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;">${sl}</span>
+                </td>
+                <td style="padding:8px 10px;text-align:center;font-size:13px;font-weight:700;color:${scoreColor(a.score)};">${a.score !== null ? a.score + '/20' : '—'}</td>
+                <td style="padding:8px 10px;text-align:center;">
+                    <span style="color:${riskColor(a.risk_score)};font-size:12px;font-weight:600;">${a.risk_score}%</span>
+                </td>
+                <td style="padding:8px 10px;text-align:center;font-size:12px;color:#64748b;">${a.duration_min !== null ? a.duration_min + ' min' : '—'}</td>
+                <td style="padding:8px 10px;text-align:center;font-size:12px;color:${a.extra_minutes > 0 ? '#d97706' : '#94a3b8'};">${a.extra_minutes > 0 ? '+' + a.extra_minutes + ' min' : '—'}</td>
+                <td style="padding:8px 10px;text-align:center;font-size:12px;color:${a.note_count > 0 ? '#6366f1' : '#94a3b8'};">${a.note_count > 0 ? a.note_count + ' note(s)' : '—'}</td>
+                <td style="padding:8px 10px;text-align:center;">
+                    <div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap;">
+                        <button onclick="showAttemptReview(${a.attempt_id},'${safeName}')"
+                            style="padding:3px 9px;font-size:11px;background:#ede9fe;color:#6366f1;border:none;border-radius:5px;cursor:pointer;white-space:nowrap;">
+                            <i class="fas fa-eye"></i> Réviser
+                        </button>
+                        ${a.score != null ? `<button onclick="downloadAttemptReportPDF(${a.attempt_id},'${safeName}')"
+                            style="padding:3px 9px;font-size:11px;background:#f0fdf4;color:#16a34a;border:none;border-radius:5px;cursor:pointer;white-space:nowrap;">
+                            <i class="fas fa-file-pdf"></i> PDF
+                        </button>` : ''}
+                    </div>
+                </td>
+            </tr>`;
+        }).join('');
+
+        const html = `
+        <div style="max-width:820px;">
+            <h2 style="margin:0 0 4px;font-size:17px;"><i class="fas fa-list-alt" style="color:#0369a1;margin-right:8px;"></i>Bilan — ${escHtml(d.exam_title || examTitle)}</h2>
+            <p style="color:#64748b;margin:0 0 16px;font-size:13px;">${(d.attempts||[]).length} participant(s)</p>
+            <div style="overflow-x:auto;">
+                <table style="width:100%;border-collapse:collapse;">
+                    <thead>
+                        <tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0;">
+                            <th style="padding:8px 10px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;">Étudiant</th>
+                            <th style="padding:8px 10px;text-align:center;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;">Statut</th>
+                            <th style="padding:8px 10px;text-align:center;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;">Note</th>
+                            <th style="padding:8px 10px;text-align:center;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;">Risque</th>
+                            <th style="padding:8px 10px;text-align:center;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;">Durée</th>
+                            <th style="padding:8px 10px;text-align:center;font-size:11px;color:#d97706;font-weight:700;text-transform:uppercase;">Extra</th>
+                            <th style="padding:8px 10px;text-align:center;font-size:11px;color:#6366f1;font-weight:700;text-transform:uppercase;">Notes surv.</th>
+                            <th style="padding:8px 10px;text-align:center;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows || '<tr><td colspan="8" style="text-align:center;padding:24px;color:#94a3b8;">Aucun participant</td></tr>'}</tbody>
+                </table>
+            </div>
+            <div style="margin-top:14px;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;">
+                <button onclick="downloadCorrectionsZip(${examId},'${(d.exam_title||examTitle||'').replace(/'/g,'')}')"
+                    style="background:#0369a1;color:white;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px;">
+                    <i class="fas fa-file-archive"></i> ZIP copies
+                </button>
+                <button onclick="downloadBilanPDF(${examId},'${(d.exam_title||examTitle||'').replace(/'/g,'')}')"
+                    style="background:#1e293b;color:white;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px;">
+                    <i class="fas fa-file-pdf"></i> PDF Bilan
+                </button>
+            </div>
+        </div>`;
+        showModal(html);
+    } catch (e) {
+        showAlert(e.message || 'Impossible de charger le bilan.', 'error');
+    } finally {
+        showLoader(false);
+    }
+}
+
+function escHtml(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ============================================================================
+// TÉLÉCHARGEMENT PDF BILAN
+// ============================================================================
+
+async function downloadBilanPDF(examId, examTitle) {
+    try {
+        const token = localStorage.getItem('authToken');
+        const r = await fetch(`/api/online_exams/${examId}/bilan/pdf`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!r.ok) { const d = await r.json(); throw new Error(d.error || 'Erreur PDF'); }
+        const blob = await r.blob();
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = `bilan-${(examTitle||'examen').replace(/[^a-zA-Z0-9-_ ]/g,'').trim()}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+    } catch (e) { showAlert(e.message || 'Erreur lors du téléchargement PDF.', 'error'); }
+}
+
+// ============================================================================
+// CORRECTION EN CHAÎNE
+// ============================================================================
+
+let _chainQueue = [];
+let _chainIdx   = 0;
+let _chainExamId = null;
+
+async function startChainCorrection(examId) {
+    showLoader(true);
+    try {
+        const r = await authenticatedFetch(`/api/online_exams/${examId}/attempts`);
+        const attempts = await r.json();
+        const queue = attempts.filter(a => a.needs_correction || (a.status === 'submitted' || a.status === 'auto_submitted'));
+        if (!queue.length) { showAlert('Aucune copie à corriger pour cet examen.', 'info'); return; }
+        _chainQueue  = queue;
+        _chainIdx    = 0;
+        _chainExamId = examId;
+        await _renderChainModal();
+    } catch (e) { showAlert(e.message, 'error'); }
+    finally { showLoader(false); }
+}
+
+async function _renderChainModal() {
+    const existing = document.getElementById('chain-modal');
+    if (existing) existing.remove();
+
+    const attempt = _chainQueue[_chainIdx];
+    if (!attempt) return;
+
+    // Fetch full details for this attempt
+    let answers = '', feedback = '', score = attempt.score, warnings = attempt.warnings_count || 0;
+    try {
+        const r2 = await authenticatedFetch(`/api/exam_attempts/${attempt.id}/result`).catch(() => null);
+        if (r2 && r2.ok) {
+            const d2 = await r2.json();
+            feedback = d2.feedback || '';
+            score    = d2.score !== undefined ? d2.score : score;
+        }
+    } catch (_) {}
+    try {
+        const parsed = JSON.parse(attempt.answers || '{}');
+        answers = parsed.reponse || parsed.content || parsed.answer || parsed.text || attempt.answers || '';
+    } catch { answers = attempt.answers || ''; }
+    answers = (answers || '').trim();
+
+    const scoreColor = score !== null ? (score >= 10 ? '#10b981' : '#ef4444') : '#94a3b8';
+    const m = document.createElement('div');
+    m.id = 'chain-modal';
+    m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9998;display:flex;align-items:center;justify-content:center;padding:12px;';
+    m.innerHTML = `
+    <div style="background:#fff;border-radius:16px;width:100%;max-width:780px;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(0,0,0,.3);">
+        <!-- Header -->
+        <div style="padding:16px 22px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+            <div>
+                <span style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;">Correction en chaîne</span>
+                <h2 style="margin:2px 0 0;font-size:16px;font-weight:700;color:#0f172a;">${escHtml(attempt.student_name)}</h2>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+                <span style="background:#f1f5f9;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;color:#475569;">${_chainIdx+1} / ${_chainQueue.length}</span>
+                ${score !== null ? `<span style="background:${scoreColor}22;color:${scoreColor};padding:4px 12px;border-radius:20px;font-size:13px;font-weight:700;">${score}/20</span>` : ''}
+                ${warnings > 0 ? `<span style="background:#fef3c7;color:#d97706;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;"><i class="fas fa-exclamation-triangle"></i> ${warnings} incident(s)</span>` : ''}
+                <button onclick="document.getElementById('chain-modal').remove()" style="background:none;border:none;font-size:20px;color:#94a3b8;cursor:pointer;line-height:1;">&times;</button>
+            </div>
+        </div>
+        <!-- Body -->
+        <div style="flex:1;overflow-y:auto;padding:18px 22px;display:flex;flex-direction:column;gap:14px;">
+            <div>
+                <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:6px;">Réponse de l'étudiant</div>
+                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;font-size:13px;color:#334155;line-height:1.7;max-height:220px;overflow-y:auto;white-space:pre-wrap;">${escHtml(answers) || '<em style="color:#94a3b8">Aucune réponse enregistrée</em>'}</div>
+            </div>
+            ${feedback ? `<div>
+                <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:6px;">Feedback IA</div>
+                <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px;font-size:12px;color:#1e40af;line-height:1.6;max-height:140px;overflow-y:auto;">${feedback.replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')}</div>
+            </div>` : ''}
+            <!-- Saisie manuelle -->
+            <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:14px;">
+                <div style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;margin-bottom:10px;"><i class="fas fa-pen"></i> Correction manuelle</div>
+                <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;">
+                    <div style="flex:0 0 120px;">
+                        <label style="font-size:12px;color:#475569;display:block;margin-bottom:4px;">Note /20</label>
+                        <input id="chain-score" type="number" min="0" max="20" step="0.5" value="${score !== null ? score : ''}" placeholder="—"
+                            style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:15px;font-weight:700;text-align:center;box-sizing:border-box;">
+                    </div>
+                    <div style="flex:1;min-width:200px;">
+                        <label style="font-size:12px;color:#475569;display:block;margin-bottom:4px;">Feedback (optionnel)</label>
+                        <textarea id="chain-feedback" rows="3" placeholder="Commentaire pour l'étudiant…"
+                            style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:12px;resize:vertical;box-sizing:border-box;">${escHtml(feedback)}</textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Footer -->
+        <div style="padding:14px 22px;border-top:1px solid #f1f5f9;display:flex;gap:10px;flex-wrap:wrap;justify-content:space-between;">
+            <div style="display:flex;gap:8px;">
+                <button onclick="_chainNav(-1)" ${_chainIdx === 0 ? 'disabled' : ''}
+                    style="padding:9px 16px;border:1px solid #e2e8f0;background:#f8fafc;border-radius:8px;cursor:pointer;font-size:13px;${_chainIdx===0?'opacity:.4;cursor:not-allowed;':''}">
+                    <i class="fas fa-chevron-left"></i> Précédent
+                </button>
+                <button onclick="_chainNav(1)" ${_chainIdx >= _chainQueue.length-1 ? 'disabled' : ''}
+                    style="padding:9px 16px;border:1px solid #e2e8f0;background:#f8fafc;border-radius:8px;cursor:pointer;font-size:13px;${_chainIdx>=_chainQueue.length-1?'opacity:.4;cursor:not-allowed;':''}">
+                    Suivant <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+            <div style="display:flex;gap:8px;">
+                <button onclick="_chainSaveManual(${attempt.id})"
+                    style="padding:9px 18px;background:#d97706;color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;">
+                    <i class="fas fa-save"></i> Enregistrer
+                </button>
+                <button onclick="_chainCorrectAI(${attempt.id})"
+                    style="padding:9px 18px;background:#10b981;color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;">
+                    <i class="fas fa-robot"></i> Corriger par IA
+                </button>
+            </div>
+        </div>
+    </div>`;
+    document.body.appendChild(m);
+    m.addEventListener('click', e => { if (e.target === m) m.remove(); });
+}
+
+async function _chainNav(dir) {
+    const newIdx = _chainIdx + dir;
+    if (newIdx < 0 || newIdx >= _chainQueue.length) return;
+    _chainIdx = newIdx;
+    await _renderChainModal();
+}
+
+async function _chainSaveManual(attemptId) {
+    const scoreVal = parseFloat(document.getElementById('chain-score').value);
+    const fb = (document.getElementById('chain-feedback').value || '').trim();
+    if (isNaN(scoreVal) || scoreVal < 0 || scoreVal > 20) {
+        showAlert('Note invalide (0–20)', 'error'); return;
+    }
+    try {
+        const r = await authenticatedFetch(`/api/exam_attempts/${attemptId}/manual-grade`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ score: scoreVal, feedback: fb })
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error);
+        // Update queue entry
+        const entry = _chainQueue.find(a => a.id === attemptId);
+        if (entry) { entry.score = scoreVal; entry.needs_correction = false; }
+        showAlert(`✅ Note enregistrée : ${scoreVal}/20`, 'success');
+        if (_chainIdx < _chainQueue.length - 1) {
+            _chainIdx++;
+            await _renderChainModal();
+        } else {
+            document.getElementById('chain-modal')?.remove();
+            showAlert('Toutes les copies ont été corrigées.', 'success');
+        }
+    } catch (e) { showAlert(e.message, 'error'); }
+}
+
+async function _chainCorrectAI(attemptId) {
+    showLoader(true);
+    try {
+        const r = await authenticatedFetch(`/api/exam_attempts/${attemptId}/correct`, { method: 'POST' });
+        const d = await r.json();
+        if (!r.ok || !d.success) throw new Error(d.error || 'Erreur IA');
+        const entry = _chainQueue.find(a => a.id === attemptId);
+        if (entry) { entry.score = d.attempt?.score; entry.needs_correction = false; }
+        showAlert(`✅ IA : ${d.attempt?.score}/20`, 'success');
+        if (_chainIdx < _chainQueue.length - 1) {
+            _chainIdx++;
+            await _renderChainModal();
+        } else {
+            document.getElementById('chain-modal')?.remove();
+            showAlert('Toutes les copies ont été corrigées.', 'success');
+        }
+    } catch (e) { showAlert(e.message, 'error'); }
+    finally { showLoader(false); }
+}
+
+// ============================================================================
+// CALENDRIER GRILLE — PROFESSEUR / ADMIN
+// ============================================================================
+
+let _calYear  = new Date().getFullYear();
+let _calMonth = new Date().getMonth(); // 0-based
+let _calExams = [];
+
+async function loadExamCalendar() {
+    if (window.event && window.event.target) setActiveTab(window.event.target);
+    showLoader(true);
+    try {
+        const r = await authenticatedFetch('/api/online_exams');
+        _calExams = await r.json();
+        _calYear  = new Date().getFullYear();
+        _calMonth = new Date().getMonth();
+        _renderCalendar();
+    } catch (e) { showAlert('Erreur chargement calendrier.', 'error'); }
+    finally { showLoader(false); }
+}
+
+function _renderCalendar() {
+    const monthNames = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+    const dayNames   = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
+    const statusColors = { active:'#10b981', scheduled:'#3b82f6', closed:'#94a3b8', draft:'#f59e0b' };
+
+    // Build day→exams map
+    const dayMap = {};
+    _calExams.forEach(ex => {
+        const dt = ex.scheduled_start ? new Date(ex.scheduled_start) : null;
+        if (!dt) return;
+        if (dt.getFullYear() === _calYear && dt.getMonth() === _calMonth) {
+            const d = dt.getDate();
+            if (!dayMap[d]) dayMap[d] = [];
+            dayMap[d].push(ex);
+        }
+    });
+
+    const firstDay = new Date(_calYear, _calMonth, 1).getDay(); // 0=Sun
+    const leadDays = (firstDay + 6) % 7; // Mon-based
+    const daysInMonth = new Date(_calYear, _calMonth + 1, 0).getDate();
+    const today = new Date();
+
+    let cells = '';
+    for (let i = 0; i < leadDays; i++) cells += '<div style="background:#fafafa;border-radius:8px;min-height:80px;"></div>';
+    for (let d = 1; d <= daysInMonth; d++) {
+        const isToday = today.getFullYear() === _calYear && today.getMonth() === _calMonth && today.getDate() === d;
+        const exams   = dayMap[d] || [];
+        const dots = exams.map(ex => {
+            const c = statusColors[ex.status] || '#94a3b8';
+            const safe = escHtml((ex.title||'').replace(/'/g,''));
+            return `<div onclick="event.stopPropagation();_calShowExam(${ex.id})" title="${safe}"
+                style="background:${c};color:white;font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;margin-bottom:2px;cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:100%;">
+                ${safe}
+            </div>`;
+        }).join('');
+        cells += `
+        <div style="background:${isToday ? '#eff6ff' : '#fff'};border:${isToday ? '2px solid #3b82f6' : '1px solid #f1f5f9'};border-radius:8px;padding:6px 8px;min-height:80px;cursor:default;">
+            <div style="font-size:12px;font-weight:${isToday?'800':'600'};color:${isToday?'#2563eb':'#334155'};margin-bottom:4px;">${d}</div>
+            ${dots}
+        </div>`;
+    }
+    // Fill trailing cells to complete last week
+    const total = leadDays + daysInMonth;
+    const trail = total % 7 === 0 ? 0 : 7 - (total % 7);
+    for (let i = 0; i < trail; i++) cells += '<div style="background:#fafafa;border-radius:8px;min-height:80px;"></div>';
+
+    const upcomingList = _calExams
+        .filter(ex => ex.scheduled_start)
+        .sort((a,b) => new Date(a.scheduled_start) - new Date(b.scheduled_start))
+        .slice(0, 8)
+        .map(ex => {
+            const c = statusColors[ex.status] || '#94a3b8';
+            const dt = new Date(ex.scheduled_start).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
+            return `<div onclick="_calShowExam(${ex.id})" style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;cursor:pointer;transition:background .15s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
+                <span style="width:10px;height:10px;background:${c};border-radius:50%;flex-shrink:0;"></span>
+                <span style="flex:1;font-size:13px;color:#0f172a;font-weight:500;">${escHtml(ex.title)}</span>
+                <span style="font-size:11px;color:#94a3b8;">${dt}</span>
+            </div>`;
+        }).join('') || '<p style="color:#94a3b8;font-size:13px;padding:8px 12px;">Aucun examen planifié</p>';
+
+    document.getElementById('main-content').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 260px;gap:20px;align-items:start;">
+        <!-- Calendrier -->
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:20px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+                <button onclick="_calNav(-1)" style="background:none;border:1px solid #e2e8f0;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:14px;">‹</button>
+                <h2 style="margin:0;font-size:17px;font-weight:700;color:#0f172a;">${monthNames[_calMonth]} ${_calYear}</h2>
+                <button onclick="_calNav(1)"  style="background:none;border:1px solid #e2e8f0;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:14px;">›</button>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px;">
+                ${dayNames.map(d => `<div style="text-align:center;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;padding:4px 0;">${d}</div>`).join('')}
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;">${cells}</div>
+            <!-- Légende -->
+            <div style="display:flex;gap:14px;margin-top:12px;flex-wrap:wrap;">
+                ${Object.entries(statusColors).map(([s,c])=>`<span style="display:flex;align-items:center;gap:5px;font-size:11px;color:#64748b;"><span style="width:8px;height:8px;background:${c};border-radius:50%;"></span>${s}</span>`).join('')}
+            </div>
+        </div>
+        <!-- Sidebar liste -->
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:16px;">
+            <h3 style="margin:0 0 12px;font-size:14px;font-weight:700;color:#0f172a;display:flex;align-items:center;gap:8px;"><i class="fas fa-list" style="color:#3b82f6;"></i> À venir</h3>
+            ${upcomingList}
+        </div>
+    </div>`;
+}
+
+function _calNav(dir) {
+    _calMonth += dir;
+    if (_calMonth < 0)  { _calMonth = 11; _calYear--; }
+    if (_calMonth > 11) { _calMonth = 0;  _calYear++; }
+    _renderCalendar();
+}
+
+async function _calShowExam(examId) {
+    const ex = _calExams.find(e => e.id === examId);
+    if (!ex) return;
+    const statusColors = { active:'#10b981', scheduled:'#3b82f6', closed:'#94a3b8', draft:'#f59e0b' };
+    const c = statusColors[ex.status] || '#94a3b8';
+    const dt = ex.scheduled_start ? new Date(ex.scheduled_start).toLocaleString('fr-FR',{timeZone:'Africa/Dakar'}) : '—';
+    const html = `
+    <div style="max-width:440px;">
+        <h2 style="margin:0 0 6px;font-size:17px;">${escHtml(ex.title)}</h2>
+        <span style="background:${c}22;color:${c};padding:3px 12px;border-radius:20px;font-size:12px;font-weight:700;">${ex.status}</span>
+        <div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div style="background:#f8fafc;border-radius:10px;padding:12px;">
+                <div style="font-size:11px;color:#94a3b8;">Date</div>
+                <div style="font-size:13px;font-weight:600;color:#0f172a;margin-top:2px;">${dt}</div>
+            </div>
+            <div style="background:#f8fafc;border-radius:10px;padding:12px;">
+                <div style="font-size:11px;color:#94a3b8;">Durée</div>
+                <div style="font-size:13px;font-weight:600;color:#0f172a;margin-top:2px;">${ex.duration_minutes || '—'} min</div>
+            </div>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;">
+            <button onclick="closeModal();loadOnlineExams()" style="flex:1;padding:9px;background:#6366f1;color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;">
+                <i class="fas fa-external-link-alt"></i> Gérer l'examen
+            </button>
+            ${ex.status === 'closed' ? `<button onclick="closeModal();showExamBilan(${examId},'${(ex.title||"").replace(/'/g,"\\'")}')" style="flex:1;padding:9px;background:#0369a1;color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;"><i class="fas fa-list-alt"></i> Bilan</button>` : ''}
+        </div>
+    </div>`;
+    showModal(html);
+}
+
+
+// ============================================================================
+// RÉVISION DÉTAILLÉE D'UNE TENTATIVE
+// ============================================================================
+
+async function showAttemptReview(attemptId, studentName) {
+    showLoader(true);
+    try {
+        const r = await authenticatedFetch(`/api/exam_attempts/${attemptId}/review`);
+        const d = await r.json();
+
+        const scoreColor = (d.score != null && d.score >= 10) ? '#10b981' : '#ef4444';
+        const riskColor  = d.risk_score >= 70 ? '#ef4444' : d.risk_score >= 40 ? '#f59e0b' : '#10b981';
+
+        const badge = (label, val, bg, fg='white') =>
+            `<span style="background:${bg}22;color:${bg};padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;border:1px solid ${bg}44;">${label}: ${val}</span>`;
+
+        const incidentTypes = { tab_switch:'Changement onglet', copy_attempt:'Copier', paste_attempt:'Coller',
+            right_click:'Clic droit', devtools:'Outils dev', no_face:'Visage absent',
+            face_mismatch:'Visage différent', suspicious_audio:'Audio suspect' };
+
+        const incRows = d.incidents.slice(-20).map(inc => {
+            const ts = inc.timestamp ? new Date(inc.timestamp).toLocaleTimeString('fr-FR') : '—';
+            const label = incidentTypes[inc.type] || inc.type;
+            return `<tr><td style="padding:4px 8px;font-size:11px;color:#64748b;">${ts}</td>
+                    <td style="padding:4px 8px;font-size:11px;font-weight:600;color:#ef4444;">${label}</td></tr>`;
+        }).join('') || `<tr><td colspan="2" style="padding:8px;font-size:12px;color:#94a3b8;">Aucun incident</td></tr>`;
+
+        const noteRows = d.proctor_notes.map(n => {
+            const ts = n.timestamp ? new Date(n.timestamp).toLocaleString('fr-FR') : '—';
+            return `<div style="background:#fef3c7;border-left:3px solid #f59e0b;padding:8px 12px;margin-bottom:8px;border-radius:0 6px 6px 0;">
+                <div style="font-size:11px;color:#92400e;font-weight:700;">${escHtml(n.author || '—')} — ${ts}</div>
+                <div style="font-size:12px;color:#78350f;margin-top:2px;">${escHtml(n.note)}</div>
+            </div>`;
+        }).join('') || '<p style="color:#94a3b8;font-size:12px;">Aucune note</p>';
+
+        const answerHtml = d.student_answer
+            ? `<pre style="white-space:pre-wrap;word-break:break-word;font-family:inherit;font-size:12px;color:#334155;background:#f8fafc;padding:12px;border-radius:8px;max-height:250px;overflow-y:auto;border:1px solid #e2e8f0;">${escHtml(d.student_answer.substring(0,3000))}${d.student_answer.length>3000?'\n…(tronqué)':''}</pre>`
+            : '<p style="color:#94a3b8;font-size:12px;">Réponse non disponible</p>';
+
+        const feedbackHtml = d.feedback
+            ? `<pre style="white-space:pre-wrap;word-break:break-word;font-family:inherit;font-size:12px;color:#334155;background:#f0f9ff;padding:12px;border-radius:8px;max-height:250px;overflow-y:auto;border:1px solid #bae6fd;">${escHtml(d.feedback.substring(0,4000))}${d.feedback.length>4000?'\n…(tronqué)':''}</pre>`
+            : '<p style="color:#94a3b8;font-size:12px;">Pas encore corrigé</p>';
+
+        const duration = d.duration_min != null ? `${d.duration_min} min` : '—';
+
+        showModal(`
+        <div style="max-width:760px;">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;gap:12px;flex-wrap:wrap;">
+                <div>
+                    <h2 style="margin:0 0 4px;font-size:16px;"><i class="fas fa-user-graduate" style="color:#6366f1;margin-right:8px;"></i>${escHtml(d.student_name)}</h2>
+                    <p style="color:#64748b;margin:0;font-size:12px;">${escHtml(d.exam_title)}</p>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    ${d.score != null ? badge('Note', d.score+'/20', scoreColor) : ''}
+                    ${badge('Risque', d.risk_score+'%', riskColor)}
+                    ${badge('Durée', duration, '#6366f1')}
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+                <!-- Incidents -->
+                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px;">
+                    <h4 style="margin:0 0 8px;font-size:12px;font-weight:700;color:#ef4444;text-transform:uppercase;letter-spacing:.05em;">
+                        <i class="fas fa-exclamation-triangle"></i> Incidents (${d.incidents.length})
+                    </h4>
+                    <div style="font-size:11px;color:#64748b;margin-bottom:6px;">
+                        ${d.tab_switches} fenêtre · ${d.warnings_count} avert. · ${d.no_face_count} sans-visage
+                        ${d.extra_minutes ? ` · +${d.extra_minutes} min extra` : ''}
+                    </div>
+                    <table style="width:100%;">${incRows}</table>
+                    ${d.ban_reason ? `<div style="background:#fef2f2;border-radius:6px;padding:8px;margin-top:8px;font-size:11px;color:#dc2626;"><b>Exclu :</b> ${escHtml(d.ban_reason)}</div>` : ''}
+                </div>
+                <!-- Notes surveillant -->
+                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px;">
+                    <h4 style="margin:0 0 8px;font-size:12px;font-weight:700;color:#f59e0b;text-transform:uppercase;letter-spacing:.05em;">
+                        <i class="fas fa-sticky-note"></i> Notes surveillant (${d.proctor_notes.length})
+                    </h4>
+                    ${noteRows}
+                </div>
+            </div>
+            <!-- Réponse -->
+            <div style="margin-bottom:12px;">
+                <h4 style="margin:0 0 6px;font-size:12px;font-weight:700;color:#334155;text-transform:uppercase;letter-spacing:.05em;">Réponse étudiant</h4>
+                ${answerHtml}
+            </div>
+            <!-- Correction -->
+            <div style="margin-bottom:16px;">
+                <h4 style="margin:0 0 6px;font-size:12px;font-weight:700;color:#6366f1;text-transform:uppercase;letter-spacing:.05em;">Correction IA</h4>
+                ${feedbackHtml}
+            </div>
+            <div style="text-align:right;display:flex;gap:10px;justify-content:flex-end;">
+                <button onclick="downloadAttemptReportPDF(${attemptId},'${(d.student_name||'').replace(/'/g,"\\'")}');closeModal();"
+                    style="padding:8px 18px;background:#6366f1;color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;">
+                    <i class="fas fa-file-pdf"></i> Rapport PDF
+                </button>
+                <button onclick="closeModal()" style="padding:8px 18px;background:#f1f5f9;color:#475569;border:none;border-radius:8px;cursor:pointer;font-size:13px;">Fermer</button>
+            </div>
+        </div>`, '800px');
+    } catch(e) {
+        showAlert('Erreur révision : ' + (e.serverMessage || e.message), 'error');
+    } finally { showLoader(false); }
+}
+
+
+// ============================================================================
+// TÉLÉCHARGEMENT ZIP DES COPIES CORRIGÉES
+// ============================================================================
+
+async function downloadCorrectionsZip(examId, examTitle) {
+    showLoader(true);
+    try {
+        const r = await authenticatedFetch(`/api/online_exams/${examId}/corrections/zip`);
+        if (!r.ok) {
+            const err = await r.json().catch(() => ({}));
+            throw new Error(err.error || 'Erreur téléchargement ZIP');
+        }
+        const blob = await r.blob();
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = `corrections_${(examTitle||'exam').replace(/[^a-z0-9]/gi,'_')}.zip`;
+        document.body.appendChild(a); a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showAlert('ZIP téléchargé avec succès.', 'success');
+    } catch(e) {
+        showAlert('Erreur ZIP : ' + (e.serverMessage || e.message), 'error');
+    } finally { showLoader(false); }
+}
+
+
+// ============================================================================
+// PDF RAPPORT INDIVIDUEL PAR TENTATIVE
+// ============================================================================
+
+async function downloadAttemptReportPDF(attemptId, studentName) {
+    showLoader(true);
+    try {
+        const r = await authenticatedFetch(`/api/exam_attempts/${attemptId}/report/pdf`);
+        if (!r.ok) {
+            const err = await r.json().catch(() => ({}));
+            throw new Error(err.error || 'Erreur rapport PDF');
+        }
+        const blob = await r.blob();
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = `rapport_${(studentName||'etudiant').replace(/[^a-z0-9]/gi,'_')}_${attemptId}.pdf`;
+        document.body.appendChild(a); a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    } catch(e) {
+        showAlert('Erreur rapport : ' + (e.serverMessage || e.message), 'error');
+    } finally { showLoader(false); }
+}
+
+
+// ============================================================================
+// DASHBOARD ANALYTIQUE PROF
+// ============================================================================
+
+async function loadProfessorAnalytics() {
+    if (window.event && window.event.target) setActiveTab(window.event.target);
+    showLoader(true);
+    try {
+        const r = await authenticatedFetch('/api/professor/analytics');
+        const d = await r.json();
+
+        const kpi = (label, val, color='#1e293b', sub='') =>
+            `<div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px 20px;flex:1;min-width:130px;">
+                <div style="font-size:24px;font-weight:800;color:${color};">${val ?? '—'}</div>
+                <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-top:2px;">${label}</div>
+                ${sub ? `<div style="font-size:11px;color:#94a3b8;margin-top:4px;">${sub}</div>` : ''}
+             </div>`;
+
+        const statusColors = { active:'#10b981', scheduled:'#3b82f6', closed:'#94a3b8', draft:'#f59e0b' };
+
+        const statusDots = Object.entries(d.status_counts||{}).map(([s,n]) =>
+            `<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#475569;margin-right:14px;">
+                <span style="width:10px;height:10px;background:${statusColors[s]||'#94a3b8'};border-radius:50%;"></span>${s} <b>${n}</b>
+             </span>`
+        ).join('');
+
+        const examRankRow = (exam, medal) =>
+            `<tr onclick="loadOnlineExams()" style="cursor:pointer;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
+                <td style="padding:8px 10px;font-size:13px;">${medal} ${escHtml(exam.title)}</td>
+                <td style="padding:8px 10px;font-size:13px;font-weight:700;color:${(exam.avg_score||0)>=10?'#10b981':'#ef4444'};">${exam.avg_score}/20</td>
+                <td style="padding:8px 10px;font-size:12px;color:#64748b;">${exam.pass_rate}%</td>
+                <td style="padding:8px 10px;font-size:12px;color:#64748b;">${exam.corrected} copie(s)</td>
+             </tr>`;
+
+        const topRows = (d.top_exams||[]).map((e,i) => examRankRow(e, ['🥇','🥈','🥉'][i]||'•')).join('');
+        const botRows = (d.bottom_exams||[]).map((e,i) => examRankRow(e, ['⬇️','⬇️','⬇️'][i]||'•')).join('');
+
+        const recentRows = (d.recent_corrections||[]).map(c => {
+            const sc = c.score != null ? c.score : null;
+            const dt = c.corrected_at ? new Date(c.corrected_at).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+            return `<tr>
+                <td style="padding:7px 10px;font-size:12px;">${escHtml(c.student_name)}</td>
+                <td style="padding:7px 10px;font-size:12px;color:#64748b;">${escHtml(c.exam_title)}</td>
+                <td style="padding:7px 10px;font-size:12px;font-weight:700;color:${sc!=null&&sc>=10?'#10b981':'#ef4444'};">${sc != null ? sc+'/20' : '—'}</td>
+                <td style="padding:7px 10px;font-size:11px;color:#94a3b8;">${dt}</td>
+             </tr>`;
+        }).join('') || `<tr><td colspan="4" style="padding:12px;color:#94a3b8;text-align:center;">Aucune correction récente</td></tr>`;
+
+        const avgColor = d.overall_avg != null ? (d.overall_avg >= 10 ? '#10b981' : '#ef4444') : '#1e293b';
+        const prColor  = d.overall_pass_rate != null ? (d.overall_pass_rate >= 50 ? '#10b981' : '#f59e0b') : '#1e293b';
+
+        document.getElementById('main-content').innerHTML = `
+        <div class="page-header">
+            <h2><i class="fas fa-chart-line" style="color:#6366f1;margin-right:10px;"></i>Tableau de bord analytique</h2>
+            <p style="color:#64748b;margin:4px 0 0;">${statusDots}</p>
+        </div>
+        <!-- KPI Row -->
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;">
+            ${kpi('Examens', d.total_exams, '#6366f1')}
+            ${kpi('Tentatives', d.total_attempts, '#0ea5e9')}
+            ${kpi('Soumissions', d.total_submitted, '#8b5cf6')}
+            ${kpi('Copies corrigées', d.total_corrected, '#10b981')}
+            ${kpi('Moyenne globale', d.overall_avg != null ? d.overall_avg+'/20' : '—', avgColor)}
+            ${kpi('Taux réussite', d.overall_pass_rate != null ? d.overall_pass_rate+'%' : '—', prColor)}
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+            <!-- Top exams -->
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;">
+                <h3 style="margin:0 0 12px;font-size:13px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:.05em;">
+                    <i class="fas fa-trophy" style="color:#f59e0b;margin-right:6px;"></i>Meilleurs examens
+                </h3>
+                ${topRows ? `<table style="width:100%;border-collapse:collapse;">${topRows}</table>` : '<p style="color:#94a3b8;font-size:12px;">Pas encore de données (min. 2 copies corrigées)</p>'}
+            </div>
+            <!-- Bottom exams -->
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;">
+                <h3 style="margin:0 0 12px;font-size:13px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:.05em;">
+                    <i class="fas fa-arrow-down" style="color:#ef4444;margin-right:6px;"></i>Examens à améliorer
+                </h3>
+                ${botRows ? `<table style="width:100%;border-collapse:collapse;">${botRows}</table>` : '<p style="color:#94a3b8;font-size:12px;">Pas encore de données (min. 2 copies corrigées)</p>'}
+            </div>
+        </div>
+
+        <!-- Corrections récentes -->
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;">
+            <h3 style="margin:0 0 12px;font-size:13px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:.05em;">
+                <i class="fas fa-clock" style="color:#6366f1;margin-right:6px;"></i>Corrections récentes (10 dernières)
+            </h3>
+            <table style="width:100%;border-collapse:collapse;">
+                <thead>
+                    <tr style="background:#f8fafc;">
+                        <th style="padding:8px 10px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;">Étudiant</th>
+                        <th style="padding:8px 10px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;">Examen</th>
+                        <th style="padding:8px 10px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;">Note</th>
+                        <th style="padding:8px 10px;text-align:left;font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;">Date</th>
+                    </tr>
+                </thead>
+                <tbody>${recentRows}</tbody>
+            </table>
+        </div>`;
+    } catch(e) {
+        showAlert('Erreur analytique : ' + (e.serverMessage || e.message), 'error');
+    } finally { showLoader(false); }
 }

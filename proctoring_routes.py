@@ -585,12 +585,22 @@ def get_active_proctoring(exam_id):
                 'tab_switches': a.tab_switches,
                 'no_face_count': a.no_face_count or 0,
                 'started_at': a.started_at.isoformat() if a.started_at else None,
+                'submitted_at': a.submitted_at.isoformat() if a.submitted_at else None,
+                'score': a.score,
                 'banned': a.status == AttemptStatus.BANNED,
+                'ban_reason': a.ban_reason if hasattr(a, 'ban_reason') else None,
+                'duration_minutes': (
+                    int((a.submitted_at - a.started_at).total_seconds() / 60)
+                    if a.submitted_at and a.started_at else None
+                ),
                 'livekit_identity': f'student-{a.student_id}',
                 'current_egress_id': a.current_egress_id,
                 'proctor_id': pid,
                 'proctor_name': proctor_names.get(pid, 'Non affecté') if pid else 'Non affecté',
                 'proctor_identity': f'proctor-{pid}' if pid else None,
+                'has_pre_sig': bool(a.pre_exam_signature_data),
+                'pre_sig_meta': a.pre_exam_signature_meta,
+                'has_post_sig': bool(a.signature_data),
             })
 
         # Filtrer la vue du surveillant (ne montrer que son groupe)
@@ -623,6 +633,31 @@ def get_active_proctoring(exam_id):
             'my_role': role,
             'my_identity': my_identity,
         })
+    finally:
+        session.close()
+
+
+# ============================================================================
+# API : SIGNATURE IMAGE (enseignant/admin uniquement)
+# ============================================================================
+
+@proctoring_bp.route('/api/exam_attempts/<int:attempt_id>/signature/<sig_type>', methods=['GET'])
+@jwt_required()
+def get_attempt_signature(attempt_id, sig_type):
+    """Retourne l'image de signature pré ou post examen (prof/admin)."""
+    claims = get_jwt()
+    if claims.get('role') not in ['professor', 'admin']:
+        return jsonify({'error': 'Accès non autorisé'}), 403
+    if sig_type not in ('pre', 'post'):
+        return jsonify({'error': 'Type de signature invalide'}), 400
+    session = get_session()
+    try:
+        attempt = session.query(ExamAttempt).filter_by(id=attempt_id).first()
+        if not attempt:
+            return jsonify({'error': 'Tentative non trouvée'}), 404
+        if sig_type == 'pre':
+            return jsonify({'data': attempt.pre_exam_signature_data, 'meta': attempt.pre_exam_signature_meta})
+        return jsonify({'data': attempt.signature_data, 'meta': None})
     finally:
         session.close()
 
@@ -1007,13 +1042,43 @@ def get_surveillant_exams():
         exam_proctors = session.query(ExamProctor).filter_by(proctor_id=user_id).all()
         exams = []
         for ep in exam_proctors:
-            if ep.exam:
-                d = ep.exam.to_dict()
-                # Nombre d'étudiants à surveiller
-                d['my_student_count'] = session.query(ProctorAssignment).filter_by(
-                    exam_id=ep.exam_id, proctor_id=user_id
-                ).count()
-                exams.append(d)
+            if not ep.exam:
+                continue
+            d = ep.exam.to_dict()
+
+            # Récupérer les affectations de cet examen pour ce surveillant
+            assignments = session.query(ProctorAssignment).filter_by(
+                exam_id=ep.exam_id, proctor_id=user_id
+            ).all()
+
+            students = []
+            for pa in assignments:
+                s_info = {
+                    'student_id':    pa.student_id,
+                    'student_name':  pa.student.full_name if pa.student else '—',
+                    'student_email': pa.student.email    if pa.student else '—',
+                    'attempt_id':    pa.attempt_id,
+                    'status':        'not_started',
+                    'risk_score':    0,
+                }
+                if pa.attempt:
+                    s_info['attempt_id']  = pa.attempt.id
+                    s_info['status']      = pa.attempt.status.value
+                    s_info['risk_score']  = pa.attempt.risk_score or 0
+                elif pa.student_id:
+                    attempt = session.query(ExamAttempt).filter_by(
+                        exam_id=ep.exam_id, student_id=pa.student_id
+                    ).first()
+                    if attempt:
+                        s_info['attempt_id'] = attempt.id
+                        s_info['status']     = attempt.status.value
+                        s_info['risk_score'] = attempt.risk_score or 0
+                students.append(s_info)
+
+            d['my_students']      = students
+            d['my_student_count'] = len(students)
+            exams.append(d)
+
         return jsonify({'success': True, 'exams': exams})
     finally:
         session.close()
@@ -2020,6 +2085,38 @@ def agent_get_alerts():
     if role not in ['professor', 'admin', 'surveillant']:
         return jsonify({'error': 'Accès non autorisé'}), 403
     alerts = _load_alerts()
+
+    # Auto-marquer comme lues les alertes d'étudiants qui ne sont plus en cours
+    unread_attempt_ids = list({
+        a.get('attempt_id') for a in alerts
+        if not a.get('read') and a.get('attempt_id') is not None
+    })
+    if unread_attempt_ids:
+        session = get_session()
+        try:
+            existing = session.query(ExamAttempt).filter(
+                ExamAttempt.id.in_(unread_attempt_ids)
+            ).all()
+            existing_ids = {att.id for att in existing}
+            # Marquer comme lues : (1) étudiants qui ne sont plus en cours
+            # et (2) attempt_id inconnu en DB (alertes orphelines/obsolètes)
+            stale_ids = (
+                {att.id for att in existing if att.status != AttemptStatus.IN_PROGRESS}
+                | (set(unread_attempt_ids) - existing_ids)
+            )
+        except Exception:
+            stale_ids = set()
+        finally:
+            session.close()
+        if stale_ids:
+            changed = False
+            for a in alerts:
+                if not a.get('read') and a.get('attempt_id') in stale_ids:
+                    a['read'] = True
+                    changed = True
+            if changed:
+                _save_alerts(alerts)
+
     unread = [a for a in alerts if not a.get('read')]
     return jsonify({'alerts': unread[-50:], 'total_unread': len(unread)})
 
@@ -2031,7 +2128,8 @@ def agent_mark_read():
     claims = get_jwt()
     if claims.get('role') not in ['professor', 'admin', 'surveillant']:
         return jsonify({'error': 'Accès non autorisé'}), 403
-    ids = set(request.get_json(silent=True) or {}).get('attempt_ids', [])
+    data = request.get_json(silent=True) or {}
+    ids = set(data.get('attempt_ids', []))
     alerts = _load_alerts()
     for a in alerts:
         if a.get('attempt_id') in ids:

@@ -1111,6 +1111,7 @@ async function init() {
         }
 
         subjectData = await subjectResp.json();
+        _extraMinutes = subjectData.extra_minutes || 0;
         const riskData = riskResp.ok ? await riskResp.json() : {};
 
         riskScore = riskData.risk_score || 0;
@@ -1192,13 +1193,36 @@ function stripBaremeFromContent(content) {
 // TIMER
 // ═══════════════════════════════════════════════════════════
 
+let _extraMinutes = 0;
+let _extraPollInterval = null;
+
+async function _pollExtraTime() {
+    try {
+        const r = await api(`/api/exam_attempts/${ATTEMPT_ID}/subject`);
+        if (!r.ok) return;
+        const d = await r.json();
+        const newExtra = d.extra_minutes || 0;
+        if (newExtra > _extraMinutes) {
+            const added = newExtra - _extraMinutes;
+            _extraMinutes = newExtra;
+            // Flash info banner
+            const banner = document.createElement('div');
+            banner.style.cssText = 'position:fixed;top:70px;left:50%;transform:translateX(-50%);background:#d97706;color:white;padding:10px 22px;border-radius:8px;font-size:14px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.3)';
+            banner.textContent = `+${added} minute${added > 1 ? 's' : ''} accordée${added > 1 ? 's' : ''} par le surveillant`;
+            document.body.appendChild(banner);
+            setTimeout(() => banner.remove(), 6000);
+        }
+    } catch (_) {}
+}
+
 function startTimer() {
-    const duration = subjectData.duration_minutes || 60;
+    const duration  = subjectData.duration_minutes || 60;
     const startedAt = new Date(subjectData.started_at);
-    const endAt = new Date(startedAt.getTime() + duration * 60000);
 
     timerInterval = setInterval(() => {
-        const now = new Date();
+        const totalMins = duration + _extraMinutes;
+        const endAt     = new Date(startedAt.getTime() + totalMins * 60000);
+        const now       = new Date();
         const remaining = Math.max(0, endAt - now);
         timeLeft = Math.floor(remaining / 1000);
 
@@ -1214,9 +1238,13 @@ function startTimer() {
 
         if (timeLeft === 0) {
             clearInterval(timerInterval);
+            clearInterval(_extraPollInterval);
             autoSubmit();
         }
     }, 1000);
+
+    // Poll for granted extra time every 30 s
+    _extraPollInterval = setInterval(_pollExtraTime, 30000);
 }
 
 async function autoSubmit() {
@@ -1251,8 +1279,42 @@ async function initLiveKit() {
     try {
         room = new LivekitClient.Room({ adaptiveStream: true, dynacast: true });
 
+        let _reconnectAttempts = 0;
+        const _MAX_RECONNECT = 5;
+        let _reconnectTimer = null;
+
         room.on(LivekitClient.RoomEvent.Disconnected, () => {
-            console.log('LiveKit déconnecté');
+            console.warn('⚠️ LiveKit déconnecté');
+            if (_reconnectAttempts >= _MAX_RECONNECT) {
+                console.error('❌ Reconnexion abandonnée après', _MAX_RECONNECT, 'tentatives');
+                return;
+            }
+            const delay = Math.min(2000 * Math.pow(1.5, _reconnectAttempts), 30000);
+            _reconnectAttempts++;
+            console.log(`🔄 Reconnexion LiveKit dans ${Math.round(delay/1000)}s (tentative ${_reconnectAttempts})`);
+            clearTimeout(_reconnectTimer);
+            _reconnectTimer = setTimeout(async () => {
+                try {
+                    const res = await api(`/api/exam_attempts/${ATTEMPT_ID}/livekit_token`);
+                    if (!res.ok) throw new Error('token');
+                    const tk = await res.json();
+                    await room.connect(tk.ws_url, tk.token);
+                    _reconnectAttempts = 0;
+                    console.log('✅ LiveKit reconnecté');
+                } catch (e) {
+                    console.error('❌ Échec reconnexion:', e);
+                }
+            }, delay);
+        });
+
+        room.on(LivekitClient.RoomEvent.Reconnecting, () => {
+            console.log('🔄 LiveKit reconnexion native...');
+        });
+
+        room.on(LivekitClient.RoomEvent.Reconnected, () => {
+            _reconnectAttempts = 0;
+            clearTimeout(_reconnectTimer);
+            console.log('✅ LiveKit rétabli (natif)');
         });
 
         room.on(LivekitClient.RoomEvent.DataReceived, (payload) => {

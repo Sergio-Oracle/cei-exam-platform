@@ -218,6 +218,48 @@
             font-size:16px;font-weight:700;color:white;
         }
 
+        .submitted-overlay {
+            position:absolute;inset:0;
+            background:rgba(15,23,42,.88);
+            display:flex;flex-direction:column;align-items:center;justify-content:center;
+            gap:8px;color:rgba(255,255,255,.9);
+        }
+        .submitted-overlay i { font-size:32px;color:#10b981; }
+        .submitted-overlay .sub-label { font-size:12px;font-weight:700;color:#10b981;text-transform:uppercase;letter-spacing:.05em; }
+        .submitted-overlay .sub-time  { font-size:11px;color:rgba(255,255,255,.5); }
+
+        /* ── Panneau Terminés ── */
+        #completed-panel {
+            margin:0 20px 20px;
+            background:rgba(255,255,255,.03);
+            border:1px solid rgba(255,255,255,.08);
+            border-radius:12px;
+            overflow:hidden;
+        }
+        #completed-panel-header {
+            display:flex;align-items:center;gap:10px;
+            padding:10px 16px;
+            background:rgba(255,255,255,.04);
+            cursor:pointer;
+            user-select:none;
+        }
+        #completed-panel-header:hover { background:rgba(255,255,255,.07); }
+        #completed-panel-header h4 { margin:0;font-size:13px;font-weight:700;color:rgba(255,255,255,.8); }
+        .completed-count-badge {
+            background:rgba(16,185,129,.2);color:#10b981;
+            font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;
+        }
+        #completed-list-wrap { display:none; }
+        .completed-table { width:100%;border-collapse:collapse; }
+        .completed-table th {
+            font-size:11px;text-transform:uppercase;color:rgba(255,255,255,.35);
+            padding:8px 14px;text-align:left;border-bottom:1px solid rgba(255,255,255,.06);
+            font-weight:600;letter-spacing:.06em;
+        }
+        .completed-table td { padding:10px 14px;font-size:12px;color:rgba(255,255,255,.75);border-bottom:1px solid rgba(255,255,255,.04); }
+        .completed-table tr:last-child td { border-bottom:none; }
+        .completed-table tr:hover td { background:rgba(255,255,255,.03); }
+
         /* ── Info étudiant ── */
         .card-info {
             padding: 12px 14px;
@@ -384,6 +426,31 @@
             margin-bottom:16px;
         }
         @keyframes spin { to{transform:rotate(360deg)} }
+
+        /* ── Vue Enseignant ── */
+        .tv-stat-bar { display:flex;gap:10px;flex-wrap:wrap;padding:14px 20px;border-bottom:1px solid rgba(255,255,255,.08); }
+        .tv-stat-chip { display:flex;flex-direction:column;align-items:center;padding:10px 18px;
+            background:rgba(255,255,255,.04);border-radius:10px;border:1px solid rgba(255,255,255,.08);min-width:90px; }
+        .tv-stat-chip .tv-val { font-size:22px;font-weight:700;line-height:1;margin-bottom:4px; }
+        .tv-stat-chip .tv-lbl { font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,.4); }
+        .tv-search-bar { padding:10px 20px;display:flex;gap:10px;align-items:center;border-bottom:1px solid rgba(255,255,255,.06); }
+        .tv-section { padding:0 20px 6px; }
+        .tv-section-hdr { display:flex;align-items:center;gap:10px;padding:14px 0 8px; }
+        .tv-section-hdr h3 { margin:0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.45); }
+        .tv-badge { border-radius:99px;padding:2px 9px;font-size:11px;font-weight:700; }
+        .tv-badge.green { background:rgba(16,185,129,.2);color:#6ee7b7; }
+        .tv-badge.red   { background:rgba(239,68,68,.2);color:#fca5a5; }
+        .tv-badge.blue  { background:rgba(59,130,246,.2);color:#93c5fd; }
+        .tv-sig-btn { display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:6px;
+            font-size:10px;font-weight:600;border:none;cursor:pointer; }
+        .tv-sig-btn.pre    { background:rgba(99,102,241,.25);color:#c7d2fe; }
+        .tv-sig-btn.post   { background:rgba(16,185,129,.25);color:#6ee7b7; }
+        .tv-sig-btn.absent { background:rgba(255,255,255,.06);color:rgba(255,255,255,.25);cursor:default; }
+        .tv-empty { text-align:center;padding:20px;color:rgba(255,255,255,.3);font-size:12px; }
+        .tv-risk-badge { display:inline-block;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:700; }
+        .tv-risk-badge.low    { background:rgba(16,185,129,.2);color:#6ee7b7; }
+        .tv-risk-badge.medium { background:rgba(245,158,11,.2);color:#fcd34d; }
+        .tv-risk-badge.high   { background:rgba(239,68,68,.2);color:#fca5a5; }
     </style>
 </head>
 <body>
@@ -427,6 +494,15 @@
         <div class="stat-pill" id="stat-messages-pill" style="background:rgba(37,99,235,.3);cursor:pointer;" onclick="openStudentMessages()" title="Messages des étudiants">
             <i class="fas fa-comment-dots"></i>
             <span id="stat-messages">0</span> message(s)
+        </div>
+        <!-- Pills enseignant uniquement -->
+        <div class="stat-pill" id="stat-submitted-pill" style="background:rgba(16,185,129,.3);display:none;">
+            <i class="fas fa-check-circle"></i>
+            <span id="stat-submitted">0</span> terminés
+        </div>
+        <div class="stat-pill" id="stat-avgscore-pill" style="background:rgba(59,130,246,.3);display:none;">
+            <i class="fas fa-star"></i>
+            Note moy. <span id="stat-avgscore">—</span>
         </div>
     </div>
 
@@ -579,10 +655,125 @@
         <div id="proctors-grid" style="display:flex;gap:12px;flex-wrap:wrap;"></div>
     </div>
 
+    <!-- ════ VUE ENSEIGNANT ════ -->
+    <div id="teacher-view" style="display:none;">
+
+        <!-- Barre stats enseignant -->
+        <div class="tv-stat-bar">
+            <div class="tv-stat-chip">
+                <span class="tv-val" id="tv-total" style="color:#f1f5f9;">0</span>
+                <span class="tv-lbl">Total</span>
+            </div>
+            <div class="tv-stat-chip">
+                <span class="tv-val" id="tv-inprogress-n" style="color:#10b981;">0</span>
+                <span class="tv-lbl">En cours</span>
+            </div>
+            <div class="tv-stat-chip">
+                <span class="tv-val" id="tv-done-n" style="color:#6ee7b7;">0</span>
+                <span class="tv-lbl">Terminés</span>
+            </div>
+            <div class="tv-stat-chip">
+                <span class="tv-val" id="tv-banned-n" style="color:#f87171;">0</span>
+                <span class="tv-lbl">Exclus</span>
+            </div>
+            <div class="tv-stat-chip">
+                <span class="tv-val" id="tv-avg-score" style="color:#93c5fd;">—</span>
+                <span class="tv-lbl">Note moy.</span>
+            </div>
+            <div class="tv-stat-chip">
+                <span class="tv-val" id="tv-avg-risk" style="color:#fcd34d;">0%</span>
+                <span class="tv-lbl">Risque moy.</span>
+            </div>
+        </div>
+
+        <!-- Barre de recherche enseignant -->
+        <div class="tv-search-bar">
+            <input type="text" id="tv-search" class="search-input"
+                   placeholder="Rechercher un étudiant…" oninput="renderTeacherView()"
+                   style="max-width:320px;margin:0;">
+            <button class="btn btn-light btn-sm" onclick="refreshData()">
+                <i class="fas fa-sync-alt" id="tv-refresh-icon"></i> Actualiser
+            </button>
+        </div>
+
+        <!-- Section En cours -->
+        <div class="tv-section" id="tv-inprogress-section">
+            <div class="tv-section-hdr">
+                <span style="width:8px;height:8px;border-radius:50%;background:#10b981;display:inline-block;"></span>
+                <h3>En cours</h3>
+                <span class="tv-badge green" id="tv-inprogress-badge">0</span>
+            </div>
+            <div style="overflow-x:auto;">
+            <table class="completed-table">
+                <thead><tr>
+                    <th>Étudiant</th>
+                    <th>Démarré à</th>
+                    <th>Durée</th>
+                    <th>Risque</th>
+                    <th>Tabs / Alertes</th>
+                    <th>Surveillant</th>
+                    <th>Actions</th>
+                </tr></thead>
+                <tbody id="tv-inprogress-body"></tbody>
+            </table>
+            </div>
+        </div>
+
+        <!-- Section Terminés -->
+        <div class="tv-section" id="tv-completed-section">
+            <div class="tv-section-hdr">
+                <i class="fas fa-check-circle" style="color:#10b981;font-size:13px;"></i>
+                <h3>Terminés</h3>
+                <span class="tv-badge green" id="tv-completed-badge">0</span>
+            </div>
+            <div style="overflow-x:auto;">
+            <table class="completed-table">
+                <thead><tr>
+                    <th>Étudiant</th>
+                    <th>Statut</th>
+                    <th>Soumis à</th>
+                    <th>Durée</th>
+                    <th>Note</th>
+                    <th>Risque</th>
+                    <th>Sig. pré-examen</th>
+                    <th>Sig. post-examen</th>
+                    <th>Surveillant</th>
+                </tr></thead>
+                <tbody id="tv-completed-body"></tbody>
+            </table>
+            </div>
+        </div>
+
+        <!-- Section Exclus -->
+        <div class="tv-section" id="tv-banned-section" style="padding-bottom:20px;">
+            <div class="tv-section-hdr">
+                <i class="fas fa-ban" style="color:#ef4444;font-size:13px;"></i>
+                <h3>Exclus</h3>
+                <span class="tv-badge red" id="tv-banned-badge">0</span>
+            </div>
+            <div style="overflow-x:auto;">
+            <table class="completed-table">
+                <thead><tr>
+                    <th>Étudiant</th>
+                    <th>Motif d'exclusion</th>
+                    <th>Risque</th>
+                    <th>Surveillant</th>
+                </tr></thead>
+                <tbody id="tv-banned-body"></tbody>
+            </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ════ VUE SURVEILLANT ════ -->
+    <div id="surveillance-view">
+
     <!-- Barre de filtre -->
     <div class="filter-bar">
-        <button class="filter-btn active" onclick="setFilter('all',this)">Tous</button>
-        <button class="filter-btn" onclick="setFilter('IN_PROGRESS',this)">En cours</button>
+        <button class="filter-btn" onclick="setFilter('all',this)">Tous</button>
+        <button class="filter-btn active" id="filter-btn-inprogress" onclick="setFilter('IN_PROGRESS',this)">
+            <i class="fas fa-circle" style="color:#10b981;font-size:8px;"></i> En cours
+        </button>
         <button class="filter-btn" onclick="setFilter('high_risk',this)">
             <i class="fas fa-exclamation-triangle"></i> Risque élevé
         </button>
@@ -594,9 +785,50 @@
         </button>
     </div>
 
-    <!-- Grille des étudiants -->
+    <!-- Grille des étudiants actifs -->
     <div class="students-grid" id="students-grid"></div>
 
+    <!-- Panneau Terminés (soumis / auto-soumis) -->
+    <div id="completed-panel" style="display:none;">
+        <div id="completed-panel-header" onclick="toggleCompletedPanel()">
+            <i class="fas fa-check-circle" style="color:#10b981;font-size:15px;"></i>
+            <h4>Copies terminées</h4>
+            <span class="completed-count-badge" id="completed-count-badge">0</span>
+            <i class="fas fa-chevron-down" id="completed-chevron"
+               style="margin-left:auto;color:rgba(255,255,255,.4);font-size:12px;transition:transform .2s;"></i>
+        </div>
+        <div id="completed-list-wrap">
+            <table class="completed-table">
+                <thead>
+                    <tr>
+                        <th>Étudiant</th>
+                        <th>Statut</th>
+                        <th>Soumis à</th>
+                        <th>Durée</th>
+                        <th>Risque</th>
+                        <th>Note</th>
+                        <th>Surveillant</th>
+                    </tr>
+                </thead>
+                <tbody id="completed-list"></tbody>
+            </table>
+        </div>
+    </div>
+
+    </div><!-- /surveillance-view -->
+</div>
+
+<!-- ════════ MODAL SIGNATURE ════════ -->
+<div id="modal-sig" class="modal">
+    <div class="modal-box" style="max-width:520px;text-align:center;">
+        <h2 id="modal-sig-title" style="font-size:15px;margin-bottom:4px;"></h2>
+        <div id="modal-sig-meta" style="font-size:11px;color:#94a3b8;margin-bottom:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;"></div>
+        <img id="modal-sig-img" src="" alt="Signature"
+             style="max-width:100%;border:2px solid rgba(255,255,255,.1);border-radius:8px;background:#fff;display:block;margin:0 auto 16px;">
+        <div class="modal-actions" style="justify-content:center;">
+            <button class="btn btn-light" onclick="document.getElementById('modal-sig').classList.remove('active')">Fermer</button>
+        </div>
+    </div>
 </div>
 
 <!-- ════════ PANNEAU LOGS ════════ -->
@@ -762,7 +994,7 @@ let studentsData  = [];
 let proctorsData  = [];        // liste des surveillants (pour vue enseignant)
 let myRole        = null;      // 'professor'|'admin'|'surveillant'
 let myIdentity    = null;      // ex. 'proctor-42' ou 'teacher-7'
-let currentFilter = 'all';
+let currentFilter = 'IN_PROGRESS';
 let selectedAttemptId = null;
 let sendType = 'warning'; // 'warning' ou 'message'
 let banAttemptId = null;
@@ -865,15 +1097,27 @@ async function loadData() {
     });
 
     document.getElementById('exam-title').textContent = data.exam_title || 'Examen';
-    const roleSuffix = myRole === 'surveillant' ? ' — Mon Groupe' : '';
-    document.getElementById('exam-subtitle').textContent =
-        `Dashboard de surveillance${roleSuffix} • Statut: ${data.exam_status || '?'}`;
 
     updateStats();
+    _checkHighRiskAlerts(studentsData);
+    // Grille caméra : toujours rendue (enseignant voit tous les groupes, surveillant voit le sien)
     renderGrid();
+    renderCompletedPanel();
+    // Table de gestion : enseignant seulement
+    if (myRole !== 'surveillant') {
+        renderTeacherView();
+        renderProctorsPanel();
+    }
 
-    // Panneau surveillants (enseignant seulement)
-    if (myRole !== 'surveillant') renderProctorsPanel();
+    // Titre dynamique selon le rôle
+    const examStatus = data.exam_status || '?';
+    if (myRole === 'surveillant') {
+        document.getElementById('exam-subtitle').textContent =
+            `Vue surveillance — Mon groupe • Statut: ${examStatus}`;
+    } else {
+        document.getElementById('exam-subtitle').textContent =
+            `Vue pédagogique enseignant • Statut: ${examStatus}`;
+    }
 }
 
 function applyRoleUI() {
@@ -899,10 +1143,218 @@ function applyRoleUI() {
     if (camLabel) camLabel.textContent = isSurveillant ? 'Diffuser caméra' : 'Caméra';
     if (micLabel) micLabel.textContent = isSurveillant ? 'Diffuser micro' : 'Micro';
 
-    // Panneau surveillants humains (visible seulement enseignant/admin)
-    // La carte Agent IA (#agent-status-wrap) est TOUJOURS visible pour tous les rôles
+    // Panneau surveillants humains (enseignant seulement)
     const pp = document.getElementById('proctors-panel');
     if (pp) pp.style.display = isSurveillant ? 'none' : 'block';
+
+    // Panneau gestion enseignant : visible seulement pour prof/admin
+    // La grille caméra (#surveillance-view) reste TOUJOURS visible pour les deux rôles
+    const teacherView = document.getElementById('teacher-view');
+    if (teacherView) teacherView.style.display = isSurveillant ? 'none' : '';
+
+    // Pills enseignant dans le header (terminés + note moy.)
+    if (!isSurveillant) {
+        ['stat-submitted-pill', 'stat-avgscore-pill'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = '';
+        });
+    }
+}
+
+// ═══════════════════════════════════════════════════════════
+// VUE ENSEIGNANT
+// ═══════════════════════════════════════════════════════════
+
+function renderTeacherView() {
+    const search = (document.getElementById('tv-search')?.value || '').toLowerCase();
+
+    const all        = studentsData.filter(s => !search ||
+        s.student_name.toLowerCase().includes(search) || (s.student_email || '').toLowerCase().includes(search));
+    const inProgress = all.filter(s => s.status === 'in_progress');
+    const completed  = all.filter(s => ['submitted','auto_submitted'].includes(s.status));
+    const banned     = all.filter(s => s.status === 'banned');
+
+    // Stats enseignant dans le teacher-view
+    const total   = studentsData.length;
+    const scored  = completed.filter(s => s.score !== null && s.score !== undefined);
+    const avgScore = scored.length
+        ? (scored.reduce((a,s) => a + s.score, 0) / scored.length).toFixed(1) + '/20'
+        : '—';
+    const avgRisk = total
+        ? Math.round(studentsData.reduce((a,s) => a + (s.risk_score || 0), 0) / total) + '%'
+        : '0%';
+
+    _setTv('tv-total',         total);
+    _setTv('tv-inprogress-n',  inProgress.length);
+    _setTv('tv-done-n',        completed.length);
+    _setTv('tv-banned-n',      banned.length);
+    _setTv('tv-avg-score',     avgScore);
+    _setTv('tv-avg-risk',      avgRisk);
+    _setTv('tv-inprogress-badge', inProgress.length);
+    _setTv('tv-completed-badge',  completed.length);
+    _setTv('tv-banned-badge',     banned.length);
+
+    // ── En cours ──
+    const ipBody = document.getElementById('tv-inprogress-body');
+    if (ipBody) {
+        if (!inProgress.length) {
+            ipBody.innerHTML = `<tr><td colspan="7" class="tv-empty">Aucun étudiant en cours</td></tr>`;
+        } else {
+            ipBody.innerHTML = inProgress.map(s => {
+                const riskCls = s.risk_score >= 70 ? 'high' : s.risk_score >= 40 ? 'medium' : 'low';
+                const elapsed = s.started_at ? _elapsed(s.started_at) : '—';
+                const nameEsc = (s.student_name || '?').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+                return `<tr>
+                    <td><strong>${s.student_name || '?'}</strong><br>
+                        <span style="color:rgba(255,255,255,.4);font-size:10px;">${s.student_email || ''}</span></td>
+                    <td>${s.started_at ? new Date(s.started_at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}) : '—'}</td>
+                    <td>${elapsed}</td>
+                    <td><span class="tv-risk-badge ${riskCls}">${s.risk_score || 0}%</span></td>
+                    <td>
+                        <span style="color:${s.tab_switches > 2 ? '#fcd34d' : 'rgba(255,255,255,.5)'};">Tabs: ${s.tab_switches || 0}</span>
+                        &nbsp;·&nbsp;
+                        <span style="color:${s.warnings_count > 0 ? '#fca5a5' : 'rgba(255,255,255,.5)'};">Alertes: ${s.warnings_count || 0}</span>
+                    </td>
+                    <td style="color:rgba(255,255,255,.6);">${s.proctor_name || '—'}</td>
+                    <td>
+                        <button onclick="openSendModal(${s.attempt_id},'${nameEsc}','message')"
+                            style="background:rgba(37,99,235,.2);color:#93c5fd;border:none;padding:3px 8px;border-radius:5px;font-size:10px;cursor:pointer;margin-right:4px;">
+                            <i class="fas fa-comment"></i> Message
+                        </button>
+                        <button onclick="openSendModal(${s.attempt_id},'${nameEsc}','warning')"
+                            style="background:rgba(245,158,11,.2);color:#fcd34d;border:none;padding:3px 8px;border-radius:5px;font-size:10px;cursor:pointer;">
+                            <i class="fas fa-exclamation-triangle"></i> Avertir
+                        </button>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+    }
+
+    // ── Terminés ──
+    const cBody = document.getElementById('tv-completed-body');
+    if (cBody) {
+        if (!completed.length) {
+            cBody.innerHTML = `<tr><td colspan="9" class="tv-empty">Aucune copie soumise</td></tr>`;
+        } else {
+            cBody.innerHTML = completed.map(s => {
+                const riskCls   = s.risk_score >= 70 ? 'high' : s.risk_score >= 40 ? 'medium' : 'low';
+                const isAuto    = s.status === 'auto_submitted';
+                const statusBadge = isAuto
+                    ? `<span style="background:rgba(99,102,241,.2);color:#c7d2fe;border-radius:4px;padding:2px 7px;font-size:10px;">Auto</span>`
+                    : `<span style="background:rgba(16,185,129,.2);color:#6ee7b7;border-radius:4px;padding:2px 7px;font-size:10px;">Soumis</span>`;
+                const subTime = s.submitted_at
+                    ? new Date(s.submitted_at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}) : '—';
+                const dur  = s.duration_minutes != null ? `${s.duration_minutes} min` : '—';
+                const note = s.score != null ? `${s.score}/20` : '—';
+
+                let preSigBtn, postSigBtn;
+                if (s.has_pre_sig) {
+                    let metaStr = '';
+                    try {
+                        const m = typeof s.pre_sig_meta === 'string' ? JSON.parse(s.pre_sig_meta) : s.pre_sig_meta;
+                        if (m) metaStr = `Traits:${m.strokes||'?'} · ${Math.round((m.duration_ms||0)/1000)}s`;
+                    } catch(e){}
+                    preSigBtn = `<button class="tv-sig-btn pre" onclick="showTeacherSig(${s.attempt_id},'pre','Signature pré-examen — ${s.student_name.replace(/'/g,"\\'")}')">
+                        <i class="fas fa-signature"></i> Voir${metaStr ? ` <small style="opacity:.6;">(${metaStr})</small>` : ''}
+                    </button>`;
+                } else {
+                    preSigBtn = `<span class="tv-sig-btn absent"><i class="fas fa-times-circle"></i> Absente</span>`;
+                }
+
+                if (isAuto) {
+                    postSigBtn = `<span class="tv-sig-btn absent" title="Auto-soumission — signature non requise"><i class="fas fa-robot"></i> Auto</span>`;
+                } else if (s.has_post_sig) {
+                    postSigBtn = `<button class="tv-sig-btn post" onclick="showTeacherSig(${s.attempt_id},'post','Signature post-examen — ${s.student_name.replace(/'/g,"\\'")}')">
+                        <i class="fas fa-signature"></i> Voir
+                    </button>`;
+                } else {
+                    postSigBtn = `<span class="tv-sig-btn absent"><i class="fas fa-times-circle"></i> Absente</span>`;
+                }
+
+                return `<tr>
+                    <td><strong>${s.student_name || '?'}</strong><br>
+                        <span style="color:rgba(255,255,255,.4);font-size:10px;">${s.student_email || ''}</span></td>
+                    <td>${statusBadge}</td>
+                    <td>${subTime}</td>
+                    <td>${dur}</td>
+                    <td style="font-weight:700;color:${s.score != null ? '#93c5fd' : 'rgba(255,255,255,.4)'};">${note}</td>
+                    <td><span class="tv-risk-badge ${riskCls}">${s.risk_score || 0}%</span></td>
+                    <td>${preSigBtn}</td>
+                    <td>${postSigBtn}</td>
+                    <td style="color:rgba(255,255,255,.6);">${s.proctor_name || '—'}</td>
+                </tr>`;
+            }).join('');
+        }
+    }
+
+    // ── Exclus ──
+    const bBody = document.getElementById('tv-banned-body');
+    if (bBody) {
+        if (!banned.length) {
+            bBody.innerHTML = `<tr><td colspan="4" class="tv-empty">Aucun étudiant exclu</td></tr>`;
+        } else {
+            bBody.innerHTML = banned.map(s => {
+                const riskCls = s.risk_score >= 70 ? 'high' : s.risk_score >= 40 ? 'medium' : 'low';
+                return `<tr>
+                    <td><strong>${s.student_name || '?'}</strong><br>
+                        <span style="color:rgba(255,255,255,.4);font-size:10px;">${s.student_email || ''}</span></td>
+                    <td style="color:#fca5a5;">${s.ban_reason || '—'}</td>
+                    <td><span class="tv-risk-badge ${riskCls}">${s.risk_score || 0}%</span></td>
+                    <td style="color:rgba(255,255,255,.6);">${s.proctor_name || '—'}</td>
+                </tr>`;
+            }).join('');
+        }
+    }
+
+    // Afficher/masquer sections vides
+    const noStudents = !studentsData.length;
+    if (document.getElementById('tv-inprogress-section'))
+        document.getElementById('tv-inprogress-section').style.display = (!search && !inProgress.length && !noStudents) ? 'none' : '';
+    if (document.getElementById('tv-completed-section'))
+        document.getElementById('tv-completed-section').style.display = (!search && !completed.length && !noStudents) ? 'none' : '';
+    if (document.getElementById('tv-banned-section'))
+        document.getElementById('tv-banned-section').style.display = (!search && !banned.length && !noStudents) ? 'none' : '';
+}
+
+function _setTv(id, val) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+}
+
+function _elapsed(isoStr) {
+    if (!isoStr) return '—';
+    const diff = Math.floor((Date.now() - new Date(isoStr).getTime()) / 1000);
+    if (diff < 60) return `${diff}s`;
+    if (diff < 3600) return `${Math.floor(diff/60)} min`;
+    return `${Math.floor(diff/3600)}h${String(Math.floor((diff%3600)/60)).padStart(2,'0')}`;
+}
+
+async function showTeacherSig(attemptId, sigType, title) {
+    try {
+        const resp = await api(`/api/exam_attempts/${attemptId}/signature/${sigType}`);
+        if (!resp.ok) { toast('Signature introuvable', 'error'); return; }
+        const d = await resp.json();
+        if (!d.data) { toast('Aucune signature enregistrée', 'info'); return; }
+        document.getElementById('modal-sig-title').textContent = title;
+        document.getElementById('modal-sig-img').src = d.data;
+
+        // Métadonnées
+        let metaHtml = '';
+        if (d.meta) {
+            try {
+                const m = typeof d.meta === 'string' ? JSON.parse(d.meta) : d.meta;
+                if (m.strokes)      metaHtml += `<span style="background:rgba(255,255,255,.1);padding:2px 8px;border-radius:6px;">Traits: ${m.strokes}</span>`;
+                if (m.duration_ms)  metaHtml += `<span style="background:rgba(255,255,255,.1);padding:2px 8px;border-radius:6px;">Durée: ${(m.duration_ms/1000).toFixed(1)}s</span>`;
+                if (m.path_length)  metaHtml += `<span style="background:rgba(255,255,255,.1);padding:2px 8px;border-radius:6px;">Longueur: ${Math.round(m.path_length)}px</span>`;
+                if (m.signed_at)    metaHtml += `<span style="background:rgba(255,255,255,.1);padding:2px 8px;border-radius:6px;">${new Date(m.signed_at).toLocaleString('fr-FR')}</span>`;
+            } catch(e){}
+        }
+        document.getElementById('modal-sig-meta').innerHTML = metaHtml;
+        document.getElementById('modal-sig').classList.add('active');
+    } catch(e) {
+        toast('Erreur lors du chargement de la signature', 'error');
+    }
 }
 
 function renderProctorsPanel() {
@@ -961,20 +1413,88 @@ function renderProctorsPanel() {
 }
 
 async function refreshData() {
-    const icon = document.getElementById('refresh-icon');
-    if (icon) icon.classList.add('fa-spin');
+    ['refresh-icon','tv-refresh-icon'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('fa-spin');
+    });
     try { await loadData(); } catch(e) {}
-    setTimeout(() => { if (icon) icon.classList.remove('fa-spin'); }, 500);
+    setTimeout(() => {
+        ['refresh-icon','tv-refresh-icon'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.classList.remove('fa-spin');
+        });
+    }, 500);
+}
+
+// ── Panneau des copies terminées ────────────────────────────────────────────
+function renderCompletedPanel() {
+    const done = studentsData.filter(s =>
+        s.status === 'submitted' || s.status === 'auto_submitted'
+    );
+    const panel  = document.getElementById('completed-panel');
+    const badge  = document.getElementById('completed-count-badge');
+    const tbody  = document.getElementById('completed-list');
+    if (!panel || !badge || !tbody) return;
+
+    badge.textContent = done.length;
+    panel.style.display = done.length > 0 ? 'block' : 'none';
+
+    tbody.innerHTML = done.map(s => {
+        const isAuto = s.status === 'auto_submitted';
+        const statusHtml = isAuto
+            ? `<span style="background:rgba(245,158,11,.18);color:#d97706;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;"><i class="fas fa-clock"></i> Auto-soumis</span>`
+            : `<span style="background:rgba(16,185,129,.15);color:#10b981;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;"><i class="fas fa-check"></i> Soumis</span>`;
+        const submittedTime = s.submitted_at
+            ? new Date(s.submitted_at).toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'})
+            : '—';
+        const duration = s.duration_minutes !== null && s.duration_minutes !== undefined
+            ? `${s.duration_minutes} min` : '—';
+        const riskClass = s.risk_score >= 70 ? '#ef4444' : s.risk_score >= 40 ? '#d97706' : '#10b981';
+        const score = s.score !== null && s.score !== undefined ? `${s.score}/20` : '<span style="color:rgba(255,255,255,.3)">En attente</span>';
+        return `<tr>
+            <td>
+                <div style="font-weight:600;color:white;">${s.student_name}</div>
+                <div style="font-size:10px;color:rgba(255,255,255,.4);">${s.student_email}</div>
+            </td>
+            <td>${statusHtml}</td>
+            <td style="color:rgba(255,255,255,.6);">${submittedTime}</td>
+            <td style="color:rgba(255,255,255,.6);">${duration}</td>
+            <td><span style="font-weight:700;color:${riskClass};">${s.risk_score}%</span></td>
+            <td>${score}</td>
+            <td style="color:rgba(255,255,255,.5);font-size:11px;">${s.proctor_name || '—'}</td>
+        </tr>`;
+    }).join('');
+}
+
+function toggleCompletedPanel() {
+    const wrap = document.getElementById('completed-list-wrap');
+    const chevron = document.getElementById('completed-chevron');
+    if (!wrap) return;
+    const open = wrap.style.display === 'block';
+    wrap.style.display = open ? 'none' : 'block';
+    if (chevron) chevron.style.transform = open ? '' : 'rotate(180deg)';
 }
 
 function updateStats() {
-    const active   = studentsData.filter(s => s.status === 'in_progress').length;
-    const highRisk = studentsData.filter(s => s.risk_score >= 70).length;
-    const banned   = studentsData.filter(s => s.banned).length;
+    const active    = studentsData.filter(s => s.status === 'in_progress').length;
+    const highRisk  = studentsData.filter(s => s.risk_score >= 70).length;
+    const banned    = studentsData.filter(s => s.banned).length;
+    const submitted = studentsData.filter(s => ['submitted','auto_submitted'].includes(s.status)).length;
 
     document.getElementById('stat-active').textContent   = active;
     document.getElementById('stat-highrisk').textContent = highRisk;
     document.getElementById('stat-banned').textContent   = banned;
+
+    // Stats enseignant (header pills)
+    const subEl = document.getElementById('stat-submitted');
+    if (subEl) subEl.textContent = submitted;
+    const scored = studentsData.filter(s => s.score !== null && s.score !== undefined);
+    const avgScoreEl = document.getElementById('stat-avgscore');
+    if (avgScoreEl) {
+        avgScoreEl.textContent = scored.length
+            ? (scored.reduce((a,s) => a + s.score, 0) / scored.length).toFixed(1) + '/20'
+            : '—';
+    }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -995,11 +1515,31 @@ function renderGrid() {
     });
 
     if (filtered.length === 0) {
-        grid.innerHTML = `
-            <div class="empty-grid">
-                <i class="fas fa-users-slash"></i>
-                <p>Aucun étudiant correspondant</p>
-            </div>`;
+        const search = (document.getElementById('search-input').value || '').trim();
+        let icon = 'fa-users-slash', msg = 'Aucun étudiant correspondant';
+        if (!search) {
+            if (currentFilter === 'IN_PROGRESS') {
+                const doneCount = studentsData.filter(s => ['submitted','auto_submitted'].includes(s.status)).length;
+                const bannedCount = studentsData.filter(s => s.status === 'banned').length;
+                if (doneCount > 0 || bannedCount > 0) {
+                    icon = 'fa-check-circle';
+                    const parts = [];
+                    if (doneCount > 0) parts.push(`${doneCount} cop${doneCount > 1 ? 'ies' : 'ie'} soumise${doneCount > 1 ? 's' : ''}`);
+                    if (bannedCount > 0) parts.push(`${bannedCount} exclu${bannedCount > 1 ? 's' : ''}`);
+                    msg = `Tous les étudiants ont terminé<br><small style="color:#64748b;">${parts.join(' · ')} — voir les panneaux ci-dessous</small>`;
+                } else {
+                    icon = 'fa-hourglass-start';
+                    msg = 'En attente de connexion des étudiants';
+                }
+            } else if (currentFilter === 'BANNED') {
+                icon = 'fa-shield-check';
+                msg = 'Aucun étudiant exclu';
+            } else if (currentFilter === 'high_risk') {
+                icon = 'fa-shield-check';
+                msg = 'Aucun étudiant à risque élevé';
+            }
+        }
+        grid.innerHTML = `<div class="empty-grid"><i class="fas ${icon}"></i><p>${msg}</p></div>`;
         return;
     }
 
@@ -1088,6 +1628,21 @@ function updateCard(card, student) {
         videoDiv.appendChild(bannedOverlay);
     }
 
+    // Overlay soumis
+    const isDone = student.status === 'submitted' || student.status === 'auto_submitted';
+    let submittedOverlay = card.querySelector('.submitted-overlay');
+    if (isDone && !submittedOverlay && videoDiv && !student.banned) {
+        submittedOverlay = document.createElement('div');
+        submittedOverlay.className = 'submitted-overlay';
+        const timeStr = student.submitted_at
+            ? new Date(student.submitted_at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}) : '';
+        submittedOverlay.innerHTML = `
+            <i class="fas fa-check-circle"></i>
+            <span class="sub-label">${student.status === 'auto_submitted' ? 'Auto-soumis' : 'Copie soumise'}</span>
+            ${timeStr ? `<span class="sub-time">${timeStr}</span>` : ''}`;
+        videoDiv.appendChild(submittedOverlay);
+    }
+
     // Ré-attacher la vidéo si le track est disponible mais pas encore affiché
     const videoEl = card.querySelector(`#video-${student.attempt_id}`);
     if (videoEl && videoEl.style.display === 'none') {
@@ -1119,6 +1674,12 @@ function buildCardHTML(student) {
                 <span class="cv-risk-badge ${riskClass}">${student.risk_score}%</span>
             </div>
             ${student.banned ? '<div class="banned-overlay"><i class="fas fa-ban"></i> EXCLU</div>' : ''}
+            ${(student.status === 'submitted' || student.status === 'auto_submitted') ? `
+            <div class="submitted-overlay">
+                <i class="fas fa-check-circle"></i>
+                <span class="sub-label">${student.status === 'auto_submitted' ? 'Auto-soumis' : 'Copie soumise'}</span>
+                ${student.submitted_at ? `<span class="sub-time">${new Date(student.submitted_at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</span>` : ''}
+            </div>` : ''}
         </div>
         <div class="card-info">
             <div class="card-name">${student.student_name}</div>
@@ -1156,6 +1717,14 @@ function buildCardHTML(student) {
                     style="background:rgba(16,185,129,.15);color:#10b981;border:1px solid rgba(16,185,129,.3)"
                     onclick="startPrivateCall(${student.attempt_id},'${student.student_name}')" title="Appel audio/vidéo privé avec cet étudiant">
                     <i class="fas fa-phone"></i>
+                </button>
+                <button class="btn btn-sm" onclick="openExtraTimeModal(${student.attempt_id},'${student.student_name.replace(/'/g,"\\'")}')"
+                    style="background:rgba(245,158,11,.15);color:#d97706;border:1px solid rgba(245,158,11,.3)" title="Accorder du temps supplémentaire">
+                    <i class="fas fa-clock"></i>
+                </button>
+                <button class="btn btn-sm" onclick="openProctorNoteModal(${student.attempt_id},'${student.student_name.replace(/'/g,"\\'")}')"
+                    style="background:rgba(99,102,241,.15);color:#6366f1;border:1px solid rgba(99,102,241,.3)" title="Ajouter une note de surveillance">
+                    <i class="fas fa-sticky-note"></i>
                 </button>
                 <button class="btn btn-light btn-sm" onclick="openSidePanel(${student.attempt_id})" style="margin-left:auto" title="Voir les logs">
                     <i class="fas fa-list"></i>
@@ -1271,6 +1840,38 @@ async function initLiveKit() {
                 const student = studentsData.find(s => s.livekit_identity === id);
                 if (student) toast(`${student.student_name} déconnecté`, 'error');
             }
+        });
+
+        // ── Reconnexion automatique ─────────────────────────────────────────────
+        let _reconnectTimer = null;
+
+        room.on(LivekitClient.RoomEvent.Disconnected, () => {
+            console.warn('⚠️ LiveKit déconnecté — tentative de reconnexion...');
+            _showLivekitBanner('Connexion perdue — reconnexion en cours...', '#ef4444');
+            clearTimeout(_reconnectTimer);
+            _reconnectTimer = setTimeout(async () => {
+                try {
+                    const res = await fetch(`/api/online_exams/${currentExamId}/livekit-token`, {
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+                    });
+                    if (!res.ok) throw new Error('token fetch failed');
+                    const newToken = await res.json();
+                    await room.connect(newToken.ws_url, newToken.token);
+                } catch (err) {
+                    console.error('❌ Reconnexion LiveKit échouée :', err);
+                    _showLivekitBanner('Reconnexion impossible — rechargez la page.', '#ef4444', true);
+                }
+            }, 3000);
+        });
+
+        room.on(LivekitClient.RoomEvent.Reconnecting, () => {
+            _showLivekitBanner('Reconnexion en cours...', '#f59e0b');
+        });
+
+        room.on(LivekitClient.RoomEvent.Reconnected, () => {
+            clearTimeout(_reconnectTimer);
+            _hideLivekitBanner();
+            toast('✅ Connexion LiveKit rétablie', 'success');
         });
 
         await room.connect(tokenData.ws_url, tokenData.token);
@@ -2524,6 +3125,171 @@ async function fetchAgentStatusCard() {
 // Mettre à jour la carte agent toutes les 30s (même intervalle que l'agent)
 setInterval(fetchAgentStatusCard, 30000);
 setTimeout(fetchAgentStatusCard, 800);  // Premier appel rapide au chargement
+
+// ── Bandeau LiveKit ──────────────────────────────────────────────────────────
+function _showLivekitBanner(msg, color, permanent = false) {
+    let banner = document.getElementById('livekit-reconnect-banner');
+    if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'livekit-reconnect-banner';
+        banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;padding:10px 20px;text-align:center;font-size:13px;font-weight:600;color:white;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 2px 8px rgba(0,0,0,.3);';
+        document.body.prepend(banner);
+    }
+    banner.style.background = color;
+    banner.innerHTML = `<i class="fas fa-${permanent ? 'exclamation-triangle' : 'circle-notch fa-spin'}"></i> ${msg}`;
+    if (permanent) {
+        const btn = document.createElement('button');
+        btn.textContent = 'Recharger';
+        btn.style.cssText = 'margin-left:14px;padding:4px 12px;background:rgba(255,255,255,.25);border:1px solid rgba(255,255,255,.5);border-radius:5px;color:white;cursor:pointer;font-size:12px;';
+        btn.onclick = () => location.reload();
+        banner.appendChild(btn);
+    }
+}
+function _hideLivekitBanner() {
+    const b = document.getElementById('livekit-reconnect-banner');
+    if (b) b.remove();
+}
+
+// ── ALERTES HAUT RISQUE ──────────────────────────────────────────────────────
+let _prevRiskMap = new Map(); // attemptId → risk_score précédent
+
+function _playBeep(freq = 880, dur = 0.25, vol = 0.4) {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(vol, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + dur);
+    } catch (_) {}
+}
+
+function _checkHighRiskAlerts(students) {
+    students.forEach(s => {
+        const prev = _prevRiskMap.get(s.attempt_id) ?? 0;
+        const cur  = s.risk_score || 0;
+        // Alerte si on franchit 70 % pour la première fois (prev < 70, cur >= 70)
+        if (prev < 70 && cur >= 70 && !s.banned) {
+            _playBeep(880, 0.2, 0.5);
+            setTimeout(() => _playBeep(660, 0.2, 0.4), 250);
+            // Toast rouge persistant 8s
+            const t = document.createElement('div');
+            t.style.cssText = 'position:fixed;top:70px;right:20px;background:#ef4444;color:white;padding:12px 18px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;box-shadow:0 4px 20px rgba(239,68,68,.4);max-width:280px;';
+            t.innerHTML = `<i class="fas fa-exclamation-triangle" style="margin-right:8px;"></i><strong>Haut risque</strong><br>${s.student_name} — ${cur}%`;
+            document.body.appendChild(t);
+            setTimeout(() => t.remove(), 8000);
+        }
+        _prevRiskMap.set(s.attempt_id, cur);
+    });
+}
+
+// ── TEMPS SUPPLÉMENTAIRE ────────────────────────────────────────────────────
+function openExtraTimeModal(attemptId, studentName) {
+    const existing = document.getElementById('modal-extra-time');
+    if (existing) existing.remove();
+    const m = document.createElement('div');
+    m.id = 'modal-extra-time';
+    m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center';
+    m.innerHTML = `
+        <div style="background:#fff;border-radius:12px;padding:28px;width:360px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+            <h3 style="margin:0 0 16px;font-size:16px;color:#1e293b"><i class="fas fa-clock" style="color:#d97706;margin-right:8px"></i>Temps supplémentaire — ${studentName}</h3>
+            <label style="font-size:13px;color:#64748b;display:block;margin-bottom:6px">Minutes à accorder</label>
+            <input id="extra-time-input" type="number" min="1" max="60" value="10"
+                style="width:100%;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:15px;margin-bottom:16px;box-sizing:border-box">
+            <div style="display:flex;gap:10px">
+                <button onclick="submitExtraTime(${attemptId})"
+                    style="flex:1;padding:10px;background:#d97706;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">
+                    <i class="fas fa-check"></i> Confirmer
+                </button>
+                <button onclick="document.getElementById('modal-extra-time').remove()"
+                    style="flex:1;padding:10px;background:#f1f5f9;color:#475569;border:none;border-radius:8px;cursor:pointer;font-size:14px">
+                    Annuler
+                </button>
+            </div>
+        </div>`;
+    document.body.appendChild(m);
+    document.getElementById('extra-time-input').focus();
+}
+
+async function submitExtraTime(attemptId) {
+    const minutes = parseInt(document.getElementById('extra-time-input').value, 10);
+    if (!minutes || minutes < 1 || minutes > 60) { toast('Valeur invalide (1–60 min)', 'error'); return; }
+    try {
+        const r = await api(`/api/exam_attempts/${attemptId}/extra-time`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ minutes })
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Erreur');
+        document.getElementById('modal-extra-time').remove();
+        toast(`✅ ${minutes} min accordées (total: ${d.total_extra} min)`, 'success');
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+// ── NOTE DE SURVEILLANCE ────────────────────────────────────────────────────
+function openProctorNoteModal(attemptId, studentName) {
+    const existing = document.getElementById('modal-proctor-note');
+    if (existing) existing.remove();
+    const m = document.createElement('div');
+    m.id = 'modal-proctor-note';
+    m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center';
+    m.innerHTML = `
+        <div style="background:#fff;border-radius:12px;padding:28px;width:400px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+            <h3 style="margin:0 0 16px;font-size:16px;color:#1e293b"><i class="fas fa-sticky-note" style="color:#6366f1;margin-right:8px"></i>Note de surveillance — ${studentName}</h3>
+            <textarea id="proctor-note-input" rows="4" placeholder="Ex : étudiant consulte ses notes à 10h12, posture suspecte..."
+                style="width:100%;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;resize:vertical;margin-bottom:16px;box-sizing:border-box"></textarea>
+            <div id="proctor-notes-list" style="max-height:140px;overflow-y:auto;margin-bottom:16px;font-size:12px;color:#475569;background:#f8fafc;border-radius:8px;padding:8px 12px;display:none"></div>
+            <div style="display:flex;gap:10px">
+                <button onclick="submitProctorNote(${attemptId})"
+                    style="flex:1;padding:10px;background:#6366f1;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">
+                    <i class="fas fa-save"></i> Enregistrer
+                </button>
+                <button onclick="loadProctorNotes(${attemptId})"
+                    style="padding:10px 14px;background:#f1f5f9;color:#475569;border:none;border-radius:8px;cursor:pointer;font-size:13px">
+                    <i class="fas fa-history"></i>
+                </button>
+                <button onclick="document.getElementById('modal-proctor-note').remove()"
+                    style="padding:10px 14px;background:#f1f5f9;color:#475569;border:none;border-radius:8px;cursor:pointer;font-size:13px">
+                    Annuler
+                </button>
+            </div>
+        </div>`;
+    document.body.appendChild(m);
+    document.getElementById('proctor-note-input').focus();
+}
+
+async function submitProctorNote(attemptId) {
+    const note = document.getElementById('proctor-note-input').value.trim();
+    if (!note) { toast('Note vide', 'error'); return; }
+    try {
+        const r = await api(`/api/exam_attempts/${attemptId}/proctor-note`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ note })
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Erreur');
+        document.getElementById('proctor-note-input').value = '';
+        toast('✅ Note enregistrée', 'success');
+        await loadProctorNotes(attemptId);
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+async function loadProctorNotes(attemptId) {
+    try {
+        const r = await api(`/api/exam_attempts/${attemptId}/proctor-notes`);
+        const d = await r.json();
+        const list = document.getElementById('proctor-notes-list');
+        if (!list) return;
+        if (!d.notes || !d.notes.length) { list.style.display = 'block'; list.innerHTML = '<em>Aucune note</em>'; return; }
+        list.style.display = 'block';
+        list.innerHTML = d.notes.map(n => `<div style="border-bottom:1px solid #e2e8f0;padding:4px 0"><span style="color:#94a3b8">${new Date(n.timestamp).toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'})}</span> — ${n.note || ''}</div>`).join('');
+    } catch (e) { console.warn('Notes:', e); }
+}
 </script>
 <script src="{{ url_for('static', filename='js/site_translator.js') }}?v=7"></script>
 </body>

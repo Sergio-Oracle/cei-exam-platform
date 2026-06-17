@@ -28,9 +28,10 @@ class UserRole(enum.Enum):
     SURVEILLANT = "surveillant"
 
 class ReclamationStatus(enum.Enum):
-    PENDING = "pending"
-    RESOLVED = "resolved"
-    REJECTED = "rejected"
+    PENDING   = "pending"
+    IN_REVIEW = "in_review"
+    RESOLVED  = "resolved"
+    REJECTED  = "rejected"
 
 # MODÈLES POUR LA MAQUETTE PÉDAGOGIQUE
 class Formation(Base):
@@ -208,6 +209,7 @@ class User(Base):
     has_email = Column(Boolean, default=True)
     reset_token = Column(String(64), nullable=True)
     reset_token_expires = Column(DateTime, nullable=True)
+    notifications_last_read = Column(DateTime, nullable=True)
 
     created_subjects = relationship('Subject', foreign_keys='Subject.creator_id', back_populates='creator')
     student_papers = relationship('StudentPaper', foreign_keys='StudentPaper.student_id', back_populates='student')
@@ -492,8 +494,15 @@ class ExamAttempt(Base):
     risk_score = Column(Integer, default=0)  # Score de risque 0-100
     current_egress_id = Column(String(255))  # LiveKit Egress ID actif (null si pas d'enregistrement)
 
-    # Signature électronique de l'étudiant (base64 PNG)
+    # Signature pré-examen (attestation d'honneur signée avant le timer)
+    pre_exam_signature_data = Column(Text)
+    # Métadonnées de la signature pré-examen (JSON: strokes, path_length, duration_ms, signed_at)
+    pre_exam_signature_meta = Column(Text)
+    # Signature post-examen (confirmation lors de la soumission manuelle)
     signature_data = Column(Text)
+
+    # Temps supplémentaire accordé individuellement par le prof/surveillant
+    extra_minutes = Column(Integer, default=0)
 
     # Réponses (JSON ou texte selon format)
     answers = Column(Text)  # JSON stockant les réponses
@@ -532,7 +541,8 @@ class ExamAttempt(Base):
             'feedback': self.feedback,
             'corrected_at': self.corrected_at.isoformat() if self.corrected_at else None,
             'corrector_name': self.corrector.full_name if self.corrector else None,
-            'signature_data': self.signature_data
+            'signature_data': self.signature_data,
+            'extra_minutes': self.extra_minutes or 0,
         }
 
 class ExamActivityLog(Base):
