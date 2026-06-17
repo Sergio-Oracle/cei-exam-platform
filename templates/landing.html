@@ -55,6 +55,19 @@
         </div>
     </section>
 
+    <!-- ══ Section Bannières Visuelles ══ -->
+    <!-- Structure prête pour accueillir plusieurs images (carousel à venir) -->
+    <section id="hero-gallery" style="background:#0f172a;padding:0;overflow:hidden;">
+        <div class="hero-gallery-inner" style="display:flex;flex-direction:column;align-items:center;">
+            <img id="hero-img-1"
+                 src="{{ url_for('static', filename='images/hero_banner.jpeg') }}"
+                 alt="CEI UNCHK — L'excellence des examens à l'ere du numérique"
+                 style="width:100%;max-width:1400px;display:block;object-fit:cover;border:none;"
+                 loading="eager">
+            <!-- images suivantes seront ajoutées ici -->
+        </div>
+    </section>
+
     <!-- ══ Section Mission / Pourquoi CEI ══ -->
     <section id="mission" style="background:white;padding:80px 0;">
         <div class="container">
@@ -93,7 +106,7 @@
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
                     </div>
                     <h3 style="font-size:1.05rem;font-weight:700;color:var(--gray-900);margin-bottom:10px;">Pourquoi c'est crucial au Sénégal</h3>
-                    <p style="color:var(--gray-500);font-size:.93rem;line-height:1.7;">Avec des classes pouvant dépasser 200 étudiants, un enseignant passe des semaines à corriger manuellement. Le CEI réduit ce délai à quelques heures grâce à l'IA, tout en rendant la surveillance possible à distance — un enjeu majeur pour les filières en ligne comme l'EC2LT ou l'UVS.</p>
+                    <p style="color:var(--gray-500);font-size:.93rem;line-height:1.7;">Avec des classes pouvant dépasser 200 étudiants, un enseignant passe des semaines à corriger manuellement. Le CEI réduit ce délai à quelques heures grâce à l'IA, tout en rendant la surveillance possible à distance — un enjeu majeur pour les filières en ligne comme l'UN-CHK ou l'UVS.</p>
                 </div>
             </div>
 
@@ -718,13 +731,13 @@
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="#f59e0b" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
                     </div>
                     <blockquote style="font-size:.97rem;color:var(--gray-700);line-height:1.75;font-style:italic;margin:0;flex:1;">
-                        "Enseigner à l'EC2LT c'est gérer des étudiants qui jonglent entre travail et formation. La correction IA du CEI m'a libéré un temps considérable — ce qui prenait 3 jours se fait maintenant en une heure. Les étudiants reçoivent un feedback précis question par question, ce qui améliore leur compréhension. Un outil indispensable pour l'enseignement des filières techniques à distance."
+                        "Enseigner à l'UN-CHK c'est gérer des étudiants qui jonglent entre travail et formation. La correction IA du CEI m'a libéré un temps considérable — ce qui prenait 3 jours se fait maintenant en une heure. Les étudiants reçoivent un feedback précis question par question, ce qui améliore leur compréhension. Un outil indispensable pour l'enseignement des filières techniques à distance."
                     </blockquote>
                     <div style="display:flex;align-items:center;gap:14px;padding-top:16px;border-top:1px solid var(--gray-100);">
                         <div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#6d28d9);display:flex;align-items:center;justify-content:center;color:white;font-size:1.1rem;font-weight:700;flex-shrink:0;">N</div>
                         <div>
                             <div style="font-weight:700;color:var(--gray-900);font-size:.93rem;">Nasry AHAMADI</div>
-                            <div style="font-size:.82rem;color:var(--gray-500);line-height:1.4;">Télécoms Réseaux (Cybersécurité/DevOps) — Enseignant EC2LT</div>
+                            <div style="font-size:.82rem;color:var(--gray-500);line-height:1.4;">Télécoms Réseaux (Cybersécurité/DevOps) — Enseignant UN-CHK</div>
                         </div>
                     </div>
                 </div>
@@ -787,14 +800,14 @@
             
             <div class="footer-section">
                 <h4>Contact</h4>
-                <p><i class="fas fa-map-marker-alt"></i> Liberté 2, derrière immeuble BICIS, Jet d'eau – Dakar – Sénégal</p>
-                <p><i class="fas fa-phone"></i> (+221) 77 662 76 94</p>
-                <p><i class="fas fa-envelope"></i> entreprisertn221@gmail.com</p>
+                <p><i class="fas fa-map-marker-alt"></i> Cité du Savoir – Diamniadio, Castors, avenue Bourguiba, rue n°13</p>
+                <p><i class="fas fa-phone"></i> +221 30 108 41 53</p>
+                <p><i class="fas fa-envelope"></i> <a href="mailto:visioplus@unchk.edu.sn" style="color:inherit;">visioplus@unchk.edu.sn</a></p>
             </div>
         </div>
         
         <div class="footer-bottom">
-            <p>&copy; 2026 CEI — RTN – Réseaux et Techniques Numériques</p>
+            <p>&copy; 2026 CEI — Université Cheikh Hamidou Kane (UNCHK)</p>
         </div>
     </footer>
 <style>
